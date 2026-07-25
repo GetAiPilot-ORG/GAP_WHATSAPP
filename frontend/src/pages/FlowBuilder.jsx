@@ -4,6 +4,7 @@ import axios from 'axios';
 import FlowEditor from '../components/flow-builder/FlowEditor';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
+import { useWhatsAppAccounts } from '../context/WhatsAppAccountContext';
 import { notify } from '../services/notificationService';
 import { FLOW_TEMPLATE_CATEGORIES, FLOW_TEMPLATES, buildFlowFromTemplate } from '../components/flow-builder/flowTemplates';
 import TourButton from '../onboarding/TourButton';
@@ -54,8 +55,7 @@ export default function FlowBuilder() {
     const [selectedTemplate, setSelectedTemplate] = useState(FLOW_TEMPLATES[0]);
     const [templateDraft, setTemplateDraft] = useState(() => getDefaultTemplateDraft(FLOW_TEMPLATES[0]));
     const [templateStarStats, setTemplateStarStats] = useState({});
-    const [waAccounts, setWaAccounts] = useState([]);
-    const [waAccountsLoading, setWaAccountsLoading] = useState(true);
+    const { accounts: waAccounts, isLoading: waAccountsLoading } = useWhatsAppAccounts();
     const [selectedWaAccount, setSelectedWaAccount] = useState(() => localStorage.getItem('selected_wa_account_id') || 'All');
 
     const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
@@ -124,7 +124,6 @@ export default function FlowBuilder() {
         if (session?.access_token) {
             fetchFlows();
             fetchTemplateStars();
-            fetchWaAccounts();
         }
     }, [session]);
 
@@ -240,21 +239,6 @@ export default function FlowBuilder() {
         } catch (error) {
             const details = error?.response?.data?.validation?.errors || [error?.response?.data?.error || 'Failed to update status'];
             alertDialog(details.join('\n'), { title: 'Could not update flow', tone: 'danger' });
-        }
-    };
-
-    const fetchWaAccounts = async () => {
-        setWaAccountsLoading(true);
-        try {
-            const res = await axios.get(`${API_URL}/api/whatsapp/accounts`, {
-                headers: { 'Authorization': `Bearer ${session?.access_token}` }
-            });
-            setWaAccounts(Array.isArray(res.data) ? res.data : []);
-        } catch (error) {
-            console.error('Failed to fetch WhatsApp accounts:', error);
-            setWaAccounts([]);
-        } finally {
-            setWaAccountsLoading(false);
         }
     };
 

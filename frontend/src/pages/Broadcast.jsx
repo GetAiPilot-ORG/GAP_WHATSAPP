@@ -4,6 +4,7 @@ import { Send, Users, FileText, Calendar, Check, ArrowRight, LayoutGrid, Loader2
 import { format } from 'date-fns'
 import { useAuth } from '../context/AuthContext'
 import { useDialog } from '../context/DialogContext'
+import { useWhatsAppAccounts } from '../context/WhatsAppAccountContext'
 import { formatINRFromPaise } from '../config/whatsappPricing'
 import { MESSAGING_TIERS, getMessagingTierLabel } from '../utils/messagingLimits'
 
@@ -185,14 +186,14 @@ export default function Broadcast() {
     const [csvData, setCsvData] = useState(null)
     const [csvFileName, setCsvFileName] = useState('')
 
-    const [waAccounts, setWaAccounts] = useState([])
+    const { accounts: waAccounts, isLoading: isAccountsLoading } = useWhatsAppAccounts()
     const [messagingLimits, setMessagingLimits] = useState(null)
     const [messagingLimitsState, setMessagingLimitsState] = useState('idle')
     const [tags, setTags] = useState([])
     const [contacts, setContacts] = useState([])
     const [templates, setTemplates] = useState([])
 
-    const [isLoading, setIsLoading] = useState({ accounts: true, tags: true, templates: true, contacts: false })
+    const [isLoading, setIsLoading] = useState({ accounts: isAccountsLoading, tags: true, templates: true, contacts: false })
     const [isSending, setIsSending] = useState(false)
     const [sendResult, setSendResult] = useState(null)
     const [billingEstimate, setBillingEstimate] = useState(null)
@@ -274,24 +275,15 @@ export default function Broadcast() {
     useEffect(() => {
         if (!token) return;
 
-        apiCall(`${API_URL}/api/whatsapp/accounts`)
-            .then(res => res.json())
-            .then(data => {
-                const accounts = Array.isArray(data) ? data : [];
-                setWaAccounts(accounts);
-                setIsLoading(p => ({ ...p, accounts: false }));
-                
-                const validAccounts = accounts.filter(acc => acc.whatsapp_business_account_id);
-                if (validAccounts.length > 0) {
-                    setCampaign(prev => {
-                        if (!prev.wa_account_id) {
-                            return { ...prev, wa_account_id: validAccounts[0].id };
-                        }
-                        return prev;
-                    });
+        const validAccounts = (waAccounts || []).filter(acc => acc.whatsapp_business_account_id || acc.phone_number_id);
+        if (validAccounts.length > 0) {
+            setCampaign(prev => {
+                if (!prev.wa_account_id) {
+                    return { ...prev, wa_account_id: validAccounts[0].id };
                 }
-            })
-            .catch(() => setIsLoading(p => ({ ...p, accounts: false })));
+                return prev;
+            });
+        }
 
         apiCall(`${API_URL}/api/broadcasts/tags`)
             .then(res => res.json())

@@ -5,6 +5,7 @@ import { Toaster } from 'sonner'
 import Layout from './components/Layout'
 import { AuthProvider } from './context/AuthContext'
 import { DialogProvider } from './context/DialogContext'
+import { WhatsAppAccountProvider } from './context/WhatsAppAccountContext'
 import Contacts from './pages/Contacts'
 import WhatsAppConnect from './pages/WhatsAppConnect'
 import FlowBuilder from './pages/FlowBuilder'
@@ -61,8 +62,9 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <DialogProvider>
         <AuthProvider>
-          <BrowserRouter>
-            <Routes>
+          <WhatsAppAccountProvider>
+            <BrowserRouter>
+              <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/terms" element={<TermsOfService />} />
               <Route path="/login" element={<Login />} />
@@ -95,13 +97,14 @@ export default function App() {
             </Routes>
             {import.meta.env.VITE_ENABLE_COOKIE_CONSENT === 'true' && <CookieConsent />}
           </BrowserRouter>
-        </AuthProvider>
+        </WhatsAppAccountProvider>
+      </AuthProvider>
       </DialogProvider>
-      <Toaster 
-        position="bottom-right" 
-        expand={false} 
-        richColors 
-        closeButton 
+      <Toaster
+        position="bottom-right"
+        expand={false}
+        richColors
+        closeButton
         toastOptions={{
           style: {
             borderRadius: '12px',

@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import fs from "fs";
 import { supabase } from "../config/supabase.js";
 import { encryptToken, decryptToken } from "../utils/crypto.js";
+import { AccountHealthService } from "../services/accountHealth.service.js";
 import { cleanText, cleanNullableText, isValidEmail } from "../utils/format.js";
 import {
   enrichTemplateExamplesWithRealisticSamples,
@@ -272,9 +273,14 @@ export async function deleteAccount(req: any, res: Response) {
   const { id } = req.params;
   const orgId = req.organization_id;
   try {
+    await AccountHealthService.updateHealth(id, {
+      connection_status: 'DISCONNECTED',
+      token_status: 'MISSING',
+    });
+
     const { error } = await supabase
       .from("w_wa_accounts")
-      .update({ status: "disconnected", access_token_encrypted: null })
+      .update({ status: "disconnected", connection_status: "DISCONNECTED", access_token_encrypted: null })
       .eq("id", id)
       .eq("organization_id", orgId);
 
@@ -293,7 +299,7 @@ export async function getAccountDiagnostics(req: any, res: Response) {
     const { data: account, error } = await supabase
       .from("w_wa_accounts")
       .select(
-        "id, organization_id, phone_number_id, whatsapp_business_account_id, access_token_encrypted, display_phone_number, name, status",
+        "id, organization_id, phone_number_id, whatsapp_business_account_id, access_token_encrypted, display_phone_number, name, status, connection_status, health_version",
       )
       .eq("id", id)
       .eq("organization_id", orgId)
@@ -303,7 +309,32 @@ export async function getAccountDiagnostics(req: any, res: Response) {
     if (!account?.id)
       return res.status(404).json({ error: "WhatsApp account not found" });
 
-    res.json(await getMetaAccountDiagnostics(account));
+    const diag = await getMetaAccountDiagnostics(account);
+
+    // Persist health updates asynchronously via AccountHealthService with exact Meta Graph API values
+    const tokenStatus = diag.reconnect_required || diag.issue_codes?.includes('token_expired')
+      ? 'EXPIRED'
+      : (diag.issue_codes?.includes('token_missing') ? 'MISSING' : 'VALID');
+
+    const bizStatus = diag.business_verification?.status
+      ? String(diag.business_verification.status).toUpperCase()
+      : 'UNKNOWN';
+
+    const qualityRating = diag.phone_number_access?.quality_rating
+      ? String(diag.phone_number_access.quality_rating).toUpperCase()
+      : 'UNKNOWN';
+
+    await AccountHealthService.updateHealth(account.id, {
+      connection_status: tokenStatus === 'EXPIRED' ? 'TOKEN_INVALID' : 'CONNECTED',
+      token_status: tokenStatus,
+      business_verification_status: bizStatus as any,
+      business_name: diag.business_verification?.business_name || null,
+      business_id: diag.business_verification?.business_id || null,
+      quality_rating: qualityRating as any,
+      diagnostics_json: diag,
+    }).catch(err => console.error('[Diagnostics] Failed to persist health update:', err.message));
+
+    res.json(diag);
   } catch (err: any) {
     console.error("WhatsApp account diagnostics error:", err);
     res

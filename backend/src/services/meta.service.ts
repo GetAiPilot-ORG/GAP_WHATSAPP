@@ -1,5 +1,6 @@
 import { supabase } from '../config/supabase.js';
 import { decryptToken } from '../utils/crypto.js';
+import { AccountHealthService } from './accountHealth.service.js';
 import dotenv from "dotenv";
 dotenv.config({ path: "./.env" });
 
@@ -153,8 +154,20 @@ export function buildAccountReadinessSummary(account: any) {
 export function toSafeWhatsappAccount(account: any) {
     if (!account) return account;
     const { access_token_encrypted, ...safe } = account;
+    const hasAccessToken = Boolean(access_token_encrypted || account.has_access_token);
+    
+    const lastCheckMs = account.last_health_check_at ? new Date(account.last_health_check_at).getTime() : null;
+    const cacheAgeSeconds = lastCheckMs ? Math.max(0, Math.floor((Date.now() - lastCheckMs) / 1000)) : null;
+    const isStale = lastCheckMs ? (Date.now() - lastCheckMs) > 86400000 : true;
+
     return {
         ...safe,
+        has_access_token: hasAccessToken,
+        verified_at: account.last_health_check_at || account.updated_at || null,
+        cache_age_seconds: cacheAgeSeconds,
+        is_stale: isStale,
+        last_sync_status: account.last_sync_status || 'UNKNOWN',
+        health: AccountHealthService.buildHealthSummary(account),
         ...buildAccountReadinessSummary(account)
     };
 }

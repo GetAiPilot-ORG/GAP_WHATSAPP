@@ -25,6 +25,7 @@ import {
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
 import { useAuth } from '../context/AuthContext'
+import { useWhatsAppAccounts } from '../context/WhatsAppAccountContext'
 
 const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: Grid2X2 },
@@ -61,7 +62,7 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
     const [isHovered, setIsHovered] = useState(false)
     const [isOrgMenuOpen, setIsOrgMenuOpen] = useState(false)
     const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
-    const [waAccounts, setWaAccounts] = useState([])
+    const { accounts: waAccounts } = useWhatsAppAccounts()
     const [selectedWaAccount, setSelectedWaAccount] = useState(() => localStorage.getItem(SELECTED_WA_ACCOUNT_KEY) || 'All')
 
     const isOwner = userRole === 'owner'
@@ -89,19 +90,6 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
         return account?.name || account?.display_phone_number || account?.phone_number_id || 'Selected account'
     }, [selectedWaAccount, waAccounts])
     const shouldHighlightConnect = isOwner && waAccounts.length === 0
-
-    useEffect(() => {
-        let cancelled = false
-        apiCall(`${API_BASE}/whatsapp/accounts`)
-            .then(res => res.ok ? res.json() : [])
-            .then(data => {
-                if (!cancelled) setWaAccounts(Array.isArray(data) ? data : [])
-            })
-            .catch(() => {
-                if (!cancelled) setWaAccounts([])
-            })
-        return () => { cancelled = true }
-    }, [apiCall])
 
     const isActive = (href) => {
         const [path, search] = href.split('?')
