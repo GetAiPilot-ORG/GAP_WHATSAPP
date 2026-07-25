@@ -6,6 +6,7 @@ import { io } from "socket.io-client";
 import QRCode from 'react-qr-code'
 import { useAuth } from '../context/AuthContext'
 import { useDialog } from '../context/DialogContext'
+import { useWhatsAppAccounts } from '../context/WhatsAppAccountContext'
 import ContactProfileDrawer from '../components/ContactProfileDrawer'
 import { AudioPlayerProvider } from '../components/AudioPlayerManager'
 import AudioMessageBubble from '../components/AudioMessageBubble'
@@ -538,35 +539,23 @@ export default function LiveChat() {
         () => ['whatsapp-accounts', organizationId],
         [organizationId]
     )
+    const { accounts: sharedAccounts, isLoading: isAccountsLoading, error: accountsContextError } = useWhatsAppAccounts()
+
     const {
-        data: accountRecords,
-        error: accountsError,
-        isFetching: areAccountsFetching,
-        isFetchedAfterMount: areAccountsFetchedAfterMount,
-        isPending: areAccountsPending,
+        data: accountRecords = sharedAccounts,
+        error: accountsError = accountsContextError,
+        isFetchedAfterMount: areAccountsFetchedAfterMount = true,
+        isPending: areAccountsPending = isAccountsLoading,
+        isFetching: areAccountsFetching = false,
         refetch: refetchAccounts,
     } = useQuery({
         queryKey: accountsQueryKey,
         enabled: Boolean(session?.access_token && organizationId && !isProfileLoading),
+        initialData: sharedAccounts,
         staleTime: 5 * 60 * 1000,
         gcTime: 10 * 60 * 1000,
-        placeholderData: previousData => previousData,
-        refetchOnMount: 'always',
-        retry: 2,
-        retryDelay: attempt => Math.min(500 * (2 ** attempt), 3000),
-        queryFn: async ({ signal }) => {
-            const response = await fetch(`${API_BASE}/whatsapp/accounts`, {
-                headers: authHeaders,
-                signal,
-            })
-            if (!response.ok) {
-                const body = await response.json().catch(() => ({}))
-                throw new Error(body?.error || `Unable to load WhatsApp accounts (${response.status})`)
-            }
-            const data = await response.json()
-            if (!Array.isArray(data)) throw new Error('Invalid WhatsApp accounts response')
-            return data
-        },
+        placeholderData: previousData => previousData || sharedAccounts,
+        queryFn: async () => sharedAccounts,
     })
 
     useEffect(() => {
