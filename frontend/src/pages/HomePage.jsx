@@ -9,7 +9,7 @@ const DOMAIN = 'getaipilot.in';
 const SUPPORT_EMAIL = 'getaipilott@gmail.com';
 
 /* ─── Inline SVG Icon Component ────────────────────────────── */
-const Icon = ({ d, size = 24, className = '' }) => (
+const Icon = ({ d, size = 20, className = '' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
     <path d={d} />
   </svg>
@@ -31,20 +31,16 @@ const icons = {
   template: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8m8 4H8m2-8H8',
   users: 'M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
   zap: 'M13 2L3 14h9l-1 8 10-12h-9l1-8z',
+  sparkles: 'M12 3v3m0 12v3M3 12h3m12 0h3M7.05 7.05l2.12 2.12m5.66 5.66l2.12 2.12M7.05 16.95l2.12-2.12m5.66-5.66l2.12-2.12'
 };
-
-/* ─── Simple Section Wrapper (No hiding elements) ──────────── */
-function SectionBlock({ children, className = '' }) {
-  return <div className={`hp-section-block ${className}`}>{children}</div>;
-}
 
 /* ─── Home Page Component ───────────────────────────────────── */
 export default function HomePage() {
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    document.title = `${PRODUCT} | WhatsApp Automation & Google Calendar Platform`;
-    
+    document.title = `${PRODUCT} | Enterprise WhatsApp Automation & Google Calendar Platform`;
+
     // Ensure body and html overflow allows natural scrolling on this page
     document.documentElement.style.overflowY = 'auto';
     document.body.style.overflowY = 'auto';
@@ -73,32 +69,47 @@ export default function HomePage() {
         </div>
       </nav>
 
-      {/* ── Hero Section ── */}
+      {/* ── Hero Section (Apple x Vercel Crafted) ── */}
       <section className="hp-hero">
-        <div className="hp-hero__glow" aria-hidden="true" />
-        <div className="hp-container hp-hero__grid">
-          <div className="hp-hero__content">
-            <div className="hp-hero__badge">
-              <Icon d={icons.zap} size={15} /> Enterprise WhatsApp Cloud API & Integration Suite
-            </div>
-            <h1 className="hp-hero__title">
-              Complete WhatsApp Business Automation & Google Calendar Scheduling
-            </h1>
-            <p className="hp-hero__sub">
-              {PRODUCT} bridges Meta's WhatsApp Cloud API with business operations. Build complex conversational workflows, manage customer live chats with multi-agent teams, broadcast bulk notifications, and schedule meetings directly into Google Calendar.
-            </p>
-            <div className="hp-hero__ctas">
-              <Link to="/login" className="hp-btn hp-btn--primary hp-btn--lg">Log In to Platform</Link>
-              <Link to="/login" className="hp-btn hp-btn--outline hp-btn--lg">Sign Up Free</Link>
-            </div>
+        <div className="hp-hero__ambient" aria-hidden="true" />
+        <div className="hp-container">
+          <div className="hp-hero__badge">
+            <span className="hp-hero__badge-pulse" />
+            <span>Meta Cloud API & Google Calendar Sync Engine</span>
           </div>
-          <div className="hp-hero__visual">
-            <img
-              src="/images/hero-dashboard.png"
-              alt={`${PRODUCT} SaaS Dashboard Interface`}
-              className="hp-hero__img"
-              loading="eager"
-            />
+
+          <h1 className="hp-hero__title">
+            Enterprise WhatsApp Automation <br className="hidden md:inline" /> & Intelligent Scheduling.
+          </h1>
+
+          <p className="hp-hero__sub">
+            Build complex conversational flows, route support chats to multi-agent desks, broadcast Meta-approved campaigns, and sync appointments directly into Google Calendar.
+          </p>
+
+          <div className="hp-hero__ctas">
+            <Link to="/login" className="hp-btn hp-btn--primary hp-btn--lg">
+              Get Started <Icon d={icons.arrow} size={16} />
+            </Link>
+            <Link to="/login" className="hp-btn hp-btn--ghost hp-btn--lg">Log In to Workspace</Link>
+          </div>
+
+          <div className="hp-hero__mockup-wrapper">
+            <div className="hp-hero__mockup-frame">
+              <div className="hp-hero__mockup-bar">
+                <div className="hp-hero__mockup-dots">
+                  <span className="bg-red-400/80" />
+                  <span className="bg-amber-400/80" />
+                  <span className="bg-emerald-400/80" />
+                </div>
+                <div className="hp-hero__mockup-title">gap-flowpilot.app / workspace / dashboard</div>
+              </div>
+              <img
+                src="/images/hero-dashboard.png"
+                alt={`${PRODUCT} SaaS Dashboard Interface`}
+                className="hp-hero__img"
+                loading="eager"
+              />
+            </div>
           </div>
         </div>
       </section>
@@ -106,164 +117,237 @@ export default function HomePage() {
       {/* ── Tech Stack Strip ── */}
       <section className="hp-trust">
         <div className="hp-container">
-          <p className="hp-trust__label">Built on Official Enterprise APIs</p>
+          <p className="hp-trust__label">BUILT ON OFFICIAL ENTERPRISE APIS & SECURE INFRASTRUCTURE</p>
           <div className="hp-trust__logos">
             <div className="hp-trust__tech-item">
-              <img src="https://cdn.simpleicons.org/whatsapp/25D366" alt="WhatsApp Business" width="30" height="30" />
+              <img src="https://cdn.simpleicons.org/whatsapp/25D366" alt="WhatsApp Business" width="24" height="24" />
               <span>WhatsApp Cloud API</span>
             </div>
             <div className="hp-trust__tech-item">
-              <img src="https://cdn.simpleicons.org/googlecalendar/4285F4" alt="Google Calendar" width="30" height="30" />
+              <img src="https://cdn.simpleicons.org/googlecalendar/4285F4" alt="Google Calendar" width="24" height="24" />
               <span>Google Calendar API</span>
             </div>
             <div className="hp-trust__tech-item">
-              <img src="https://cdn.simpleicons.org/meta/0081FB" alt="Meta Platforms" width="30" height="30" />
+              <img src="https://cdn.simpleicons.org/meta/0081FB" alt="Meta Platforms" width="24" height="24" />
               <span>Meta Business Platform</span>
             </div>
             <div className="hp-trust__tech-item">
-              <img src="https://cdn.simpleicons.org/supabase/3ECF8E" alt="Supabase" width="30" height="30" />
+              <img src="https://cdn.simpleicons.org/supabase/3ECF8E" alt="Supabase" width="24" height="24" />
               <span>Supabase Enterprise DB</span>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ── Core Platform Modules ── */}
-      <section className="hp-features">
+      {/* ── Apple-Style Bento Grid Features (Diverse & Rich Visuals) ── */}
+      <section className="hp-bento">
         <div className="hp-container">
-          <SectionBlock>
-            <h2 className="hp-section-title">Core Platform Architecture & Modules</h2>
+          <div className="hp-section-header">
+            <h2 className="hp-section-title">Core Platform Architecture</h2>
             <p className="hp-section-sub">
-              {PRODUCT} delivers a comprehensive software solution for automating customer communication and scheduling.
+              Everything your team needs to scale automated customer operations on WhatsApp.
             </p>
-          </SectionBlock>
+          </div>
 
-          <div className="hp-features__grid">
-            {[
-              {
-                icon: icons.flow,
-                title: 'Interactive Flow Engine',
-                desc: 'Construct visual decision trees. Process user button clicks, message lists, keyword triggers, and condition branches in real-time.',
-              },
-              {
-                icon: icons.calendar,
-                title: 'Google Calendar Sync',
-                desc: 'Expose live calendar free/busy slots via WhatsApp. Customers pick a slot, and an event is booked to Google Calendar with exact timezone offsets.',
-              },
-              {
-                icon: icons.message,
-                title: 'Multi-Agent Shared Inbox',
-                desc: 'A team chat portal allowing multiple agents to respond to customer WhatsApp messages, transfer chats, add tags, and review history.',
-              },
-              {
-                icon: icons.broadcast,
-                title: 'Template Broadcast Manager',
-                desc: 'Create, approve, and send targeted WhatsApp message broadcasts. Upload recipient CSV lists and view deliverability analytics.',
-              },
-              {
-                icon: icons.bot,
-                title: 'AI Conversational Agents',
-                desc: 'Train specialized AI chatbots on custom knowledge bases to address repetitive customer inquiries before handing off to human agents.',
-              },
-              {
-                icon: icons.contacts,
-                title: 'Customer Contact Database',
-                desc: 'Centralized CRM database storing contact phone numbers, conversation session state, custom flow variables, and profile pictures.',
-              },
-              {
-                icon: icons.template,
-                title: 'Meta Template Wizard',
-                desc: 'Draft and submit WhatsApp message templates (Utility, Marketing, Authentication) directly to Meta for rapid approval.',
-              },
-              {
-                icon: icons.chart,
-                title: 'Live Metrics & Reporting',
-                desc: 'Detailed dashboards tracking message throughput, session completion rates, agent response latency, and appointment bookings.',
-              },
-            ].map((f) => (
-              <SectionBlock key={f.title} className="hp-feature-card">
-                <div className="hp-feature-card__icon">
-                  <Icon d={f.icon} size={22} />
+          <div className="hp-bento__grid">
+            {/* Bento 1: Visual Flow Engine */}
+            <div className="hp-bento__card hp-bento__card--hero">
+              <div className="hp-bento__body">
+                <div className="hp-bento__header-row">
+                  <div className="hp-bento__icon-badge hp-bento__icon-badge--emerald">
+                    <Icon d={icons.flow} size={20} />
+                  </div>
+                  <div className="hp-bento__tag">Drag & Drop Engine</div>
                 </div>
-                <h3 className="hp-feature-card__title">{f.title}</h3>
-                <p className="hp-feature-card__desc">{f.desc}</p>
-              </SectionBlock>
-            ))}
+                <h3 className="hp-bento__title">Visual Flow Builder Engine</h3>
+                <p className="hp-bento__desc">
+                  Construct visual decision trees with zero code. Process button taps, list selectors, keyword triggers, and condition branches in real-time.
+                </p>
+              </div>
+              <div className="hp-bento__visual-box">
+                <img src="/images/feature-flow-builder.png" alt="Visual Flow Builder Canvas" className="hp-bento__img" />
+              </div>
+            </div>
+
+            {/* Bento 2: Google Calendar */}
+            <div className="hp-bento__card hp-bento__card--blue">
+              <div className="hp-bento__body">
+                <div className="hp-bento__header-row">
+                  <div className="hp-bento__icon-badge hp-bento__icon-badge--blue">
+                    <Icon d={icons.calendar} size={20} />
+                  </div>
+                  <div className="hp-bento__tag hp-bento__tag--blue">OAuth 2.0 Direct</div>
+                </div>
+                <h3 className="hp-bento__title">Google Calendar Sync</h3>
+                <p className="hp-bento__desc">
+                  Expose live calendar free/busy slots via WhatsApp. Customers pick a slot, and an event is booked automatically with exact timezone offsets.
+                </p>
+              </div>
+
+              {/* Interactive Visual Slot Preview */}
+              <div className="hp-bento__preview-widget hp-bento__preview-widget--gcal">
+                <div className="hp-bento__gcal-slot hp-bento__gcal-slot--active">
+                  <span className="hp-bento__dot hp-bento__dot--green" />
+                  <span>10:00 AM IST</span>
+                  <span className="hp-bento__slot-badge">Confirmed</span>
+                </div>
+                <div className="hp-bento__gcal-slot">
+                  <span className="hp-bento__dot hp-bento__dot--blue" />
+                  <span>02:30 PM IST</span>
+                  <span className="hp-bento__slot-badge hp-bento__slot-badge--free">Free</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Bento 3: Multi-Agent Inbox */}
+            <div className="hp-bento__card hp-bento__card--teal">
+              <div className="hp-bento__body">
+                <div className="hp-bento__header-row">
+                  <div className="hp-bento__icon-badge hp-bento__icon-badge--teal">
+                    <Icon d={icons.message} size={20} />
+                  </div>
+                  <div className="hp-bento__tag hp-bento__tag--teal">Real-time Sockets</div>
+                </div>
+                <h3 className="hp-bento__title">Multi-Agent Live Chat Desk</h3>
+                <p className="hp-bento__desc">
+                  Unified team inbox allowing multiple agents to manage WhatsApp conversations, transfer chats, add tags, and collaborate with internal notes.
+                </p>
+              </div>
+
+              <div className="hp-bento__preview-widget hp-bento__preview-widget--chat">
+                <div className="hp-bento__chat-bubble">
+                  <span className="hp-bento__chat-sender">Agent Chetana</span>
+                  <p className="hp-bento__chat-msg">Meeting confirmed for tomorrow at 10:00 AM! Calendar invite sent.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Bento 4: Broadcast Manager */}
+            <div className="hp-bento__card hp-bento__card--amber">
+              <div className="hp-bento__body">
+                <div className="hp-bento__header-row">
+                  <div className="hp-bento__icon-badge hp-bento__icon-badge--amber">
+                    <Icon d={icons.broadcast} size={20} />
+                  </div>
+                  <div className="hp-bento__tag hp-bento__tag--amber">Meta Approved</div>
+                </div>
+                <h3 className="hp-bento__title">Template Broadcast Engine</h3>
+                <p className="hp-bento__desc">
+                  Draft, approve, and send targeted WhatsApp broadcasts. Upload CSV contact lists and track delivery metrics in real time.
+                </p>
+              </div>
+
+              <div className="hp-bento__preview-widget hp-bento__preview-widget--broadcast">
+                <div className="hp-bento__stat-chip">
+                  <span className="hp-bento__stat-val">99.4%</span>
+                  <span className="hp-bento__stat-lbl">Deliverability</span>
+                </div>
+                <div className="hp-bento__stat-chip">
+                  <span className="hp-bento__stat-val">CSV</span>
+                  <span className="hp-bento__stat-lbl">Bulk Upload</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Bento 5: AI Bots (Purple/Indigo AI Tint Card) */}
+            <div className="hp-bento__card hp-bento__card--purple">
+              <div className="hp-bento__body">
+                <div className="hp-bento__header-row">
+                  <div className="hp-bento__icon-badge hp-bento__icon-badge--purple">
+                    <Icon d={icons.bot} size={20} />
+                  </div>
+                  <div className="hp-bento__tag hp-bento__tag--purple">RAG Knowledge Engine</div>
+                </div>
+                <h3 className="hp-bento__title">AI Knowledge Chatbots</h3>
+                <p className="hp-bento__desc">
+                  Train specialized AI agents on custom document bases to resolve repetitive support queries automatically before human handoff.
+                </p>
+              </div>
+
+              <div className="hp-bento__preview-widget hp-bento__preview-widget--purple">
+                <div className="hp-bento__ai-prompt">
+                  <Icon d={icons.sparkles} size={14} className="text-purple-600" />
+                  <span>AI: "Checking workspace availability..."</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ── Deep Dive: Flow Automation & Inbox ── */}
+      {/* ── Deep Dive Technical Overview ── */}
       <section className="hp-deep-dive">
         <div className="hp-container">
-          <SectionBlock>
-            <h2 className="hp-section-title">In-Depth Application Overview</h2>
+          <div className="hp-section-header">
+            <h2 className="hp-section-title">In-Depth Application Capabilities</h2>
             <p className="hp-section-sub">
-              Detailed breakdown of how {PRODUCT} powers end-to-end business communication and integration flows.
+              Detailed breakdown of how {PRODUCT} powers end-to-end business communication.
             </p>
-          </SectionBlock>
-
-          {/* Module 1: Flow Builder */}
-          <div className="hp-deep-dive__block">
-            <SectionBlock className="hp-deep-dive__content">
-              <h3 className="hp-deep-dive__title">1. Drag-and-Drop WhatsApp Flow Engine</h3>
-              <p className="hp-deep-dive__desc">
-                The flow builder allows administrators to map complex interactive messaging journeys without code. Incoming messages trigger node executions that evaluate conditions, request user inputs, or call external API webhooks.
-              </p>
-              <ul className="hp-deep-dive__bullets">
-                <li><Icon d={icons.check} size={18} className="hp-deep-dive__icon" /> <strong>Trigger Management:</strong> Start flows via inbound keyword matches, WhatsApp link clicks, or webhook events.</li>
-                <li><Icon d={icons.check} size={18} className="hp-deep-dive__icon" /> <strong>Interactive Messaging:</strong> Send native WhatsApp button choices, multi-item pickers, and dynamic media documents.</li>
-                <li><Icon d={icons.check} size={18} className="hp-deep-dive__icon" /> <strong>Session State Storage:</strong> Save customer selections directly into flow session state data for downstream processing.</li>
-              </ul>
-            </SectionBlock>
-            <SectionBlock className="hp-deep-dive__visual">
-              <img src="/images/feature-flow-builder.png" alt="Visual WhatsApp Flow Builder Canvas" className="hp-deep-dive__img" />
-            </SectionBlock>
           </div>
 
-          {/* Module 2: Team Collaboration */}
-          <div className="hp-deep-dive__block hp-deep-dive__block--reverse">
-            <SectionBlock className="hp-deep-dive__content">
-              <h3 className="hp-deep-dive__title">2. Unified Live Chat & Agent Desk</h3>
-              <p className="hp-deep-dive__desc">
-                When automated flows reach human hand-off nodes, conversations seamlessly route to the multi-agent inbox. Team members can step in, answer questions, and manage customer relations.
-              </p>
-              <ul className="hp-deep-dive__bullets">
-                <li><Icon d={icons.check} size={18} className="hp-deep-dive__icon" /> <strong>Agent Assignment:</strong> Route incoming WhatsApp chats automatically or manually to designated team agents.</li>
-                <li><Icon d={icons.check} size={18} className="hp-deep-dive__icon" /> <strong>Internal Workspace Notes:</strong> Collaborate behind the scenes with internal agent notes before replying.</li>
-                <li><Icon d={icons.check} size={18} className="hp-deep-dive__icon" /> <strong>Real-time Socket Sync:</strong> Instant web socket updates ensure messages display across agent screens instantly.</li>
-              </ul>
-            </SectionBlock>
-            <SectionBlock className="hp-deep-dive__visual">
-              <img src="/images/hero-dashboard.png" alt="Multi-Agent Live Chat Workspace" className="hp-deep-dive__img" />
-            </SectionBlock>
+          <div className="hp-deep-dive__stack">
+            {/* Block 1 */}
+            <div className="hp-deep-dive__row">
+              <div className="hp-deep-dive__col">
+                <h3 className="hp-deep-dive__heading">1. Interactive WhatsApp Flow Engine</h3>
+                <p className="hp-deep-dive__text">
+                  The flow builder maps complex interactive messaging journeys without writing code. Incoming messages trigger node executions that evaluate conditions, request user inputs, or call external API webhooks.
+                </p>
+                <ul className="hp-deep-dive__list">
+                  <li><Icon d={icons.check} size={16} /> <strong>Trigger Management:</strong> Start flows via inbound keywords, WhatsApp link clicks, or webhook events.</li>
+                  <li><Icon d={icons.check} size={16} /> <strong>Interactive Messaging:</strong> Send native WhatsApp button choices, multi-item pickers, and dynamic media documents.</li>
+                  <li><Icon d={icons.check} size={16} /> <strong>Session State Storage:</strong> Save customer selections directly into flow variables for downstream processing.</li>
+                </ul>
+              </div>
+              <div className="hp-deep-dive__col-img">
+                <img src="/images/feature-flow-builder.png" alt="Visual WhatsApp Flow Builder Canvas" className="hp-deep-dive__card-img" />
+              </div>
+            </div>
+
+            {/* Block 2 */}
+            <div className="hp-deep-dive__row hp-deep-dive__row--reverse">
+              <div className="hp-deep-dive__col">
+                <h3 className="hp-deep-dive__heading">2. Multi-Agent Shared Live Chat Desk</h3>
+                <p className="hp-deep-dive__text">
+                  When automated flows reach human hand-off nodes, conversations seamlessly route to the team inbox. Multiple support members can step in, answer questions, and manage customer relations.
+                </p>
+                <ul className="hp-deep-dive__list">
+                  <li><Icon d={icons.check} size={16} /> <strong>Agent Assignment:</strong> Route incoming WhatsApp chats automatically or manually to designated team agents.</li>
+                  <li><Icon d={icons.check} size={16} /> <strong>Internal Workspace Notes:</strong> Collaborate behind the scenes with internal agent notes before replying.</li>
+                  <li><Icon d={icons.check} size={16} /> <strong>Real-time Socket Sync:</strong> Instant web socket updates ensure messages display across agent screens instantly.</li>
+                </ul>
+              </div>
+              <div className="hp-deep-dive__col-img">
+                <img src="/images/Agent-page.png" alt="Multi-Agent Live Chat Workspace" className="hp-deep-dive__card-img" />
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
       {/* ── Comprehensive Google Calendar Integration Section ── */}
       <section className="hp-gcal">
-        <div className="hp-container hp-gcal__inner">
-          <SectionBlock>
+        <div className="hp-container">
+          <div className="hp-gcal__header">
             <div className="hp-gcal__badge">
-              <img src="https://cdn.simpleicons.org/googlecalendar/4285F4" alt="" width="18" height="18" />
+              <img src="https://cdn.simpleicons.org/googlecalendar/4285F4" alt="" width="16" height="16" />
               <span>Official Google API Integration Specification</span>
             </div>
-            <h2 className="hp-gcal__title">Google Calendar API Usage & OAuth Compliance</h2>
-            <p className="hp-gcal__desc">
-              {PRODUCT} integrates with the Google Calendar API to allow businesses to offer direct meeting scheduling inside WhatsApp. Below is the precise operational specification for Google OAuth verification compliance.
+            <h2 className="hp-section-title">Google Calendar API Usage & OAuth Compliance</h2>
+            <p className="hp-section-sub">
+              {PRODUCT} integrates with the Google Calendar API to allow businesses to offer direct meeting scheduling inside WhatsApp. Below is the operational specification for Google OAuth verification compliance.
             </p>
-          </SectionBlock>
+          </div>
 
           <div className="hp-gcal__grid">
-            <SectionBlock className="hp-gcal__card">
+            <div className="hp-gcal__card">
               <h4 className="hp-gcal__card-title">1. Purpose & Core Value</h4>
               <p className="hp-gcal__card-desc">
                 The Google Calendar integration lets workspace owners connect their primary calendar. When a customer uses a WhatsApp flow to request a demo, consultation, or meeting, {PRODUCT} queries free/busy availability and creates the event automatically.
               </p>
-            </SectionBlock>
+            </div>
 
-            <SectionBlock className="hp-gcal__card">
+            <div className="hp-gcal__card">
               <h4 className="hp-gcal__card-title">2. Requested OAuth Scopes</h4>
               <p className="hp-gcal__card-desc">
                 We request scope access to:
@@ -271,35 +355,35 @@ export default function HomePage() {
                 <br />• <code>calendar.events</code> (creates, fetches, and deletes appointment events)
                 <br />• <code>calendar.readonly</code> (inspects busy slots to prevent booking conflicts)
               </p>
-            </SectionBlock>
+            </div>
 
-            <SectionBlock className="hp-gcal__card">
+            <div className="hp-gcal__card">
               <h4 className="hp-gcal__card-title">3. Timezone Offset Calculation</h4>
               <p className="hp-gcal__card-desc">
                 Events are created using exact local ISO string timestamps (e.g. <code>2026-07-25T11:00:00+05:30</code> for IST). The system resolves the calendar's primary timezone setting to ensure events land on the accurate local hour.
               </p>
-            </SectionBlock>
+            </div>
 
-            <SectionBlock className="hp-gcal__card">
+            <div className="hp-gcal__card">
               <h4 className="hp-gcal__card-title">4. Token Storage & Encryption</h4>
               <p className="hp-gcal__card-desc">
                 Google OAuth access tokens and refresh tokens are encrypted using AES-256-CBC cipher prior to being stored in our Supabase database. Tokens are never exposed to client-side scripts.
               </p>
-            </SectionBlock>
+            </div>
 
-            <SectionBlock className="hp-gcal__card">
+            <div className="hp-gcal__card">
               <h4 className="hp-gcal__card-title">5. Event Deletion & Management</h4>
               <p className="hp-gcal__card-desc">
                 If an appointment is cancelled or deleted within the {PRODUCT} Scheduled Meetings portal, the application issues a <code>DELETE</code> request to the Google Calendar API to immediately remove the event.
               </p>
-            </SectionBlock>
+            </div>
 
-            <SectionBlock className="hp-gcal__card">
+            <div className="hp-gcal__card">
               <h4 className="hp-gcal__card-title">6. Data Privacy & Non-Disclosure</h4>
               <p className="hp-gcal__card-desc">
                 Google user data is strictly used to provide appointment scheduling features. We do not sell, rent, or share Google Calendar data with third-party advertising networks or data brokers.
               </p>
-            </SectionBlock>
+            </div>
           </div>
         </div>
       </section>
@@ -307,49 +391,25 @@ export default function HomePage() {
       {/* ── Security & Infrastructure ── */}
       <section className="hp-security">
         <div className="hp-container">
-          <SectionBlock>
+          <div className="hp-section-header">
             <h2 className="hp-section-title">Infrastructure, Security & Compliance</h2>
             <p className="hp-section-sub">
               Designed with enterprise safeguards to manage high-volume messaging and sensitive API tokens securely.
             </p>
-          </SectionBlock>
+          </div>
 
           <div className="hp-security__grid">
             {[
               { icon: icons.lock, title: 'AES-256 Token Encryption', desc: 'All third-party credentials (Meta tokens, Google OAuth refresh tokens) are encrypted at rest using AES-256-CBC encryption.' },
-              { icon: icons.shield, title: 'Meta & Google API Guidelines', desc: 'Full compliance with Meta Cloud API Policies and Google API Services User Data Policy, including Limited Use requirements.' },
+              { icon: icons.shield, title: 'Meta & Google Policy Compliance', desc: 'Full compliance with Meta Cloud API Policies and Google API Services User Data Policy, including Limited Use requirements.' },
               { icon: icons.globe, title: 'DPDP & GDPR Compliance', desc: 'Strict compliance with India’s Digital Personal Data Protection Act, 2023 (DPDP) and EU GDPR standards.' },
               { icon: icons.users, title: 'Multi-Tenant Isolation', desc: 'Complete organization level data segregation ensuring workspaces access only their authorized accounts and contacts.' },
             ].map((s) => (
-              <SectionBlock key={s.title} className="hp-security-card">
-                <div className="hp-security-card__icon"><Icon d={s.icon} size={22} /></div>
+              <div key={s.title} className="hp-security-card">
+                <div className="hp-security-card__icon"><Icon d={s.icon} size={20} /></div>
                 <h3 className="hp-security-card__title">{s.title}</h3>
                 <p className="hp-security-card__desc">{s.desc}</p>
-              </SectionBlock>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Workflow Steps ── */}
-      <section className="hp-steps">
-        <div className="hp-container">
-          <SectionBlock>
-            <h2 className="hp-section-title">Workflow Execution Steps</h2>
-            <p className="hp-section-sub">How businesses set up and operate {PRODUCT} for daily operations.</p>
-          </SectionBlock>
-
-          <div className="hp-steps__grid">
-            {[
-              { num: '01', title: 'Connect WhatsApp & Google', desc: 'Authenticate your WhatsApp Phone Number ID via Meta and connect Google Calendar via secure OAuth 2.0.' },
-              { num: '02', title: 'Design Flow & Slot Rules', desc: 'Define your messaging logic, add interactive appointment nodes, and set meeting duration buffer rules.' },
-              { num: '03', title: 'Automate & Manage Support', desc: 'Flows automate lead capture and appointment creation 24/7 while your team handles live chats from one place.' },
-            ].map((s) => (
-              <SectionBlock key={s.num} className="hp-step">
-                <div className="hp-step__num">{s.num}</div>
-                <h3 className="hp-step__title">{s.title}</h3>
-                <p className="hp-step__desc">{s.desc}</p>
-              </SectionBlock>
+              </div>
             ))}
           </div>
         </div>
@@ -357,14 +417,16 @@ export default function HomePage() {
 
       {/* ── Call To Action Section ── */}
       <section className="hp-cta">
-        <div className="hp-container hp-cta__inner">
-          <SectionBlock>
+        <div className="hp-container">
+          <div className="hp-cta__box">
             <h2 className="hp-cta__title">Access {PRODUCT} Workspace</h2>
             <p className="hp-cta__desc">
               Log in to configure your WhatsApp Cloud API connections, build interactive flows, and manage scheduled meetings.
             </p>
-            <Link to="/login" className="hp-btn hp-btn--primary hp-btn--lg">Log In to Application</Link>
-          </SectionBlock>
+            <div className="hp-cta__actions">
+              <Link to="/login" className="hp-btn hp-btn--primary hp-btn--lg">Log In to Application</Link>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -372,7 +434,7 @@ export default function HomePage() {
       <footer className="hp-footer">
         <div className="hp-container hp-footer__inner">
           <div className="hp-footer__brand">
-            <img src="/logo.png" alt={`${PRODUCT} logo`} width="36" height="36" />
+            <img src="/logo.png" alt={`${PRODUCT} logo`} width="32" height="32" />
             <span className="hp-footer__name">{PRODUCT}</span>
             <p className="hp-footer__tagline">Enterprise WhatsApp Automation & Integration Platform by {COMPANY}</p>
           </div>

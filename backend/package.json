@@ -8,6 +8,7 @@
         "predev": "node scripts/kill-port.mjs",
         "dev": "tsx watch server.ts",
         "start": "tsx server.ts",
+        "build": "tsc --noEmit",
         "worker:broadcast": "tsx src/workers/broadcast.worker.ts",
         "test:broadcast": "tsx --test src/services/__tests__/broadcastQueue.service.test.ts",
         "kill-port": "node scripts/kill-port.mjs"

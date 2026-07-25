@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { supabase } from '../config/supabase.js';
 
 const KNOWLEDGE_MAX_CONTEXT_CHARS = 10000;
@@ -196,19 +197,24 @@ export async function getBotAgentReply(params: {
 
     if (!targetAgent) return null;
 
-    // Get OpenAI API key
+    // Get OpenAI API key & Model
     let apiKey = process.env.OPENAI_API_KEY || "";
-    if (!apiKey) {
-      const { data: settings } = await supabase
-        .from("openai_settings")
-        .select("api_key_encrypted")
-        .eq("organization_id", organization_id)
-        .single();
-      apiKey = settings?.api_key_encrypted || "";
+    let dbModel = "";
+
+    const { data: settings } = await supabase
+      .from("openai_settings")
+      .select("api_key_encrypted, model")
+      .eq("organization_id", organization_id)
+      .single();
+
+    if (settings?.model) {
+      dbModel = settings.model;
+    }
+    if (!apiKey && settings?.api_key_encrypted) {
+      apiKey = settings.api_key_encrypted;
     }
 
     if (!apiKey) {
-      console.log("No OpenAI API key configured, using static reply");
       // Return a static reply if no API key
       return {
         reply: `Hi! I'm ${targetAgent.name}. ${targetAgent.description || "How can I help you?"}`,
@@ -330,7 +336,7 @@ You represent "${targetAgent.name}" as a professional, helpful customer represen
 - RECOVERY FROM PAST FALLBACKS: If the user greets you again after a fallback, break out of the fallback state, acknowledge the greeting warmly, and do NOT repeat the decline response.`
     });
 
-    console.log(`[AI Debug] Sending to OpenAI for Conv ${conversation_id}:`, JSON.stringify(messages, null, 2));
+    const selectedModel = targetAgent.model || dbModel || process.env.OPENAI_MODEL || "gpt-4o-mini";
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -338,8 +344,8 @@ You represent "${targetAgent.name}" as a professional, helpful customer represen
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        model: targetAgent.model || "gpt-3.5-turbo",
+        body: JSON.stringify({
+        model: selectedModel,
         messages,
         temperature: Number(targetAgent.temperature) || 0.7,
         max_tokens: 500,
@@ -349,10 +355,6 @@ You represent "${targetAgent.name}" as a professional, helpful customer represen
     const data: any = await response.json();
 
     if (!response.ok) {
-      console.error(
-        "OpenAI API error:",
-        data.error?.message || "Unknown error",
-      );
       return {
         reply: `Hi! I'm ${targetAgent.name}. I'm having trouble processing your request right now. Please try again later.`,
         agent: targetAgent,

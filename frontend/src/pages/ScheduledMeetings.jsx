@@ -18,10 +18,13 @@ import {
     Trash2,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { useDialog } from '../context/DialogContext'
+import { notify } from '../services/notificationService'
 
 export default function ScheduledMeetings() {
     const navigate = useNavigate()
     const { memberProfile, user } = useAuth()
+    const { confirmDialog } = useDialog()
     const organizationId = memberProfile?.organization_id || user?.id || ''
 
     const [appointments, setAppointments] = useState([])
@@ -67,19 +70,24 @@ export default function ScheduledMeetings() {
             if (!res.ok) {
                 throw new Error('Failed to update status')
             }
+            notify.success(`Status updated to ${newStatus}`)
         } catch (err) {
             console.error('Error updating status:', err)
             // Rollback on error
             setAppointments((prev) =>
                 prev.map((app) => (app.id === item.id ? { ...app, status: prevStatus } : app))
             )
+            notify.error(err.message || 'Failed to update status')
         }
     }
 
     const handleDeleteAppointment = async (item) => {
-        if (!window.confirm(`Are you sure you want to delete the appointment for ${item.contact_name || item.contact_phone || 'this client'}? This will also remove it from Google Calendar.`)) {
-            return
-        }
+        const confirmed = await confirmDialog(`Are you sure you want to delete the appointment for ${item.contact_name || item.contact_phone || 'this client'}? This will also remove it from Google Calendar.`, {
+            title: 'Delete Appointment',
+            confirmLabel: 'Delete',
+            tone: 'danger'
+        })
+        if (!confirmed) return
 
         // Optimistic UI Removal (<50ms)
         setAppointments((prev) => prev.filter((app) => app.id !== item.id))
@@ -102,8 +110,10 @@ export default function ScheduledMeetings() {
             if (!res.ok) {
                 throw new Error('Failed to delete appointment')
             }
+            notify.success('Appointment deleted successfully')
         } catch (err) {
             console.error('Error deleting appointment:', err)
+            notify.error('Failed to delete appointment')
             fetchAppointments()
         }
     }

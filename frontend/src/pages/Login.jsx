@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { Loader2, Mail, Lock, MessageSquare, ShieldCheck, Sparkles, ArrowRight, CheckCircle2, Users, Zap, Eye, EyeOff } from 'lucide-react'
 
+import { notify, scrollToFirstError } from '../services/notificationService'
+
 export default function Login() {
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
@@ -14,14 +16,21 @@ export default function Login() {
 
     const handleSubmit = async (e) => {
         e.preventDefault()
+        if (!email || !password) {
+            scrollToFirstError(e.target)
+            return
+        }
         setLoading(true)
         setError('')
         try {
             const { error } = await signIn({ email, password }, 'owner')
             if (error) throw error
+            notify.success('Logged in successfully!')
             navigate('/dashboard', { replace: true })
         } catch (err) {
             setError(err.message)
+            notify.error(err.message || 'Login failed')
+            scrollToFirstError(e.target)
         } finally {
             setLoading(false)
         }

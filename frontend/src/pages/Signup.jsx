@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { Loader2, Mail, Lock, User, ArrowRight, MessageSquare } from 'lucide-react'
 
+import { notify, scrollToFirstError } from '../services/notificationService'
+
 export default function Signup() {
     const [formData, setFormData] = useState({
         email: '',
@@ -19,6 +21,8 @@ export default function Signup() {
         e.preventDefault()
 
         if (formData.password !== formData.confirmPassword) {
+            notify.error('Passwords do not match')
+            scrollToFirstError(e.target)
             return setError('Passwords do not match')
         }
 
@@ -36,9 +40,12 @@ export default function Signup() {
                 }
             })
             if (error) throw error
+            notify.success('Account created successfully! Please log in.')
             navigate('/login')
         } catch (err) {
             setError(err.message)
+            notify.error(err.message || 'Signup failed')
+            scrollToFirstError(e.target)
         } finally {
             setLoading(false)
         }

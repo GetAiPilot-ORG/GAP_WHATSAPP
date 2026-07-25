@@ -130,10 +130,11 @@ export async function sendFlowMediaMessageMeta(params: {
 }
 
 export async function sendTextMessage(to: string, body: string, phone_number_id: string | null = null, contextMessageId: string | null = null) {
-    let token = ACCESS_TOKEN;
-    let fromId = PHONE_NUMBER_ID;
+    let token: string | undefined = ACCESS_TOKEN;
+    let fromId: string | null | undefined = PHONE_NUMBER_ID;
 
     if (phone_number_id && supabase) {
+        fromId = phone_number_id;
         const { data: accounts } = await supabase
             .from('w_wa_accounts')
             .select('access_token_encrypted')
@@ -143,7 +144,8 @@ export async function sendTextMessage(to: string, body: string, phone_number_id:
         const data = accounts?.[0];
         if (data?.access_token_encrypted) {
             token = decryptToken(data.access_token_encrypted);
-            fromId = phone_number_id;
+        } else {
+            token = undefined;
         }
     }
 
@@ -172,6 +174,7 @@ export async function sendTextMessage(to: string, body: string, phone_number_id:
 
     const data = await r.json();
     if (!r.ok) {
+        console.error(`[Send Failure Debug] phone_number_id=${fromId}, tokenPrefix=${token ? token.slice(0, 15) : 'NONE'}... Meta error:`, JSON.stringify(data));
         throw new Error(`Send failed: ${JSON.stringify(data)}`);
     }
     return data;
@@ -287,10 +290,11 @@ export async function sendInteractiveButtons(
   footer: string = "",
   phone_number_id: string | null = null,
 ) {
-  let token = ACCESS_TOKEN;
-  let fromId = PHONE_NUMBER_ID;
+  let token: string | undefined = ACCESS_TOKEN;
+  let fromId: string | null | undefined = PHONE_NUMBER_ID;
 
   if (phone_number_id && supabase) {
+    fromId = phone_number_id;
     const { data: accounts } = await supabase
       .from("w_wa_accounts")
       .select("access_token_encrypted")
@@ -300,7 +304,8 @@ export async function sendInteractiveButtons(
     const data = accounts?.[0];
     if (data?.access_token_encrypted) {
       token = decryptToken(data.access_token_encrypted);
-      fromId = phone_number_id;
+    } else {
+      token = undefined;
     }
   }
 
@@ -397,10 +402,11 @@ export async function sendInteractiveList(
   footer: string = "",
   phone_number_id: string | null = null,
 ) {
-  let token = ACCESS_TOKEN;
-  let fromId = PHONE_NUMBER_ID;
+  let token: string | undefined = ACCESS_TOKEN;
+  let fromId: string | null | undefined = PHONE_NUMBER_ID;
 
   if (phone_number_id && supabase) {
+    fromId = phone_number_id;
     const { data: accounts } = await supabase
       .from("w_wa_accounts")
       .select("access_token_encrypted")
@@ -410,7 +416,8 @@ export async function sendInteractiveList(
     const data = accounts?.[0];
     if (data?.access_token_encrypted) {
       token = decryptToken(data.access_token_encrypted);
-      fromId = phone_number_id;
+    } else {
+      token = undefined;
     }
   }
 

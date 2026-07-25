@@ -22,6 +22,7 @@
     "driver.js": "^1.4.0",
     "exceljs": "^4.4.0",
     "lucide-react": "^0.562.0",
+    "motion": "^12.42.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-qr-code": "^2.0.18",
@@ -29,6 +30,7 @@
     "reactflow": "^11.11.4",
     "recharts": "^3.9.2",
     "socket.io-client": "^4.8.3",
+    "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
     "xlsx": "^0.18.5"
   },
