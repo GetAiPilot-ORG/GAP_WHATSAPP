@@ -2,6 +2,7 @@ import { X, Save } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { FLOW_TEMPLATES } from './flowTemplates';
+import { notify } from '../../services/notificationService';
 
 export default function NodeConfigPanel({ node, onClose, onSave }) {
     const [config, setConfig] = useState(node?.data?.config || {});
@@ -1139,7 +1140,7 @@ function AppointmentConfig({ config, updateConfig }) {
             );
         } catch (e) {
             console.error('Failed to launch Google auth popup:', e);
-            alert(e.message || 'Failed to launch Google Calendar connection. Ensure server environment variables are set.');
+            notify.error(e.message || 'Failed to launch Google Calendar connection. Ensure server environment variables are set.');
         } finally {
             setLoadingGoogle(false);
         }

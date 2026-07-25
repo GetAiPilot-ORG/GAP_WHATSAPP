@@ -1,6 +1,7 @@
 import { useEffect, lazy, Suspense } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { Toaster } from 'sonner'
 import Layout from './components/Layout'
 import { AuthProvider } from './context/AuthContext'
 import { DialogProvider } from './context/DialogContext'
@@ -96,6 +97,19 @@ export default function App() {
           </BrowserRouter>
         </AuthProvider>
       </DialogProvider>
+      <Toaster 
+        position="bottom-right" 
+        expand={false} 
+        richColors 
+        closeButton 
+        toastOptions={{
+          style: {
+            borderRadius: '12px',
+            fontSize: '13px',
+            fontFamily: 'Inter, system-ui, sans-serif',
+          },
+        }}
+      />
     </QueryClientProvider>
   )
 }

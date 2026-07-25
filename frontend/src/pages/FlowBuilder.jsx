@@ -4,6 +4,7 @@ import axios from 'axios';
 import FlowEditor from '../components/flow-builder/FlowEditor';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
+import { notify } from '../services/notificationService';
 import { FLOW_TEMPLATE_CATEGORIES, FLOW_TEMPLATES, buildFlowFromTemplate } from '../components/flow-builder/flowTemplates';
 import TourButton from '../onboarding/TourButton';
 
@@ -195,8 +196,10 @@ export default function FlowBuilder() {
                 headers: { 'Authorization': `Bearer ${session?.access_token}` }
             });
             setFlows(flows.filter(f => f.id !== id));
+            notify.success('Flow deleted successfully');
         } catch (error) {
             console.error('Failed to delete flow', error);
+            notify.error(error?.response?.data?.error || 'Failed to delete flow');
         }
     };
 

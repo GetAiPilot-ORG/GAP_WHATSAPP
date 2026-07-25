@@ -5,6 +5,7 @@ import { Plus, Search, Filter, MoreHorizontal, FileText, CheckCircle, Clock, XCi
 import Modal from '../components/Modal'
 import { useAuth } from '../context/AuthContext'
 import { useDialog } from '../context/DialogContext'
+import { notify } from '../services/notificationService'
 import { META_TEMPLATES_LIBRARY } from '../data/metaTemplates'
 import MetaTemplateLibrary from '../components/MetaTemplateLibrary'
 import { getPendingReviewInfo } from '../utils/templateReview'
@@ -229,9 +230,11 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                 method: 'DELETE'
             });
             if (res.ok) {
+                notify.success(`Template "${name}" deleted successfully`)
                 fetchData();
             } else {
                 const data = await res.json();
+                notify.error(data.error || 'Failed to delete template')
                 alertDialog(data.error || 'Failed to delete template', { title: 'Delete failed', tone: 'danger' });
             }
         } catch (error) {

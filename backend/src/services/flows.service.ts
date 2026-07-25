@@ -422,8 +422,8 @@ async function generateTimeSections(
   const rows = [];
   const slotsConfig = String(slotsConfigStr).toLowerCase();
 
-  let startHour = 9;
-  let endHour = 21;
+  let startHour = 10;
+  let endHour = 18;
 
   const timeRegex = /(\d+)\s*(am|pm)\s*-\s*(\d+)\s*(am|pm)/i;
   const match = slotsConfig.match(timeRegex);
@@ -476,53 +476,69 @@ async function generateTimeSections(
   const today = new Date();
   const isToday = selectedDate.toDateString() === today.toDateString();
 
-  // 15-minute slot generation loop
-  const minutesList = [0, 15, 30, 45];
-  for (let hr = startHour; hr < endHour; hr++) {
-    for (let min of minutesList) {
-      const idStr = `${String(hr).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+  // Dynamic Slot Step & Buffer Padding from Flow Node Configuration
+  const stepMins = parseInt(String(nodeConfig?.slotDurationMinutes || nodeConfig?.googleSlotDurationMinutes || 60), 10) || 60;
+  const bufferMins = parseInt(String(nodeConfig?.googleBufferMinutes || nodeConfig?.bufferMinutes || 30), 10) || 0;
+  const bufferMs = bufferMins * 60 * 1000;
 
-      // 1. Exclude if already booked by another user in Database
-      if (bookedSlotIds.has(idStr)) {
+  const totalMinStart = startHour * 60;
+  const totalMinEnd = endHour * 60;
+
+  for (let currentMin = totalMinStart; currentMin < totalMinEnd; currentMin += stepMins) {
+    const hr = Math.floor(currentMin / 60);
+    const min = currentMin % 60;
+    const idStr = `${String(hr).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+
+    // 1. Exclude if already booked by another user in Database
+    if (bookedSlotIds.has(idStr)) {
+      continue;
+    }
+
+    // Dynamic slot start and end timestamp in milliseconds
+    const slotStartTime = new Date(`${dateStr}T${idStr}:00Z`).getTime();
+    const slotEndTime = slotStartTime + stepMins * 60 * 1000;
+
+    if (isToday) {
+      const slotTimeLocal = new Date(`${dateStr}T${idStr}:00`);
+      const minAllowed = new Date(today.getTime() + 15 * 60 * 1000);
+      if (slotTimeLocal < minAllowed) {
         continue;
       }
-
-      // Slot duration is 15 minutes
-      const slotStartTime = new Date(`${dateStr}T${idStr}:00Z`).getTime();
-      const slotEndTime = slotStartTime + 15 * 60 * 1000;
-
-      if (isToday) {
-        const slotTimeLocal = new Date(`${dateStr}T${idStr}:00`);
-        const minAllowed = new Date(today.getTime() + 15 * 60 * 1000);
-        if (slotTimeLocal < minAllowed) {
-          continue;
-        }
-      }
-
-      // 2. Exclude if Google Busy Conflict (overlaps ONLY this 15-min slot)
-      if (busySlots.length > 0) {
-        const hasConflict = busySlots.some((b) => {
-          const bStart = new Date(b.start).getTime();
-          const bEnd = new Date(b.end).getTime();
-          return slotStartTime < bEnd && slotEndTime > bStart;
-        });
-
-        if (hasConflict) {
-          continue;
-        }
-      }
-
-      const displayHr = hr > 12 ? hr - 12 : hr === 0 ? 12 : hr;
-      const ampm = hr >= 12 ? "PM" : "AM";
-      const minStr = String(min).padStart(2, "0");
-      const timeStr = `${String(displayHr).padStart(2, "0")}:${minStr} ${ampm}`;
-
-      rows.push({
-        id: `time_${idStr}`,
-        title: timeStr,
-        description: `15 min slot (${timeStr})`,
-      });
     }
+
+    // 2. Exclude if Google Busy Conflict (using dynamic buffer padding from flow node config)
+    if (busySlots.length > 0) {
+      const hasConflict = busySlots.some((b) => {
+        const bStart = new Date(b.start).getTime() - bufferMs;
+        const bEnd = new Date(b.end).getTime() + bufferMs;
+        return slotStartTime < bEnd && slotEndTime > bStart;
+      });
+
+      if (hasConflict) {
+        continue;
+      }
+    }
+
+    const displayHr = hr > 12 ? hr - 12 : hr === 0 ? 12 : hr;
+    const ampm = hr >= 12 ? "PM" : "AM";
+    const minStr = String(min).padStart(2, "0");
+    const timeStr = `${String(displayHr).padStart(2, "0")}:${minStr} ${ampm}`;
+
+    const endCurrentMin = currentMin + stepMins;
+    const endHr = Math.floor(endCurrentMin / 60);
+    const endMin = endCurrentMin % 60;
+    const displayEndHr = endHr > 12 ? endHr - 12 : endHr === 0 ? 12 : endHr;
+    const endAmpm = endHr >= 12 ? "PM" : "AM";
+    const endMinStr = String(endMin).padStart(2, "0");
+    const endTimeStr = `${String(displayEndHr).padStart(2, "0")}:${endMinStr} ${endAmpm}`;
+
+    const labelDuration = stepMins >= 60 ? `${stepMins / 60} hr` : `${stepMins} min`;
+
+    rows.push({
+      id: `time_${idStr}`,
+      title: timeStr,
+      description: `${labelDuration} slot (${timeStr} - ${endTimeStr})`,
+    });
   }
 
   // Cap at 10 rows maximum to comply with WhatsApp Cloud API interactive list limits

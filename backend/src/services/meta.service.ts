@@ -179,7 +179,7 @@ export async function getMetaAccountDiagnostics(account: any) {
     };
 
     if (!token) {
-        addDiagnosticIssue(diagnostics, 'token_missing', 'Missing Meta access token. Reconnect this account.');
+        addDiagnosticIssue(diagnostics, 'token_missing', 'Meta API permissions are not linked to this WhatsApp number. Click Connect Meta to link account.');
         return diagnostics;
     }
 
