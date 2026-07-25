@@ -29,10 +29,10 @@ export function decryptToken(stored: string | null | undefined): string {
         const [ivHex, encHex] = stored.split(':');
         const iv = Buffer.from(ivHex, 'hex');
         const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
-        return Buffer.concat([decipher.update(Buffer.from(encHex, 'hex')), decipher.final()]).toString();
+        return Buffer.concat([decipher.update(Buffer.from(encHex, 'hex')), decipher.final()]).toString('utf8');
     } catch {
-        // Fallback: might be a legacy plain-text token
-        return stored;
+        // Decryption failed (e.g. key changed or invalid ciphertext) - return empty string
+        return '';
     }
 }
 

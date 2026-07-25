@@ -911,9 +911,10 @@ function getAccountStatus(account, diagnostics) {
     const isMeta = account.connection_type !== 'qr_session';
     const isReady = diagnostics?.send_ready ?? account.send_ready;
     const issueCodes = diagnostics?.issue_codes || [];
-    const reconnectRequired = diagnostics?.reconnect_required || issueCodes.includes('token_expired') || issueCodes.includes('token_missing');
+    const tokenExpired = diagnostics?.reconnect_required || issueCodes.includes('token_expired');
+    const tokenMissing = issueCodes.includes('token_missing') || (!account.access_token_encrypted && !diagnostics?.has_access_token);
 
-    if (reconnectRequired || account.status === 'failed' || account.status === 'disconnected') {
+    if (tokenExpired || account.status === 'failed' || account.status === 'disconnected') {
         return 'failed';
     }
 
@@ -921,6 +922,7 @@ function getAccountStatus(account, diagnostics) {
     const isCodeNotVerified = isMeta && diagnostics?.phone_number_access?.code_verification_status === 'NOT_VERIFIED';
 
     const isPending =
+        tokenMissing ||
         account.status === 'pending' ||
         account.status === 'connecting' ||
         (!isMeta && !isReady) ||
@@ -937,15 +939,17 @@ function getAccountStatus(account, diagnostics) {
 function AccountCard({ account, diagnostics, loading, onCheck, onReconnect, onDisconnect }) {
     const ready = diagnostics?.send_ready ?? account.send_ready
     const issueCodes = diagnostics?.issue_codes || []
-    const reconnectRequired = diagnostics?.reconnect_required || issueCodes.includes('token_expired') || issueCodes.includes('token_missing')
-    const summary = getAccountSummary(account, diagnostics, reconnectRequired)
+    const tokenMissing = issueCodes.includes('token_missing') || (!account.access_token_encrypted && !diagnostics?.has_access_token)
+    const tokenExpired = diagnostics?.reconnect_required || issueCodes.includes('token_expired')
+    const reconnectRequired = tokenExpired || tokenMissing
+    const summary = getAccountSummary(account, diagnostics, tokenExpired, tokenMissing)
 
     const currentStatus = getAccountStatus(account, diagnostics)
     const config = STATUS_CONFIG[currentStatus]
 
-    const statusLabel = config.label
-    const messagingStatus = currentStatus === 'connected' ? 'Send Ready' : currentStatus === 'failed' ? 'Paused' : 'Pending'
-    const templateStatus = currentStatus === 'connected' ? 'Unlocked' : currentStatus === 'failed' ? 'Reconnect' : 'Needs Check'
+    const statusLabel = currentStatus === 'connected' ? 'Connected' : tokenMissing ? 'Not Connected' : 'Disconnected'
+    const messagingStatus = currentStatus === 'connected' ? 'Send Ready' : 'Paused'
+    const templateStatus = currentStatus === 'connected' ? 'Unlocked' : tokenMissing ? 'Link Required' : 'Reconnect Required'
     const noticeClass = config.bannerClass
     const businessVerification = diagnostics?.business_verification
     const businessVerified = String(businessVerification?.status || '').toLowerCase() === 'verified'
@@ -1028,7 +1032,7 @@ function AccountCard({ account, diagnostics, loading, onCheck, onReconnect, onDi
                 {currentStatus === 'connected' ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />}
                 <div className="min-w-0 flex-1">
                     <p className="leading-relaxed">
-                        {currentStatus === 'pending' ? 'Number verification is pending. Please complete OTP verification in Meta Business Manager.' : displayedSummary || 'Run diagnostics to verify live Meta permissions.'}
+                        {displayedSummary || 'Run diagnostics to verify live Meta permissions.'}
                         {isLongSummary && (
                             <button
                                 type="button"
@@ -1050,7 +1054,7 @@ function AccountCard({ account, diagnostics, loading, onCheck, onReconnect, onDi
                         className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-xs font-semibold text-white transition-all hover:bg-blue-700 w-full sm:w-auto"
                     >
                         <Smartphone className="h-4 w-4" />
-                        Reconnect Meta
+                        {tokenMissing ? 'Connect Meta' : 'Reconnect Meta'}
                     </button>
                 ) : null}
                 <button
@@ -1083,15 +1087,18 @@ function AccountCard({ account, diagnostics, loading, onCheck, onReconnect, onDi
     )
 }
 
-function getAccountSummary(account, diagnostics, reconnectRequired) {
+function getAccountSummary(account, diagnostics, tokenExpired, tokenMissing) {
     if (account.connection_type === 'qr_session') {
         return diagnostics?.send_ready ?? account.send_ready
             ? 'QR testing session is connected and ready for messaging.'
             : 'QR testing session is disconnected. Scan the QR code below to reconnect.'
     }
     if (diagnostics?.send_ready) return 'Cloud API send access verified. Ready for production.'
-    if (reconnectRequired) {
-        return 'Meta token expire ho gaya hai. Reconnect Meta click karke same number ko fresh permission ke saath link karein; uske baad sending, templates and profile access restore ho jayega.'
+    if (tokenMissing) {
+        return 'Is WhatsApp number ke saath Meta API permissions linked nahi hain. "Connect Meta" click karke is account ko Connect with Meta se link karein.'
+    }
+    if (tokenExpired) {
+        return 'Is connected account ka Meta token expire ho gaya hai. "Reconnect Meta" click karke same number ko fresh permission ke saath link karein.'
     }
     if (diagnostics?.issues?.length) return diagnostics.issues.join(', ')
     return account.diagnostics_summary

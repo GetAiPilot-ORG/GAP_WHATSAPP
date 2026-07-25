@@ -526,10 +526,8 @@ export async function handleWebhook(req: any, res: Response) {
               phone_number_id,
               display_phone_number:
                 metadata?.display_phone_number || phone_number_id,
-              access_token_encrypted: ACCESS_TOKEN
-                ? encryptToken(ACCESS_TOKEN)
-                : "",
-              status: "connected",
+              access_token_encrypted: null,
+              status: "pending",
             },
             { onConflict: "phone_number_id" },
           )
