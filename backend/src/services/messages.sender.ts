@@ -1,5 +1,6 @@
 import { supabase } from '../config/supabase.js';
 import { decryptToken } from '../utils/crypto.js';
+import { fetchWithMetaBackoff } from './meta.service.js';
 import { FlowEngineResult } from './flows.service.js';
 import dotenv from "dotenv";
 dotenv.config({ path: "./.env" });
@@ -455,5 +456,67 @@ export async function sendInteractiveList(
     throw new Error(`Interactive list send failed: ${JSON.stringify(data)}`);
   }
   return data;
+}
+
+export async function sendTypingIndicator(params: {
+  phone_number_id: string;
+  message_id: string;
+  token?: string;
+}): Promise<any> {
+  const { phone_number_id, message_id } = params;
+  if (!phone_number_id || !message_id) return null;
+
+  try {
+    let token = params.token;
+    if (!token && supabase) {
+      const { data: accounts } = await supabase
+        .from('w_wa_accounts')
+        .select('access_token_encrypted')
+        .eq('phone_number_id', phone_number_id)
+        .order('status', { ascending: true })
+        .limit(1);
+      const data = accounts?.[0];
+      if (data?.access_token_encrypted) {
+        token = decryptToken(data.access_token_encrypted);
+      }
+    }
+    if (!token) {
+      token = process.env.WA_ACCESS_TOKEN;
+    }
+    if (!token) {
+      console.warn(`[TypingIndicator] Skipped: No access token found for phone_number_id ${phone_number_id}`);
+      return null;
+    }
+
+    const url = `https://graph.facebook.com/v21.0/${phone_number_id}/messages`;
+    const payload = {
+      messaging_product: "whatsapp",
+      status: "read",
+      message_id: message_id,
+      typing_indicator: {
+        type: "text"
+      }
+    };
+
+    const res = await fetchWithMetaBackoff(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const json: any = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      console.warn(`[TypingIndicator] Meta returned status ${res.status} for message ${message_id}:`, JSON.stringify(json));
+    } else {
+      console.log(`💬 [TypingIndicator] Sent typing indicator & marked message ${message_id} as read`);
+    }
+    return json;
+  } catch (err: any) {
+    console.warn(`[TypingIndicator] Non-blocking exception for message ${message_id}:`, err?.message || err);
+    return null;
+  }
 }
 

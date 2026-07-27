@@ -5,7 +5,7 @@ import { io } from '../socket.js';
 import { performAutoAssignment } from '../services/assignment.service.js';
 
 import { storeMessage, upsertConversation, refundWhatsappMessage } from '../services/messages.service.js';
-import { sendTextMessage, applyReactionUpdate, downloadMetaMedia, sendInteractiveButtons, sendFlowMediaMessageMeta, sendInteractiveList } from '../services/messages.sender.js';
+import { sendTextMessage, applyReactionUpdate, downloadMetaMedia, sendInteractiveButtons, sendFlowMediaMessageMeta, sendInteractiveList, sendTypingIndicator } from '../services/messages.sender.js';
 import { processFlowEngine } from '../services/flows.service.js';
 import { upsertContact } from '../services/contacts.service.js';
 import { getBotAgentReply } from '../services/ai.service.js';
@@ -825,6 +825,27 @@ export async function handleWebhook(req: any, res: Response) {
 
       // E. Bot Auto-Reply
       try {
+        // Send Meta WhatsApp typing indicator immediately & non-blockingly if bot is enabled for automated response
+        const isBotEnabled = conv?.bot_enabled !== false;
+        if (isBotEnabled && phone_number_id && wa_message_id) {
+          webhookLog("typing_indicator.async.dispatch", {
+            requestId,
+            phone_number_id,
+            wa_message_id,
+            conversation_id: conv.id,
+          });
+          sendTypingIndicator({
+            phone_number_id,
+            message_id: wa_message_id,
+          }).catch((err: any) => {
+            webhookError("typing_indicator.async.failed", err, {
+              requestId,
+              wa_message_id,
+              phone_number_id,
+            });
+          });
+        }
+
         // Intercept human handoff request via button selection or keyword
         const incomingText = text?.toLowerCase().trim();
         const interactiveId = msg.interactive?.button_reply?.id || null;
