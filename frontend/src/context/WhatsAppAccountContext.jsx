@@ -60,6 +60,10 @@ export function WhatsAppAccountProvider({ children }) {
                 (payload) => {
                     if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
                         const updatedRow = payload.new
+                        if (updatedRow.status === 'disconnected') {
+                            setAccounts(prev => prev.filter(acc => String(acc.id) !== String(updatedRow.id)))
+                            return
+                        }
                         setAccounts(prev => {
                             const index = prev.findIndex(acc => String(acc.id) === String(updatedRow.id))
                             if (index >= 0) {
@@ -68,7 +72,7 @@ export function WhatsAppAccountProvider({ children }) {
                                 const newVer = Number(updatedRow.health_version || 1)
 
                                 // Ignore stale updates (newest update wins)
-                                if (newVer < currentVer) return prev
+                                if (newVer < currentVer && updatedRow.status !== 'disconnected') return prev
 
                                 const next = [...prev]
                                 next[index] = {

@@ -68,7 +68,7 @@ export function decryptFormToken(token: string): string {
     const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
     decipher.setAuthTag(tag);
     const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
-    
+
     // Validate expiration
     const payload = JSON.parse(decrypted.toString('utf8'));
     if (payload?.expires_at) {

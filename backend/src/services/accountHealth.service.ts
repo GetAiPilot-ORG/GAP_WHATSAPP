@@ -30,11 +30,11 @@ export class AccountHealthService {
         connection_status: AccountHealthState;
         token_status: 'VALID' | 'EXPIRED' | 'MISSING' | 'INVALID';
         business_verification_status: 'VERIFIED' | 'ACTION_REQUIRED' | 'PENDING' | 'UNKNOWN';
-        business_name: string;
-        business_id: string;
-        quality_rating: 'GREEN' | 'YELLOW' | 'RED' | 'UNKNOWN';
-        messaging_limit: string;
-        webhook_status: string;
+        business_name: string | null;
+        business_id: string | null;
+        quality_rating: 'GREEN' | 'YELLOW' | 'RED' | 'UNKNOWN' | null;
+        messaging_limit: string | null;
+        webhook_status: string | null;
         diagnostics_json: any;
     }>) {
         if (!accountId) return null;
@@ -76,17 +76,18 @@ export class AccountHealthService {
                 has_access_token: Boolean(current.access_token_encrypted),
                 health_version: nextVersion,
                 last_health_check_at: now,
-                updated_at: now,
+                last_sync_attempt_at: now,
+                last_sync_status: targetConnectionStatus === 'TOKEN_INVALID' ? 'FAILED' : 'SUCCESS',
             };
 
-            if (updates.token_status) payload.token_status = updates.token_status;
-            if (updates.business_verification_status) payload.business_verification_status = updates.business_verification_status;
-            if (updates.business_name) payload.business_name = updates.business_name;
-            if (updates.business_id) payload.business_id = updates.business_id;
-            if (updates.quality_rating) payload.quality_rating = updates.quality_rating;
-            if (updates.messaging_limit) payload.messaging_limit = updates.messaging_limit;
-            if (updates.webhook_status) payload.webhook_status = updates.webhook_status;
-            if (updates.diagnostics_json) payload.health_cache = updates.diagnostics_json;
+            if (updates.token_status !== undefined) payload.token_status = updates.token_status;
+            if (updates.business_verification_status !== undefined) payload.business_verification_status = updates.business_verification_status;
+            if (updates.business_name !== undefined) payload.business_name = updates.business_name;
+            if (updates.business_id !== undefined) payload.business_id = updates.business_id;
+            if (updates.quality_rating !== undefined) payload.quality_rating = updates.quality_rating;
+            if (updates.messaging_limit !== undefined) payload.messaging_limit = updates.messaging_limit;
+            if (updates.webhook_status !== undefined) payload.webhook_status = updates.webhook_status;
+            if (updates.diagnostics_json !== undefined) payload.health_cache = updates.diagnostics_json;
 
             // 3. Persist update to DB with Optimistic Concurrency Control (OCC)
             const { data: updated, error: updateErr } = await supabase
@@ -98,22 +99,32 @@ export class AccountHealthService {
                 .single();
 
             if (updateErr) {
-                // If columns don't exist yet (e.g. connection_status), fallback to standard columns
-                if (updateErr.message?.includes('column') || updateErr.message?.includes('does not exist')) {
-                    const fallbackPayload = {
-                        status: payload.status,
-                        updated_at: now,
-                    };
-                    const { data: fallbackUpdated } = await supabase
-                        .from('w_wa_accounts')
-                        .update(fallbackPayload)
-                        .eq('id', accountId)
-                        .select('*')
-                        .single();
-                    return fallbackUpdated || current;
+                // If OCC check or column issue occurs, update directly by account ID
+                const { data: fallbackUpdated, error: fallbackErr } = await supabase
+                    .from('w_wa_accounts')
+                    .update(payload)
+                    .eq('id', accountId)
+                    .select('*')
+                    .single();
+
+                if (fallbackErr) {
+                    if (fallbackErr.message?.includes('column') || fallbackErr.message?.includes('does not exist')) {
+                        const minPayload = {
+                            status: payload.status,
+                            updated_at: now,
+                        };
+                        const { data: minUpdated } = await supabase
+                            .from('w_wa_accounts')
+                            .update(minPayload)
+                            .eq('id', accountId)
+                            .select('*')
+                            .single();
+                        return minUpdated || current;
+                    }
+                    console.error('[AccountHealthService] Failed to persist health update:', fallbackErr.message);
+                    return current;
                 }
-                console.error('[AccountHealthService] Failed to persist health update:', updateErr.message);
-                return current;
+                return fallbackUpdated || current;
             }
 
             return updated;
@@ -195,6 +206,11 @@ export class AccountHealthService {
                         ? String(diag.phone_number_access.quality_rating).toUpperCase()
                         : 'UNKNOWN';
 
+                    const { normalizeMessagingLimitTier } = await import('./meta.service.js');
+                    const rawLimit = diag.phone_number_access?.messaging_limit_tier || diag.phone_number_access?.messaging_limit;
+                    const messagingLimit = rawLimit ? normalizeMessagingLimitTier(rawLimit) : null;
+                    const webhookStatus = diag.webhook_subscription && !diag.webhook_subscription.error ? 'SUBSCRIBED' : 'NOT_SUBSCRIBED';
+
                     await this.updateHealth(account.id, {
                         connection_status: tokenStatus === 'EXPIRED' ? 'TOKEN_INVALID' : 'CONNECTED',
                         token_status: tokenStatus as any,
@@ -202,6 +218,8 @@ export class AccountHealthService {
                         business_name: diag.business_verification?.business_name || null,
                         business_id: diag.business_verification?.business_id || null,
                         quality_rating: qualityRating as any,
+                        messaging_limit: String(messagingLimit),
+                        webhook_status: webhookStatus,
                         diagnostics_json: diag,
                     });
                     succeeded++;

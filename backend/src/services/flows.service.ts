@@ -569,7 +569,53 @@ export async function processFlowEngine(
   const assigned_bot_id = convData?.assigned_bot_id || null;
 
 
-  // Flow Builder has priority and is independent from the per-chat AI-agent toggle.
+  // Pre-fetch active flows to check for Exact Match trigger overrides before resuming an active session
+  const { data: activeFlows } = await supabase
+    .from("w_flows")
+    .select("*")
+    .eq("organization_id", organization_id)
+    .eq("status", "active");
+
+  const accountEligibleFlows = (activeFlows || []).filter((flow: any) =>
+    flowAppliesToAccount(flow, incomingWaAccountId),
+  );
+
+  // Hydrate all eligible flow versions
+  const hydratedFlows: Array<{ flow: any; version: any; nodes: any[]; startNode: any; matchType: string; triggers: string[] }> = [];
+  for (const flow of accountEligibleFlows) {
+    let version = null;
+    if (flow.current_version_id) {
+      const { data } = await supabase
+        .from("w_flow_versions")
+        .select("*")
+        .eq("id", flow.current_version_id)
+        .maybeSingle();
+      version = data;
+    }
+    const nodes = version?.nodes || flow.nodes || [];
+    const startNode = nodes.find((n: any) => n?.type === 'startBotFlow');
+    const matchType = String(startNode?.data?.config?.matchType || flow?.match_type || 'string').toLowerCase().trim();
+    const triggers = getFlowTriggerKeywords(version || flow, nodes);
+    hydratedFlows.push({ flow, version, nodes, startNode, matchType, triggers });
+  }
+
+  // Phase 1: Check for Exact Match flow triggers (highest priority, overrides active sessions)
+  let matchedFlow: any = null;
+  let matchedVersion: any = null;
+
+  for (const item of hydratedFlows) {
+    if (item.matchType === 'exact') {
+      const isMatch = item.triggers.some((t: string) => {
+        const keyword = t.toLowerCase().trim();
+        return keyword && normalized === keyword;
+      });
+      if (isMatch) {
+        matchedFlow = item.flow;
+        matchedVersion = item.version;
+        break;
+      }
+    }
+  }
 
   // 1. Check for active session by contact_id
   const { data: session } = await supabase
@@ -587,52 +633,50 @@ export async function processFlowEngine(
   let run_id: string | null = null;
   let isResuming = false;
 
-  if (session) {
-    if (session.conversation_id !== conversation_id) {
-      // The session is tied to a different conversation (e.g. deleted/recreated).
-      // Discard/abandon it to allow new sessions to be created for this contact.
+  if (matchedFlow) {
+    // Exact Match trigger hit! Abandon any existing active session and start fresh
+    if (session) {
       await supabase
         .from("w_flow_sessions")
-        .update({
-          status: "completed",
-          completed_at: new Date().toISOString(),
-        })
+        .update({ status: "completed", completed_at: new Date().toISOString() })
         .eq("id", session.id);
-
       if (session.active_run_id) {
         await supabase
           .from("w_flow_runs")
-          .update({
-            status: "completed",
-            ended_at: new Date().toISOString(),
-          })
+          .update({ status: "completed", ended_at: new Date().toISOString() })
           .eq("id", session.active_run_id);
       }
-      console.log(`[Flow] Abandoned orphaned session ${session.id} for contact ${contact_id} due to conversation mismatch (old: ${session.conversation_id}, new: ${conversation_id})`);
+      console.log(`[Flow] Exact trigger "${normalized}" matched flow ${matchedFlow.name}; completed old session ${session.id}`);
+    }
+  } else if (session) {
+    if (session.conversation_id !== conversation_id) {
+      // Discard/abandon orphaned session
+      await supabase
+        .from("w_flow_sessions")
+        .update({ status: "completed", completed_at: new Date().toISOString() })
+        .eq("id", session.id);
+      if (session.active_run_id) {
+        await supabase
+          .from("w_flow_runs")
+          .update({ status: "completed", ended_at: new Date().toISOString() })
+          .eq("id", session.active_run_id);
+      }
+      console.log(`[Flow] Abandoned orphaned session ${session.id} for contact ${contact_id}`);
     } else {
       const flowObj = (session as any).w_flows;
       const flowStatus = Array.isArray(flowObj) ? flowObj[0]?.status : flowObj?.status;
 
       if (!flowStatus || flowStatus !== "active") {
-        // Flow is archived, draft, or deleted; ignore/abandon the stale session
         await supabase
           .from("w_flow_sessions")
-          .update({
-            status: "completed",
-            completed_at: new Date().toISOString(),
-          })
+          .update({ status: "completed", completed_at: new Date().toISOString() })
           .eq("id", session.id);
-
         if (session.active_run_id) {
           await supabase
             .from("w_flow_runs")
-            .update({
-              status: "completed",
-              ended_at: new Date().toISOString(),
-            })
+            .update({ status: "completed", ended_at: new Date().toISOString() })
             .eq("id", session.active_run_id);
         }
-        console.log(`[Flow] Abandoned stale session ${session.id} for inactive flow ${session.flow_id} (status: ${flowStatus || "deleted"})`);
       } else {
         currentFlowId = session.flow_id;
         currentFlowVersionId = session.flow_version_id || null;
@@ -644,67 +688,42 @@ export async function processFlowEngine(
     }
   }
 
-  if (!isResuming) {
-    // 2. Check for trigger matches in active flows
-    const { data: activeFlows } = await supabase
-      .from("w_flows")
-      .select("*")
-      .eq("organization_id", organization_id)
-      .eq("status", "active");
-
-    const accountEligibleFlows = (activeFlows || []).filter((flow: any) =>
-      flowAppliesToAccount(flow, incomingWaAccountId),
-    );
-
-    let matchedFlow = null;
-    let matchedVersion = null;
-    for (const flow of accountEligibleFlows) {
-      let version = null;
-      if (flow.current_version_id) {
-        const { data } = await supabase
-          .from("w_flow_versions")
-          .select("*")
-          .eq("id", flow.current_version_id)
-          .maybeSingle();
-        version = data;
-      }
-      const nodes = version?.nodes || flow.nodes || [];
-      const allTriggers = getFlowTriggerKeywords(version || flow, nodes);
-
-      const isMatch = allTriggers.some((t: string) => {
-        const keyword = t.toLowerCase().trim();
-        if (!keyword) return false;
-        const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(`\\b${escaped}\\b`, 'i');
-        return regex.test(normalized);
-      });
-
-      if (isMatch) {
-        matchedFlow = flow;
-        matchedVersion = version;
-        break;
+  if (!isResuming && !matchedFlow) {
+    // Phase 2: Check String Match flows if no exact match flow triggered and no active session
+    for (const item of hydratedFlows) {
+      if (item.matchType !== 'exact') {
+        const isMatch = item.triggers.some((t: string) => {
+          const keyword = t.toLowerCase().trim();
+          return keyword && normalized.includes(keyword);
+        });
+        if (isMatch) {
+          matchedFlow = item.flow;
+          matchedVersion = item.version;
+          break;
+        }
       }
     }
+  }
 
-    if (!matchedFlow) {
-      console.log("[Flow] No active flow matched; AI fallback may run", {
-        organization_id,
-        conversation_id,
-        text: normalized,
-        active_flow_count: activeFlows?.length || 0,
-        account_eligible_flow_count: accountEligibleFlows.length,
-        incoming_wa_account_id: incomingWaAccountId || null,
-        triggers: accountEligibleFlows.map((flow: any) => ({
-          id: flow.id,
-          name: flow.name,
-          trigger_keywords: flow.trigger_keywords,
-          triggers: flow.triggers,
-          wa_account_scope: flow.wa_account_scope || "all",
-          wa_account_ids: flow.wa_account_ids || [],
-        })),
-      });
-      return { consumed: false, output: null };
-    }
+  if (!isResuming && !matchedFlow) {
+    console.log("[Flow] No active flow matched; AI fallback may run", {
+      organization_id,
+      conversation_id,
+      text: normalized,
+      active_flow_count: activeFlows?.length || 0,
+      account_eligible_flow_count: accountEligibleFlows.length,
+      incoming_wa_account_id: incomingWaAccountId || null,
+      triggers: accountEligibleFlows.map((flow: any) => ({
+        id: flow.id,
+        name: flow.name,
+        trigger_keywords: flow.trigger_keywords,
+        triggers: flow.triggers,
+        wa_account_scope: flow.wa_account_scope || "all",
+        wa_account_ids: flow.wa_account_ids || [],
+      })),
+    });
+    return { consumed: false, output: null };
+  }
 
     console.log("[Flow] Matched active flow", {
       organization_id,
@@ -720,8 +739,8 @@ export async function processFlowEngine(
     currentFlowVersionId =
       matchedVersion?.id || matchedFlow.current_version_id || null;
     // Find start node
-    const nodes = matchedVersion?.nodes || matchedFlow.nodes || [];
-    const startNode = nodes.find((n: any) => n.type === "startBotFlow");
+    const targetNodes = matchedVersion?.nodes || matchedFlow.nodes || [];
+    const startNode = targetNodes.find((n: any) => n.type === "startBotFlow");
     if (!startNode) return { consumed: false, output: null };
 
     currentNodeId = startNode.id;
@@ -794,7 +813,6 @@ export async function processFlowEngine(
     console.log(
       `🆕 New flow session created: ${session_id}, starting at node: ${currentNodeId}`,
     );
-  }
 
   if (!currentFlowId || !currentNodeId || !session_id) {
     return { consumed: false, output: null };
