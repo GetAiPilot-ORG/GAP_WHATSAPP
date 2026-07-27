@@ -6,6 +6,8 @@ import { useDialog } from '../context/DialogContext'
 import { useNotificationSound } from '../hooks/useNotificationSound'
 import TourButton from '../onboarding/TourButton'
 import { useQueryClient } from '@tanstack/react-query'
+import InsightsViewToggle from '../components/insights/InsightsViewToggle'
+import InsightsChartView from '../components/insights/InsightsChartView'
 
 const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
 const DESKTOP_NOTIFICATION_KEY = 'gap_desktop_notifications_enabled'
@@ -40,6 +42,24 @@ export default function Settings() {
     const [broadcastInsights, setBroadcastInsights] = useState(null)
     const [isLoadingBroadcastInsights, setIsLoadingBroadcastInsights] = useState(false)
     const [broadcastInsightsError, setBroadcastInsightsError] = useState('')
+
+    const [insightsViewMode, setInsightsViewMode] = useState(() => {
+        try {
+            return localStorage.getItem('insights_view_mode') || 'list'
+        } catch {
+            return 'list'
+        }
+    })
+
+    const handleInsightsViewChange = (mode) => {
+        setInsightsViewMode(mode)
+        try {
+            localStorage.setItem('insights_view_mode', mode)
+        } catch {
+            // Ignored
+        }
+    }
+
     const {
         isEnabled: notificationSoundEnabled,
         setIsEnabled: setNotificationSoundEnabled,
@@ -1723,14 +1743,12 @@ export default function Settings() {
                                     type="button"
                                     onClick={fetchBroadcastInsights}
                                     disabled={isLoadingBroadcastInsights}
-                                    className="inline-flex items-center gap-1.5 rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors self-start sm:self-auto"
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors shadow-2xs self-start sm:self-auto"
                                 >
                                     <RefreshCw className={`h-3.5 w-3.5 ${isLoadingBroadcastInsights ? 'animate-spin' : ''}`} />
                                     Refresh
                                 </button>
                             </div>
-
-
 
                             {broadcastInsightsError && (
                                 <div className="mx-5 mt-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -1738,52 +1756,11 @@ export default function Settings() {
                                 </div>
                             )}
 
-                            <div className="p-5 space-y-4">
-
-                                {/* Top 3-panel grid */}
-                                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                                    <InsightPanel
-                                        title="All Messages"
-                                        rows={[
-                                            { key: 'marketing', label: 'Messages sent', value: fmtNum(allMsg.total_sent) },
-                                            { key: 'service', label: 'Messages delivered', value: fmtNum(allMsg.total_delivered) },
-                                            { key: 'utility', label: 'Messages received', value: fmtNum(allMsg.total_received) },
-                                        ]}
-                                    />
-                                    <InsightPanel
-                                        title="Messages Delivered"
-                                        total={msgDelivered.total}
-                                        rows={(msgDelivered.categories || []).map(c => ({
-                                            key: c.key, label: c.label, value: fmtNum(c.delivered)
-                                        }))}
-                                    />
-                                    <InsightPanel
-                                        title="Free Messages Delivered"
-                                        total={freeDelivered.total}
-                                        rows={(freeDelivered.categories || []).map(c => ({
-                                            key: c.key, label: c.label, value: fmtNum(c.delivered)
-                                        }))}
-                                    />
-                                </div>
-
-                                {/* Bottom 2-panel grid */}
-                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                    <InsightPanel
-                                        title="Paid Messages Delivered"
-                                        total={paidDelivered.total}
-                                        rows={(paidDelivered.categories || []).map(c => ({
-                                            key: c.key, label: c.label, value: fmtNum(c.delivered)
-                                        }))}
-                                    />
-                                    <InsightPanel
-                                        title="Approximate Total Charges"
-                                        totalLabel={fmtRupees(charges.total_paise)}
-                                        rows={(charges.categories || []).map(c => ({
-                                            key: c.key, label: c.label, value: fmtRupees(c.charges_paise)
-                                        }))}
-                                    />
-                                </div>
-
+                            <div className="p-5">
+                                <InsightsChartView
+                                    broadcastInsights={broadcastInsights}
+                                    isLoading={isLoadingBroadcastInsights}
+                                />
                             </div>
                         </div>
                     )

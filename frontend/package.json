@@ -21,6 +21,7 @@
     "date-fns": "^4.1.0",
     "driver.js": "^1.4.0",
     "exceljs": "^4.4.0",
+    "framer-motion": "^12.42.2",
     "lucide-react": "^0.562.0",
     "motion": "^12.42.2",
     "react": "^19.2.0",
