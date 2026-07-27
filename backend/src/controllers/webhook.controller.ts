@@ -1265,6 +1265,9 @@ export async function handleWebhook(req: any, res: Response) {
               const previousPromise = botLockMap.get(conv.id) || Promise.resolve();
               const currentPromise = previousPromise.then(async () => {
                   try {
+                      if (phone_number_id && wa_message_id) {
+                        sendTypingIndicator({ phone_number_id, message_id: wa_message_id }).catch(() => {});
+                      }
                       const botResult = await getBotAgentReply({
                         organization_id,
                         conversation_id: conv.id,
