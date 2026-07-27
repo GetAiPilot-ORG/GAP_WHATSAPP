@@ -2,6 +2,7 @@
 
 **Effective Date:** March 2026
 
+
 Welcome to **WhatsApp Automation** (the "App"). This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our website or use our WhatsApp automation services, including our integrations with the Meta (Facebook) WhatsApp Cloud API.
 
 By using our App, you agree to the collection and use of information in accordance with this Privacy Policy.

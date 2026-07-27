@@ -1,5 +1,5 @@
 import { Handle, Position } from 'reactflow';
-import { Trash2, Check, AlertCircle } from 'lucide-react';
+import { Trash2, Check, AlertCircle, Eye } from 'lucide-react';
 
 export default function BaseNode({
     id,
@@ -30,10 +30,27 @@ export default function BaseNode({
 
     return (
         <div
-            className={`flow-node bg-white rounded-lg border border-gray-200 transition-all ${selected ? 'ring-2 ring-[#25D366] ring-offset-2 ring-offset-[#f5f7fa]' : 'hover:border-gray-300'
+            className={`flow-node group relative bg-white rounded-lg border border-gray-200 transition-all ${selected ? 'ring-2 ring-[#25D366] ring-offset-2 ring-offset-[#f5f7fa]' : 'hover:border-gray-300'
                 }`}
             style={{ minWidth: '240px', maxWidth: '280px' }}
         >
+            {/* Eye preview button */}
+            {data?.onPreview && (
+                <div className="absolute -left-10 top-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            data.onPreview(id);
+                        }}
+                        className="bg-white border border-gray-200 shadow-sm rounded-full p-2 text-gray-500 hover:text-blue-600 hover:bg-gray-50 flex items-center justify-center nodrag nopan"
+                        title="Preview node on WhatsApp"
+                    >
+                        <Eye className="h-4 w-4" />
+                    </button>
+                </div>
+            )}
             {handles.input && (
                 <Handle
                     type="target"

@@ -8,22 +8,30 @@
         "predev": "node scripts/kill-port.mjs",
         "dev": "tsx watch server.ts",
         "start": "tsx server.ts",
+        "build": "tsc --noEmit",
+        "worker:broadcast": "tsx src/workers/broadcast.worker.ts",
+        "test:broadcast": "tsx --test src/services/__tests__/broadcastQueue.service.test.ts",
         "kill-port": "node scripts/kill-port.mjs"
     },
     "dependencies": {
         "@supabase/supabase-js": "^2.89.0",
+        "@types/node-cron": "^3.0.11",
         "@whiskeysockets/baileys": "^6.6.0",
+        "bullmq": "^5.79.2",
         "cors": "^2.8.5",
         "dotenv": "^16.3.1",
         "express": "^4.18.2",
+        "ioredis": "^5.10.1",
         "mammoth": "^1.12.0",
         "multer": "^1.4.5-lts.1",
+        "node-cron": "^4.2.1",
         "node-fetch": "^3.3.2",
-        "nodemailer": "^8.0.7",
+        "nodemailer": "9.0.1",
         "pdf-parse": "^1.1.1",
         "pino": "^10.3.1",
         "qrcode-terminal": "^0.12.0",
-        "socket.io": "^4.7.2"
+        "socket.io": "^4.7.2",
+        "twilio": "^6.0.2"
     },
     "devDependencies": {
         "@types/cors": "^2.8.17",

@@ -30,3 +30,6 @@ build/
 Thumbs.db
 
 .codex-history
+
+**/baileys_auth_info/
+**/app-state-sync-*

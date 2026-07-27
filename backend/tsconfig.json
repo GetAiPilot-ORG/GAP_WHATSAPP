@@ -11,9 +11,13 @@
         "outDir": "./dist"
     },
     "include": [
-        "**/*.ts"
+        "server.ts",
+        "src/**/*.ts"
     ],
     "exclude": [
-        "node_modules"
+        "node_modules",
+        "extract_agents.ts",
+        "temp_flow.ts",
+        "extract_flow_engine.ts"
     ]
 }

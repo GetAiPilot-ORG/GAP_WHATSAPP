@@ -1,12 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, Fragment } from 'react'
+import { Dialog as HeadlessDialog, Transition as HeadlessTransition } from '@headlessui/react'
 import {
     AlertCircle,
     ChevronDown,
     Loader2,
 } from 'lucide-react'
 import {
+    ArrowRight,
     Brain,
     Check,
+    ChatCircleText,
     Database,
     FileText,
     GearSix,
@@ -16,21 +19,21 @@ import {
     Robot,
     ShieldCheck,
     Sparkle,
+    Target,
     Trash,
     UploadSimple,
     X,
 } from '@phosphor-icons/react'
 import { useAuth } from '../context/AuthContext'
 import { useDialog } from '../context/DialogContext'
+import { FALLBACK_PLANS } from '../config/whatsappPricing'
+import TourButton from '../onboarding/TourButton'
 
 const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
 const API_BASE = `${BACKEND_BASE}/api`
 
 const MODELS = [
     { value: 'gpt-4o-mini', label: 'GPT-4o Mini', helper: 'Fast support replies' },
-    { value: 'gpt-4o', label: 'GPT-4o', helper: 'Best quality' },
-    { value: 'gpt-4-turbo', label: 'GPT-4 Turbo', helper: 'Legacy advanced' },
-    { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo', helper: 'Legacy low cost' },
 ]
 
 const defaultAgent = {
@@ -55,7 +58,7 @@ const settingsType = '__agent_settings'
 const getDocCharCount = (doc) => Number(doc?.character_count ?? String(doc?.content || '').length ?? 0)
 
 export default function BotAgents() {
-    const { session, apiCall } = useAuth()
+    const { session, apiCall, user } = useAuth()
     const { alertDialog, confirmDialog } = useDialog()
     const [agents, setAgents] = useState([])
     const [knowledgeDocs, setKnowledgeDocs] = useState([])
@@ -69,6 +72,15 @@ export default function BotAgents() {
     const [isSaving, setIsSaving] = useState(false)
     const [query, setQuery] = useState('')
     const [uploadingKb, setUploadingKb] = useState(false)
+    const [confirmModal, setConfirmModal] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        confirmLabel: '',
+        cancelLabel: '',
+        tone: 'info',
+        onConfirm: () => { },
+    })
     const fileInputRef = useRef(null)
 
     const authHeaders = useMemo(() => ({
@@ -155,10 +167,40 @@ export default function BotAgents() {
         return { total: agents.length, active, unknown, trainedChars }
     }, [agents])
 
+    const currentPlanName = user?.plan || 'No active plan'
+    const normalizedPlanName = currentPlanName.toLowerCase()
+    const currentPlanConfig = useMemo(() => {
+        let lookupKey = normalizedPlanName
+        if (
+            normalizedPlanName.includes('gap max') || 
+            normalizedPlanName.includes('gap core') || 
+            normalizedPlanName.includes('gap pro')
+        ) {
+            lookupKey = 'pro'
+        } else if (
+            normalizedPlanName.includes('free trial') || 
+            normalizedPlanName.includes('trial')
+        ) {
+            lookupKey = 'starter'
+        }
+        return FALLBACK_PLANS.find(p => 
+            lookupKey.includes(p.id.toLowerCase()) || 
+            lookupKey.includes(p.name.toLowerCase())
+        )
+    }, [normalizedPlanName])
+    const aiAgentLimit = currentPlanConfig?.limits?.ai_agents ?? 0
+    const isLimitReached = aiAgentLimit !== -1 && agents.length >= aiAgentLimit
+
     const filteredAgents = agents.filter(agent => {
         const haystack = [agent.name, agent.description, agent.model, ...(agent.triggerKeywords || []), ...(agent.knowledgeBase || [])].join(' ').toLowerCase()
         return !query.trim() || haystack.includes(query.trim().toLowerCase())
     })
+    const hasAgents = agents.length > 0
+    const setupSteps = [
+        { title: 'Add business knowledge', helper: `${knowledgeDocs.length} docs ready`, done: knowledgeDocs.length > 0 },
+        { title: 'Create first agent', helper: hasAgents ? `${agents.length} agents created` : 'Click Create Agent', done: hasAgents },
+        { title: 'Turn on auto replies', helper: stats.unknown > 0 ? `${stats.unknown} ready` : 'Enable unknown chats', done: stats.unknown > 0 },
+    ]
 
     const openCreate = () => {
         setDraft({
@@ -199,8 +241,26 @@ export default function BotAgents() {
         is_active: draft.isActive,
     })
 
-    const saveAgent = async () => {
+    const saveAgent = () => {
         if (!draft.name.trim()) return
+        const isEditing = Boolean(draft.id)
+        setConfirmModal({
+            isOpen: true,
+            title: isEditing ? 'Save changes?' : 'Create agent?',
+            message: isEditing
+                ? `Are you sure you want to save the updated settings and re-train the agent "${draft.name}"?`
+                : `Are you sure you want to create and train the new agent "${draft.name}"?`,
+            confirmLabel: isEditing ? 'Save & Train' : 'Create & Train',
+            cancelLabel: 'Cancel',
+            tone: 'info',
+            onConfirm: () => {
+                setConfirmModal(prev => ({ ...prev, isOpen: false }))
+                executeSaveAgent()
+            }
+        })
+    }
+
+    const executeSaveAgent = async () => {
         setIsSaving(true)
         try {
             const res = await apiCall(`${API_BASE}/agents${draft.id ? `/${draft.id}` : ''}`, {
@@ -226,15 +286,29 @@ export default function BotAgents() {
         if (res.ok) setAgents(prev => prev.map(item => item.id === agent.id ? { ...item, isActive: !item.isActive } : item))
     }
 
-    const deleteAgent = async (agent) => {
-        const confirmed = await confirmDialog(`Delete ${agent.name}? This cannot be undone.`, {
-            title: 'Delete agent',
+    const deleteAgent = (agent) => {
+        setConfirmModal({
+            isOpen: true,
+            title: 'Delete agent?',
+            message: `Are you sure you want to delete ${agent.name}? This action is permanent and cannot be undone.`,
+            confirmLabel: 'Delete',
+            cancelLabel: 'Cancel',
             tone: 'danger',
-            confirmLabel: 'Delete agent',
+            onConfirm: async () => {
+                setConfirmModal(prev => ({ ...prev, isOpen: false }))
+                try {
+                    const res = await apiCall(`${API_BASE}/agents/${agent.id}`, { method: 'DELETE' })
+                    if (res.ok) {
+                        setAgents(prev => prev.filter(item => item.id !== agent.id))
+                    } else {
+                        const data = await res.json().catch(() => ({}))
+                        alertDialog(data.error || 'Failed to delete agent', { title: 'Delete failed', tone: 'danger' })
+                    }
+                } catch (err) {
+                    alertDialog(err.message || 'Failed to delete agent', { title: 'Delete failed', tone: 'danger' })
+                }
+            }
         })
-        if (!confirmed) return
-        const res = await apiCall(`${API_BASE}/agents/${agent.id}`, { method: 'DELETE' })
-        if (res.ok) setAgents(prev => prev.filter(item => item.id !== agent.id))
     }
 
     const saveApiKey = async () => {
@@ -291,27 +365,56 @@ export default function BotAgents() {
     }
 
     return (
-        <div className="min-h-full bg-gray-50/70 px-4 py-5 lg:px-7">
+        <div className="min-h-full bg-[#f5f7fa]  sm:px-4 lg:px-7">
             <div className="space-y-5">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-950">Bot Agents</h1>
-                        <p className="mt-1 text-sm text-gray-500">Train WhatsApp agents with saved knowledge, trigger rules, and automatic replies for new chats.</p>
+                <div className="rounded-lg border border-gray-200 bg-white p-4 sm:p-5">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="max-w-2xl">
+                            <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-[#0064b7]">
+                                <Sparkle size={14} weight="fill" />
+                                WhatsApp AI setup
+                            </div>
+                            <h1 className="mt-3 text-2xl font-semibold leading-tight text-gray-950 sm:text-3xl">Bot Agents</h1>
+                            <p className="mt-2 text-sm leading-6 text-gray-600">Aapke WhatsApp ke liye trained assistant. Pehle docs add karo, phir ek agent create karo, aur auto replies on kar do.</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:flex-wrap sm:items-center sm:w-auto">
+                            <span className="hidden sm:inline-block"><TourButton /></span>
+                            <button onClick={refreshAll} className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-all active:scale-[0.98]">
+                                <Database size={18} weight="duotone" />
+                                Sync
+                            </button>
+                            <button data-tour="agents-api" onClick={() => setShowApiSettings(true)} className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3.5 py-2 text-sm font-semibold transition-all active:scale-[0.98] ${apiKeyConfigured ? 'border-green-200 bg-green-50 text-green-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
+                                <Key size={18} weight="duotone" />
+                                API Settings
+                                {apiKeyConfigured ? <Check size={16} weight="bold" /> : null}
+                            </button>
+                            <div className="col-span-2 sm:col-span-1">
+                                <button
+                                    onClick={openCreate}
+                                    data-tour="agents-create"
+                                    disabled={isLimitReached}
+                                    title={isLimitReached ? `AI agent limit reached for ${currentPlanName} plan (${agents.length}/${aiAgentLimit}). Upgrade your plan to add more.` : 'Click here to create your first agent'}
+                                    className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-all active:scale-[0.98] ${isLimitReached ? 'cursor-not-allowed bg-gray-400' : 'bg-green-600 hover:bg-green-700'}`}
+                                >
+                                    <Plus size={18} weight="bold" />
+                                    {hasAgents ? 'Create Agent' : 'Create first agent'}
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
-                        <button onClick={refreshAll} className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50">
-                            <Database size={18} weight="duotone" />
-                            Sync
-                        </button>
-                        <button onClick={() => setShowApiSettings(true)} className={`inline-flex items-center justify-center gap-2 rounded-lg border px-3.5 py-2 text-sm font-semibold shadow-sm ${apiKeyConfigured ? 'border-green-200 bg-green-50 text-green-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
-                            <Key size={18} weight="duotone" />
-                            API Settings
-                            {apiKeyConfigured ? <Check size={16} weight="bold" /> : null}
-                        </button>
-                        <button onClick={openCreate} className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-700">
-                            <Plus size={18} weight="bold" />
-                            Create Agent
-                        </button>
+
+                    <div className="mt-5 grid gap-3 md:grid-cols-3">
+                        {setupSteps.map((step, index) => (
+                            <div key={step.title} className={`flex items-start gap-3 rounded-lg border p-3 ${step.done ? 'border-green-200 bg-green-50' : 'border-blue-100 bg-blue-50/60'}`}>
+                                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${step.done ? 'bg-green-600 text-white' : 'bg-white text-[#0064b7] ring-1 ring-blue-100'}`}>
+                                    {step.done ? <Check size={15} weight="bold" /> : index + 1}
+                                </span>
+                                <span className="min-w-0">
+                                    <span className="block text-sm font-semibold text-gray-950">{step.title}</span>
+                                    <span className="mt-0.5 block text-xs text-gray-600">{step.helper}</span>
+                                </span>
+                            </div>
+                        ))}
                     </div>
                 </div>
 
@@ -322,25 +425,28 @@ export default function BotAgents() {
                     </div>
                 ) : null}
 
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                    <StatCard icon={Robot} label="Agents" value={stats.total} />
-                    <StatCard icon={Check} label="Active" value={stats.active} />
-                    <StatCard icon={ShieldCheck} label="Unknown chat ready" value={stats.unknown} />
-                    <StatCard icon={Database} label="Trained text" value={stats.trainedChars.toLocaleString()} />
+                <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
+                    <StatCard icon={Robot} label="Agents" value={stats.total} helper="Total trained bots" />
+                    <StatCard icon={Check} label="Active" value={stats.active} helper="Replying now" />
+                    <StatCard icon={ShieldCheck} label="Auto reply ready" value={stats.unknown} helper="New chats covered" />
+                    <StatCard icon={Database} label="Trained text" value={stats.trainedChars.toLocaleString()} helper="Knowledge used" />
                 </div>
 
                 <div className="grid gap-4 2xl:grid-cols-[1fr_360px]">
-                    <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
+                    <section data-tour="agents-list" className="rounded-lg border border-gray-200 bg-white">
                         <div className="flex flex-col gap-3 border-b border-gray-200 p-4 md:flex-row md:items-center md:justify-between">
                             <div className="relative flex-1">
                                 <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={17} />
                                 <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search agents, keywords, docs..." className="w-full rounded-lg border border-gray-300 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20" />
                             </div>
-                            <div className="text-sm text-gray-500">{knowledgeDocs.length} synced knowledge docs</div>
+                            <div className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                                <Database size={16} weight="duotone" />
+                                {knowledgeDocs.length} synced knowledge docs
+                            </div>
                         </div>
                         <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-3">
                             {filteredAgents.length === 0 ? (
-                                <div className="col-span-full rounded-xl border border-dashed border-gray-300 p-10 text-center text-sm text-gray-500">No agents yet. Create one and attach your saved knowledge base.</div>
+                                <EmptyAgentsState hasAgents={hasAgents} query={query} onCreate={openCreate} isLimitReached={isLimitReached} />
                             ) : filteredAgents.map(agent => (
                                 <AgentCard key={agent.id} agent={agent} onEdit={openEdit} onToggle={toggleAgentStatus} onDelete={deleteAgent} />
                             ))}
@@ -348,7 +454,23 @@ export default function BotAgents() {
                     </section>
 
                     <aside className="space-y-4">
-                        <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                        <section className="rounded-lg border border-blue-100 bg-blue-50 p-4">
+                            <div className="flex gap-3">
+                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-[#0064b7] ring-1 ring-blue-100">
+                                    <Target size={20} weight="duotone" />
+                                </span>
+                                <div>
+                                    <h2 className="font-semibold text-gray-950">Quick guide</h2>
+                                    <p className="mt-1 text-sm leading-5 text-gray-600">Non-tech flow simple rakho: docs upload, agent create, phir unknown chats ko auto reply.</p>
+                                </div>
+                            </div>
+                            <button onClick={openCreate} disabled={isLimitReached} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#0070d1] px-3 py-2.5 text-sm font-semibold text-white hover:bg-[#0064b7] disabled:bg-gray-400">
+                                Click here to create first agent
+                                <ArrowRight size={16} weight="bold" />
+                            </button>
+                        </section>
+
+                        <section data-tour="agents-knowledge" className="rounded-lg border border-gray-200 bg-white p-4">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <h2 className="font-bold text-gray-950">Knowledge sync</h2>
@@ -367,15 +489,20 @@ export default function BotAgents() {
                                         <FileText size={18} weight="duotone" className="text-gray-400" />
                                         <div className="min-w-0 flex-1">
                                             <div className="truncate text-sm font-semibold text-gray-800">{doc.name}</div>
-                                            <div className="text-xs text-gray-400">{doc.size_label} • {getDocCharCount(doc).toLocaleString()} chars</div>
+                                            <div className="text-xs text-gray-400">{doc.size_label} - {getDocCharCount(doc).toLocaleString()} chars</div>
                                         </div>
                                         <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700">{doc.status || 'INDEXED'}</span>
                                     </div>
                                 ))}
+                                {knowledgeDocs.length === 0 ? (
+                                    <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-4 text-center text-sm text-gray-500">
+                                        Upload FAQ, pricing, services, or product docs. Agent isi knowledge se answer karega.
+                                    </div>
+                                ) : null}
                             </div>
                         </section>
 
-                        <section className="rounded-xl border border-green-200 bg-green-50 p-4">
+                        <section className="rounded-lg border border-green-200 bg-green-50 p-4">
                             <div className="flex gap-3">
                                 <Sparkle size={22} weight="duotone" className="mt-0.5 text-green-700" />
                                 <div>
@@ -405,21 +532,38 @@ export default function BotAgents() {
             {showApiSettings ? (
                 <ApiKeyModal apiKey={apiKey} setApiKey={setApiKey} configured={apiKeyConfigured} isSaving={isSaving} onClose={() => setShowApiSettings(false)} onSave={saveApiKey} />
             ) : null}
+
+            <AppleVercelConfirmModal
+                isOpen={confirmModal.isOpen}
+                onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                confirmLabel={confirmModal.confirmLabel}
+                cancelLabel={confirmModal.cancelLabel}
+                tone={confirmModal.tone}
+                onConfirm={confirmModal.onConfirm}
+            />
         </div>
     )
 }
 
 function AgentCard({ agent, onEdit, onToggle, onDelete }) {
+    const automationLabel = agent.automation.default_for_new_chats
+        ? 'Default for new chats'
+        : agent.automation.auto_reply_unknown
+            ? 'Unknown chats ready'
+            : 'Keyword only'
+
     return (
-        <div className="group rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-green-200 hover:shadow-md">
+        <div className="group rounded-lg border border-gray-200 bg-white p-4 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50/20">
             <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
-                    <div className={`flex h-11 w-11 items-center justify-center rounded-xl ring-1 ${agent.isActive ? 'bg-green-50 text-green-700 ring-green-200' : 'bg-gray-50 text-gray-400 ring-gray-200'}`}>
+                    <div className={`flex h-11 w-11 items-center justify-center rounded-lg ring-1 ${agent.isActive ? 'bg-green-50 text-green-700 ring-green-200' : 'bg-gray-50 text-gray-400 ring-gray-200'}`}>
                         <Robot size={24} weight="duotone" />
                     </div>
                     <div className="min-w-0">
-                        <h3 className="font-bold text-gray-950">{agent.name}</h3>
-                        <p className="text-xs text-gray-500">{agent.model} • Temp {agent.temperature}</p>
+                        <h3 className="truncate font-bold text-gray-950">{agent.name}</h3>
+                        <p className="text-xs text-gray-500">{agent.model} - Temp {agent.temperature}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-1.5">
@@ -432,6 +576,13 @@ function AgentCard({ agent, onEdit, onToggle, onDelete }) {
                     </button>
                 </div>
             </div>
+            <div className="mt-4 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+                <div className="flex items-center gap-2 text-xs font-semibold text-gray-700">
+                    <ChatCircleText size={16} weight="duotone" className="text-[#0064b7]" />
+                    {automationLabel}
+                </div>
+                <p className="mt-1 text-xs leading-5 text-gray-500">Customer message aane par ye bot selected rules ke hisaab se reply karega.</p>
+            </div>
             <p className="mt-4 line-clamp-3 min-h-[60px] text-sm leading-5 text-gray-600">{agent.description || 'No description yet.'}</p>
             <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
                 <MiniMetric label="Docs" value={agent.documentCount || 0} />
@@ -442,10 +593,32 @@ function AgentCard({ agent, onEdit, onToggle, onDelete }) {
                 {agent.automation.auto_reply_unknown ? <span className="rounded-full bg-green-50 px-2 py-1 text-xs font-semibold text-green-700">unknown auto</span> : null}
                 {agent.automation.default_for_new_chats ? <span className="rounded-full bg-purple-50 px-2 py-1 text-xs font-semibold text-purple-700">default</span> : null}
             </div>
-            <button onClick={() => onEdit(agent)} className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:border-green-200 hover:bg-green-50 hover:text-green-700">
+            <button onClick={() => onEdit(agent)} className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:border-blue-200 hover:bg-blue-50 hover:text-[#0064b7]">
                 <GearSix size={18} weight="duotone" />
-                Configure
+                Configure agent
             </button>
+        </div>
+    )
+}
+
+function EmptyAgentsState({ hasAgents, query, onCreate, isLimitReached }) {
+    return (
+        <div className="col-span-full rounded-lg border border-dashed border-blue-200 bg-blue-50/60 p-6 text-center sm:p-10">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-white text-[#0064b7] ring-1 ring-blue-100">
+                <Robot size={26} weight="duotone" />
+            </div>
+            <h3 className="mt-4 text-lg font-semibold text-gray-950">{hasAgents ? 'No matching agents found' : 'Create your first WhatsApp agent'}</h3>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-gray-600">
+                {hasAgents
+                    ? `No agent matches "${query}". Try a different name, keyword, or document search.`
+                    : 'Start simple: create one support agent, attach your docs, and enable auto replies for new chats.'}
+            </p>
+            {!hasAgents ? (
+                <button onClick={onCreate} disabled={isLimitReached} className="mt-5 inline-flex items-center justify-center gap-2 rounded-lg bg-[#0070d1] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0064b7] disabled:bg-gray-400">
+                    <Plus size={18} weight="bold" />
+                    Click here to create first agent
+                </button>
+            ) : null}
         </div>
     )
 }
@@ -493,17 +666,26 @@ function AgentDrawer({ draft, setDraft, docs, models, selectedDocs, selectedChar
                             <div className="mt-1 text-sm font-bold text-gray-900">{draft.automation.auto_reply_unknown || draft.automation.default_for_new_chats ? 'Auto-ready' : 'Keyword only'}</div>
                         </div>
                     </div>
+                    <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
+                        <div className="flex flex-col gap-2 text-sm text-gray-700 sm:flex-row sm:items-center sm:justify-between">
+                            <span className="font-semibold text-gray-950">Setup guide</span>
+                            <span>1. Profile</span>
+                            <span>2. Auto replies</span>
+                            <span>3. Knowledge</span>
+                            <span>4. Save and train</span>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto bg-gray-50 p-3 sm:p-5">
                     <div className="space-y-4">
                         <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                            <SectionTitle title="Profile" subtitle="Name, model and personality shown through bot replies." />
+                            <SectionTitle title="Profile" subtitle="Simple naam aur role likho. Customer ko ye ek helpful team member jaisa lagega." />
                             <div className="grid gap-4 md:grid-cols-2">
                                 <Field label="Agent name"><input value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} className="field-input" placeholder="Customer Support Bot" /></Field>
                                 <Field label="Model"><CustomSelect value={draft.model} onChange={value => setDraft({ ...draft, model: value })} options={models} /></Field>
                             </div>
-                            <Field label="Description" className="mt-4"><textarea value={draft.description} onChange={event => setDraft({ ...draft, description: event.target.value })} rows={5} className="field-input min-h-28 resize-y leading-6" placeholder="What does this agent do?" /></Field>
+                            <Field label="Description" className="mt-4"><textarea value={draft.description} onChange={event => setDraft({ ...draft, description: event.target.value })} rows={5} className="field-input min-h-28 resize-y leading-6" placeholder="Example: Answers pricing, services, timings, and booking questions politely." /></Field>
                             <Field label={`Temperature (${draft.temperature})`} className="mt-4">
                                 <input type="range" min="0" max="2" step="0.1" value={draft.temperature} onChange={event => setDraft({ ...draft, temperature: parseFloat(event.target.value) })} className="w-full accent-green-600" />
                                 <div className="mt-1 flex justify-between text-xs text-gray-500"><span>Precise</span><span>Creative</span></div>
@@ -512,7 +694,7 @@ function AgentDrawer({ draft, setDraft, docs, models, selectedDocs, selectedChar
 
                         <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
                             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <SectionTitle title="Automation policy" subtitle="Choose exactly when this bot replies without a human opening the chat." />
+                                <SectionTitle title="Automation policy" subtitle="Yahan decide hota hai bot kab reply karega. Start ke liye unknown chats on rakhna best hai." />
                                 <Toggle checked={draft.isActive} onChange={value => setDraft({ ...draft, isActive: value })} label={draft.isActive ? 'Active' : 'Inactive'} />
                             </div>
                             <div className="divide-y divide-gray-100 rounded-xl border border-gray-200">
@@ -521,7 +703,7 @@ function AgentDrawer({ draft, setDraft, docs, models, selectedDocs, selectedChar
                                 <PolicyToggle title="Default for new chats" description="Use this bot if no keyword matches." checked={draft.automation.default_for_new_chats} onChange={value => updateAutomation('default_for_new_chats', value)} />
                                 <PolicyToggle title="Pause after human reply" description="Keep human handoff clean." checked={draft.automation.handoff_on_human_reply} onChange={value => updateAutomation('handoff_on_human_reply', value)} />
                             </div>
-                            <Field label="Trigger keywords" className="mt-4"><input value={draft.triggerKeywords} onChange={event => setDraft({ ...draft, triggerKeywords: event.target.value })} className="field-input" placeholder="help, support, price, admission" /></Field>
+                            <Field label="Trigger keywords" className="mt-4"><input value={draft.triggerKeywords} onChange={event => setDraft({ ...draft, triggerKeywords: event.target.value })} className="field-input" placeholder="help, support, price, booking, demo" /></Field>
                         </section>
 
                         <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -529,7 +711,7 @@ function AgentDrawer({ draft, setDraft, docs, models, selectedDocs, selectedChar
                                 <SectionTitle title="Knowledge Base training" subtitle="Select indexed documents. Saving trains this agent with selected content." />
                                 <div className="rounded-lg bg-green-50 px-3 py-2 text-right">
                                     <div className="text-xs font-medium text-green-700">Selected</div>
-                                    <div className="text-sm font-bold text-green-950">{selectedDocs.length} docs • {selectedCharacters.toLocaleString()} chars</div>
+                                    <div className="text-sm font-bold text-green-950">{selectedDocs.length} docs - {selectedCharacters.toLocaleString()} chars</div>
                                 </div>
                             </div>
                             <div className="mb-3 flex gap-2">
@@ -548,7 +730,7 @@ function AgentDrawer({ draft, setDraft, docs, models, selectedDocs, selectedChar
                                             </div>
                                             <div className="min-w-0 flex-1">
                                                 <div className="truncate text-sm font-bold text-gray-900">{doc.name}</div>
-                                                <div className="text-xs text-gray-500">{doc.size_label} • {getDocCharCount(doc).toLocaleString()} chars</div>
+                                                <div className="text-xs text-gray-500">{doc.size_label} - {getDocCharCount(doc).toLocaleString()} chars</div>
                                             </div>
                                         </button>
                                     )
@@ -602,15 +784,16 @@ function ApiKeyModal({ apiKey, setApiKey, configured, isSaving, onClose, onSave 
     )
 }
 
-function StatCard({ icon, label, value }) {
+function StatCard({ icon, label, value, helper }) {
     const IconComponent = icon
     return (
-        <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+        <div className="rounded-lg border border-gray-200 bg-white px-4 py-3">
             <div className="flex items-center justify-between">
                 <div className="text-xs font-medium text-gray-500">{label}</div>
                 <IconComponent size={18} weight="duotone" className="text-gray-400" />
             </div>
             <div className="mt-2 text-2xl font-bold text-gray-950">{value}</div>
+            {helper ? <div className="mt-1 text-xs text-gray-500">{helper}</div> : null}
         </div>
     )
 }
@@ -659,21 +842,105 @@ function CustomSelect({ value, onChange, options }) {
     const [open, setOpen] = useState(false)
     const selected = options.find(option => option.value === value) || options[0]
     return (
-        <div className="relative">
-            <button type="button" onClick={() => setOpen(v => !v)} onBlur={() => setTimeout(() => setOpen(false), 120)} className={`flex h-[42px] w-full items-center justify-between gap-3 rounded-lg border bg-white px-3 text-left text-sm font-semibold shadow-sm outline-none ${open ? 'border-green-500 ring-2 ring-green-500/20' : 'border-gray-300 hover:border-gray-400'}`}>
-                <span className="min-w-0"><span className="block truncate">{selected?.label}</span>{selected?.helper ? <span className="block truncate text-[10px] font-medium text-gray-400">{selected.helper}</span> : null}</span>
-                <ChevronDown className={`h-4 w-4 text-gray-500 transition ${open ? 'rotate-180' : ''}`} />
+        <div className="relative w-full">
+            <button
+                type="button"
+                onClick={() => setOpen(v => !v)}
+                onBlur={() => setTimeout(() => setOpen(false), 120)}
+                className="w-full apple-select-trigger"
+                style={{ height: '42px' }}
+            >
+                <span className="min-w-0 text-left">
+                    <span className="block truncate text-[#1d1d1f]">{selected?.label}</span>
+                    {selected?.helper ? <span className="block truncate text-[9.5px] font-medium text-gray-400 leading-tight">{selected.helper}</span> : null}
+                </span>
+                <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-gray-505 transition ${open ? 'rotate-180 text-gray-800' : ''}`} />
             </button>
             {open ? (
-                <div className="absolute z-[80] mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white p-1 shadow-xl">
-                    {options.map(option => (
-                        <button key={option.value} type="button" onMouseDown={event => event.preventDefault()} onClick={() => { onChange(option.value); setOpen(false) }} className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm ${option.value === value ? 'bg-green-50 text-green-700' : 'text-gray-700 hover:bg-gray-50'}`}>
-                            <span><span className="block font-semibold">{option.label}</span>{option.helper ? <span className="block text-[11px] text-gray-400">{option.helper}</span> : null}</span>
-                            {option.value === value ? <Check size={16} weight="bold" /> : null}
-                        </button>
-                    ))}
+                <div className="absolute z-[80] mt-1 max-h-72 w-full overflow-y-auto apple-select-dropdown wa-chat-scroll">
+                    {options.map(option => {
+                        const active = option.value === value
+                        return (
+                            <button
+                                key={option.value}
+                                type="button"
+                                onMouseDown={event => event.preventDefault()}
+                                onClick={() => { onChange(option.value); setOpen(false) }}
+                                className={`apple-select-option ${active ? 'apple-select-option-selected' : ''}`}
+                            >
+                                <span className="min-w-0 text-left">
+                                    <span className="block truncate">{option.label}</span>
+                                    {option.helper ? <span className="block truncate text-[10px] text-gray-405 leading-tight mt-0.5">{option.helper}</span> : null}
+                                </span>
+                                {active ? <Check size={16} weight="bold" className="shrink-0 text-black ml-2" /> : null}
+                            </button>
+                        )
+                    })}
                 </div>
             ) : null}
         </div>
+    )
+}
+
+function AppleVercelConfirmModal({ isOpen, onClose, title, message, confirmLabel, cancelLabel, tone = 'info', onConfirm }) {
+    return (
+        <HeadlessTransition show={isOpen} as={Fragment}>
+            <HeadlessDialog as="div" className="relative z-[100]" onClose={onClose}>
+                <HeadlessTransition.Child
+                    as={Fragment}
+                    enter="ease-out duration-200"
+                    enterFrom="opacity-0"
+                    enterTo="opacity-100"
+                    leave="ease-in duration-150"
+                    leaveFrom="opacity-100"
+                    leaveTo="opacity-0"
+                >
+                    <div className="fixed inset-0 bg-black/40 backdrop-blur-[6px]" />
+                </HeadlessTransition.Child>
+
+                <div className="fixed inset-0 overflow-y-auto">
+                    <div className="flex min-h-full items-center justify-center p-4 text-center">
+                        <HeadlessTransition.Child
+                            as={Fragment}
+                            enter="ease-out duration-200"
+                            enterFrom="opacity-0 scale-95"
+                            enterTo="opacity-100 scale-100"
+                            leave="ease-in duration-150"
+                            leaveFrom="opacity-100 scale-100"
+                            leaveTo="opacity-0 scale-95"
+                        >
+                            <HeadlessDialog.Panel className="w-full max-w-[360px] transform overflow-hidden rounded-2xl border border-neutral-100/90 bg-white p-6 text-center shadow-[0_24px_50px_-12px_rgba(0,0,0,0.15)] transition-all">
+                                <HeadlessDialog.Title as="h3" className="text-lg font-semibold text-neutral-900 tracking-tight leading-6">
+                                    {title}
+                                </HeadlessDialog.Title>
+                                <p className="mt-2 text-sm text-neutral-500 leading-relaxed font-normal">
+                                    {message}
+                                </p>
+
+                                <div className="mt-6 flex items-center gap-2.5">
+                                    <button
+                                        type="button"
+                                        onClick={onClose}
+                                        className="flex-1 px-4 py-2.5 text-sm font-semibold text-neutral-600 bg-white border border-neutral-200 rounded-xl hover:bg-neutral-50 hover:text-neutral-900 active:bg-neutral-100 transition-colors duration-150 outline-none"
+                                    >
+                                        {cancelLabel || 'Cancel'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={onConfirm}
+                                        className={`flex-1 px-4 py-2.5 text-sm font-semibold text-white border border-transparent rounded-xl shadow-sm hover:shadow active:scale-[0.98] transition-all duration-150 outline-none ${tone === 'danger'
+                                            ? 'bg-red-600 hover:bg-red-500 active:bg-red-700'
+                                            : 'bg-black hover:bg-neutral-900 active:bg-neutral-800'
+                                            }`}
+                                    >
+                                        {confirmLabel || 'Confirm'}
+                                    </button>
+                                </div>
+                            </HeadlessDialog.Panel>
+                        </HeadlessTransition.Child>
+                    </div>
+                </div>
+            </HeadlessDialog>
+        </HeadlessTransition>
     )
 }

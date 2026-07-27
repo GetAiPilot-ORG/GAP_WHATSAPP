@@ -152,6 +152,23 @@ User types in LiveChat
 ### Frontend File
 `src/pages/LiveChat.jsx`
 
+### LiveChat inbox loading contract
+
+- `GET /api/whatsapp/accounts` is the authoritative connection check. The UI remains in a loading skeleton until this request succeeds; transport failures render a retry state and are never treated as a disconnected account.
+- `GET /api/conversations?limit=50&cursor=<opaque>` returns:
+
+```json
+{
+  "items": [],
+  "next_cursor": "opaque-or-null",
+  "has_more": false
+}
+```
+
+- `limit` is clamped to `1..100`. An invalid cursor returns HTTP `400`.
+- The cursor is opaque to clients and must be sent back unchanged. Pagination is scoped by the authenticated organization and agent role on the server.
+- Apply `SQL files/livechat_inbox_performance_indexes.sql` to production before measuring large-inbox latency.
+
 ### Name Display Priority
 
 The app shows contact names in this priority order:

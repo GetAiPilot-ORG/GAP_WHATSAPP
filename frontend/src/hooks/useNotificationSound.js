@@ -1,32 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import notificationSounds from 'virtual:notification-sounds'
 
-export const NOTIFICATION_SOUNDS = [
-    {
-        id: 'dragon-studio',
-        label: 'Soft chime',
-        src: '/Notifications/dragon-studio-notification-sound-444817.mp3',
-    },
-    {
-        id: 'universfield-033',
-        label: 'Quick pop',
-        src: '/Notifications/universfield-new-notification-033-480571.mp3',
-    },
-    {
-        id: 'universfield-038',
-        label: 'Bright ping',
-        src: '/Notifications/universfield-new-notification-038-487899.mp3',
-    },
-    {
-        id: 'universfield-056',
-        label: 'Clean tap',
-        src: '/Notifications/universfield-new-notification-056-494256.mp3',
-    },
-    {
-        id: 'universfield-09',
-        label: 'Short alert',
-        src: '/Notifications/universfield-new-notification-09-352705.mp3',
-    },
-]
+const FALLBACK_NOTIFICATION_SOUND = {
+    id: 'notification-sound',
+    label: 'Notification sound',
+    src: '',
+}
+
+export const NOTIFICATION_SOUNDS = notificationSounds.length > 0
+    ? notificationSounds
+    : [FALLBACK_NOTIFICATION_SOUND]
 
 const ENABLED_STORAGE_KEY = 'gap_notification_sound_enabled'
 const SOUND_STORAGE_KEY = 'gap_notification_sound_file'

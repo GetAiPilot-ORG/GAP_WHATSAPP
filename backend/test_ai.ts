@@ -1,0 +1,1 @@
+import dotenv from 'dotenv'; dotenv.config(); import { getBotAgentReply } from './src/services/ai.service.ts'; async function test() { const res = await getBotAgentReply({ organization_id: '847e859b-9bd7-4407-93c7-84e6b7a499f2', conversation_id: 'f78e3138-64d3-46e6-9310-cda4c072f8f5', text: 'what is css' }); console.log(res); } test();

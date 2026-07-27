@@ -40,7 +40,7 @@ export default function AcceptInvite() {
 
                 const { error } = await signIn({ email: data.email, password: data.password }, 'agent')
                 if (error) throw error
-                navigate('/', { replace: true })
+                navigate('/dashboard', { replace: true })
             } catch (err) {
                 setStatus('error')
                 setMessage(err.message || 'Invitation could not be accepted')

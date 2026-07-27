@@ -3,7 +3,7 @@ import { Dialog, Transition } from '@headlessui/react'
 import { X } from 'lucide-react'
 import clsx from 'clsx'
 
-export default function Modal({ isOpen, onClose, title, children, maxWidth = 'max-w-md' }) {
+export default function Modal({ isOpen, onClose, title, children, maxWidth = 'max-w-md', panelClassName = '' }) {
     return (
         <Transition show={isOpen} as={Fragment}>
             <Dialog as="div" className="relative z-50" onClose={onClose}>
@@ -20,7 +20,7 @@ export default function Modal({ isOpen, onClose, title, children, maxWidth = 'ma
                 </Transition.Child>
 
                 <div className="fixed inset-0 overflow-y-auto">
-                    <div className="flex min-h-full items-center justify-center p-4 text-center">
+                    <div className="flex min-h-full items-end justify-center p-0 text-center sm:items-center sm:p-4">
                         <Transition.Child
                             as={Fragment}
                             enter="ease-out duration-300"
@@ -31,14 +31,17 @@ export default function Modal({ isOpen, onClose, title, children, maxWidth = 'ma
                             leaveTo="opacity-0 scale-95"
                         >
                             <Dialog.Panel className={clsx(
-                                "w-full transform overflow-hidden rounded-lg border border-gray-200 bg-white p-6 text-left align-middle transition-all",
-                                maxWidth
+                                "w-full transform overflow-hidden rounded-t-2xl border border-gray-200 bg-white p-4 text-left align-middle shadow-[0_24px_80px_rgba(15,23,42,0.18)] transition-all sm:rounded-xl sm:p-6",
+                                maxWidth,
+                                panelClassName
                             )}>
-                                <div className="flex items-center justify-between mb-5">
+                                <div className="mb-5 flex items-center justify-between">
                                     <Dialog.Title as="h3" className="text-lg font-semibold leading-6 text-gray-900">
                                         {title}
                                     </Dialog.Title>
                                     <button
+                                        type="button"
+                                        aria-label="Close dialog"
                                         onClick={onClose}
                                         className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-500 transition-colors"
                                     >

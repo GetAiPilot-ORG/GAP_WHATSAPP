@@ -7,13 +7,10 @@ export const useAuth = () => useContext(AuthContext)
 
 // Map raw plan IDs → display names
 function resolvePlanName(plan) {
-    if (!plan) return 'Free'
+    if (!plan) return 'No active plan'
     const p = plan.toLowerCase()
-    if (p.includes('all_in_one') || p.includes('ultimate') || p.includes('enterprise')) return 'GAP Ultimate Ecosystem'
-    if (p.includes('whatsapp_premium') || p.includes('premium')) return 'WhatsApp Premium'
-    if (p.includes('whatsapp_pro') || p.includes('whatsapp')) return 'WhatsApp Pro'
-    if (p === 'free' || p === '') return 'Free'
-    return plan // keep as-is for known names like "GAP Ultimate Ecosystem"
+    if (p === 'free' || p === 'whatsapp_free' || p === '') return 'No active plan'
+    return plan
 }
 
 export function AuthProvider({ children }) {
@@ -24,28 +21,49 @@ export function AuthProvider({ children }) {
     const [memberProfile, setMemberProfile] = useState(null)
     const [isProfileLoading, setIsProfileLoading] = useState(false)
     const fetchedForProfileKey = useRef(null) // tracks which user + portal we last fetched profile for
+    const lastSubscriptionCheckRef = useRef(0)
     const [loginType, setLoginType] = useState(localStorage.getItem('auth_login_type') || 'owner')
 
     const fetchUserProfile = useCallback(async (sessionUser) => {
         try {
-            // WhatsApp shares the same Supabase as the hub — query app_user_subscriptions directly
+            // Find organization owner to get their subscription status
+            const { data: member } = await supabase
+                .from('organization_members')
+                .select('organization_id')
+                .eq('user_id', sessionUser.id)
+                .maybeSingle()
+
+            let ownerId = sessionUser.id
+            if (member?.organization_id) {
+                const { data: ownerMember } = await supabase
+                    .from('organization_members')
+                    .select('user_id')
+                    .eq('organization_id', member.organization_id)
+                    .eq('role', 'owner')
+                    .maybeSingle()
+                if (ownerMember?.user_id) {
+                    ownerId = ownerMember.user_id
+                }
+            }
+
             const { data: sub } = await supabase
                 .from('app_user_subscriptions')
                 .select('plan_id, plan_label, expires_at')
-                .eq('user_id', sessionUser.id)
+                .eq('user_id', ownerId)
                 .maybeSingle()
 
             const isSubActive = sub?.expires_at ? new Date(sub.expires_at) > new Date() : false
             let resolvedPlan = isSubActive
-                ? (sub?.plan_label || sub?.plan_id || 'Free')
-                : 'Free'
-            const resolvedStatus = isSubActive ? 'active' : (sub ? 'expired' : 'free')
+                ? (sub?.plan_label || sub?.plan_id || 'No active plan')
+                : 'No active plan'
+            const resolvedStatus = isSubActive ? 'active' : (sub ? 'expired' : 'inactive')
 
             resolvedPlan = resolvePlanName(resolvedPlan)
 
-            setUser(prev => prev ? { ...prev, plan: resolvedPlan, subscription_status: resolvedStatus } : null)
+            setUser(prev => prev ? { ...prev, plan: resolvedPlan, subscription_status: resolvedStatus, subscription_checked: true } : null)
         } catch (err) {
             console.error('[AUTH] fetchUserProfile error:', err)
+            setUser(prev => prev ? { ...prev, subscription_checked: true } : null)
         }
     }, [])
 
@@ -60,7 +78,7 @@ export function AuthProvider({ children }) {
 
     const fetchMemberProfile = async (token, userId) => {
         // Avoid re-fetching on TOKEN_REFRESHED (tab focus) — only fetch when user actually changes
-        const profileKey = `${userId}:${loginType || 'owner'}`
+        const profileKey = `${userId}:${loginType || 'owner'}:${token}`
         if (fetchedForProfileKey.current === profileKey && userRole !== null) return
         fetchedForProfileKey.current = profileKey
         setUserRole(null)
@@ -68,7 +86,7 @@ export function AuthProvider({ children }) {
         setIsProfileLoading(true)
         try {
             const res = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api/team/my-profile`, {
-                headers: { 
+                headers: {
                     Authorization: `Bearer ${token}`,
                     'X-Auth-Portal': loginType
                 }
@@ -76,7 +94,6 @@ export function AuthProvider({ children }) {
             if (res.ok) {
                 const data = await res.json()
                 const role = data?.role || (loginType === 'agent' ? 'agent' : 'owner')
-                console.log("Profile Data:", data, "Resolved Role:", role, "Login Type:", loginType)
                 setUserRole(role)
                 setMemberProfile(data)
             } else {
@@ -99,8 +116,9 @@ export function AuthProvider({ children }) {
         supabase.auth.getSession().then(({ data: { session } }) => {
             setSession(session ?? null)
             if (session?.user) {
-                setUser({ ...session.user, plan: session.user.user_metadata?.plan || 'Free', subscription_status: session.user.user_metadata?.subscription_status || 'active' })
+                setUser({ ...session.user, plan: resolvePlanName(session.user.user_metadata?.plan), subscription_status: session.user.user_metadata?.subscription_status || 'inactive' })
                 fetchUserProfile(session.user)
+                lastSubscriptionCheckRef.current = Date.now()
             } else {
                 setUser(null)
             }
@@ -111,12 +129,26 @@ export function AuthProvider({ children }) {
         // Do NOT call setLoading here — it causes children to unmount/remount on
         // TOKEN_REFRESHED events (tab switching), wiping form state in child pages.
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-            console.log('Auth state change:', event, session?.user?.email);
             setSession(session ?? null)
             if (session?.user) {
-                setUser({ ...session.user, plan: session.user.user_metadata?.plan || 'Free', subscription_status: session.user.user_metadata?.subscription_status || 'active' })
+                setUser(prev => {
+                    const isSameUser = prev && prev.id === session.user.id;
+                    return {
+                        ...session.user,
+                        plan: isSameUser && prev.subscription_checked ? prev.plan : resolvePlanName(session.user.user_metadata?.plan),
+                        subscription_status: isSameUser && prev.subscription_checked ? prev.subscription_status : (session.user.user_metadata?.subscription_status || 'inactive'),
+                        subscription_checked: isSameUser ? (prev.subscription_checked || false) : false
+                    };
+                });
                 if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
                     fetchUserProfile(session.user)
+                    lastSubscriptionCheckRef.current = Date.now()
+                } else if (event === 'TOKEN_REFRESHED') {
+                    const fiveMinutes = 5 * 60 * 1000
+                    if (Date.now() - lastSubscriptionCheckRef.current > fiveMinutes) {
+                        fetchUserProfile(session.user)
+                        lastSubscriptionCheckRef.current = Date.now()
+                    }
                 }
             } else {
                 setUser(null)
@@ -124,7 +156,6 @@ export function AuthProvider({ children }) {
 
             // Handle sign out on token expiry
             if (event === 'SIGNED_OUT') {
-                console.log('User signed out');
                 setUserRole(null)
                 setMemberProfile(null)
                 setIsProfileLoading(false)
@@ -145,7 +176,56 @@ export function AuthProvider({ children }) {
             setMemberProfile(null)
             setIsProfileLoading(false)
         }
-    }, [session?.user?.id, loginType])
+    }, [session?.user?.id, session?.access_token, loginType])
+
+    const updateMyOnlineStatus = async (isOnline) => {
+        const token = session?.access_token
+        if (!token) throw new Error('No session token')
+
+        const res = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api/team/status`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+                'X-Auth-Portal': loginType || 'owner'
+            },
+            body: JSON.stringify({ is_online: isOnline })
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(data?.error || 'Failed to update online status')
+
+        setMemberProfile(prev => prev ? { ...prev, is_online: isOnline } : prev)
+        return data
+    }
+
+    useEffect(() => {
+        if (session?.access_token && memberProfile && memberProfile.role !== 'owner') {
+            let sent = false;
+            const handleUnload = () => {
+                if (sent) return;
+                sent = true;
+                const token = session.access_token;
+                const url = `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api/team/status`;
+                fetch(url, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                        'X-Auth-Portal': loginType || 'owner'
+                    },
+                    body: JSON.stringify({ is_online: false }),
+                    keepalive: true
+                }).catch(() => { });
+            };
+
+            window.addEventListener('beforeunload', handleUnload);
+            window.addEventListener('pagehide', handleUnload);
+            return () => {
+                window.removeEventListener('beforeunload', handleUnload);
+                window.removeEventListener('pagehide', handleUnload);
+            };
+        }
+    }, [session?.access_token, memberProfile, loginType]);
 
     const updateMyProfile = async ({ name, avatar_color }) => {
         const token = session?.access_token
@@ -192,7 +272,22 @@ export function AuthProvider({ children }) {
                 redirectTo: `${window.location.origin}/dashboard`
             }
         }),
-        signOut: () => {
+        signOut: async () => {
+            if (session?.access_token && memberProfile && memberProfile.role !== 'owner') {
+                try {
+                    await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api/team/status`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${session.access_token}`,
+                            'X-Auth-Portal': loginType || 'owner'
+                        },
+                        body: JSON.stringify({ is_online: false })
+                    });
+                } catch (e) {
+                    console.error("Failed to set offline status on signOut", e);
+                }
+            }
             setUserRole(null)
             setMemberProfile(null)
             fetchedForProfileKey.current = null
@@ -209,9 +304,11 @@ export function AuthProvider({ children }) {
                     const isExpiring = expiresAtMs && expiresAtMs < Date.now() + 60_000
 
                     if (!tokenOverride && isExpiring) {
-                        console.log('Token expired or expiring soon, refreshing before request...')
                         const { data, error } = await supabase.auth.refreshSession()
-                        if (error) throw error
+                        if (error) {
+                            supabase.auth.signOut().catch(() => {});
+                            throw error;
+                        }
                         currentSession = data.session
                         if (data.session) {
                             setSession(data.session)
@@ -238,9 +335,11 @@ export function AuthProvider({ children }) {
 
                     // If 401, try to refresh token once
                     if (response.status === 401 && retryCount === 0) {
-                        console.log('Token expired, attempting refresh...');
                         const { data, error } = await supabase.auth.refreshSession();
-                        if (error) throw error;
+                        if (error) {
+                            supabase.auth.signOut().catch(() => {});
+                            throw error;
+                        }
                         if (data.session) {
                             setSession(data.session);
                             setUser(data.session.user);
@@ -264,7 +363,9 @@ export function AuthProvider({ children }) {
         memberProfile,
         isProfileLoading,
         loginType,
-        updateMyProfile
+        updateMyProfile,
+        updateMyOnlineStatus,
+        setMemberProfile
     }
 
     return (

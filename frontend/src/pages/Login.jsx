@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { Loader2, Mail, Lock, MessageSquare, ShieldCheck, Sparkles, ArrowRight, CheckCircle2, Users, Zap } from 'lucide-react'
+import { Loader2, Mail, Lock, MessageSquare, ShieldCheck, Sparkles, ArrowRight, CheckCircle2, Users, Zap, Eye, EyeOff } from 'lucide-react'
+
+import { notify, scrollToFirstError } from '../services/notificationService'
 
 export default function Login() {
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
+    const [showPassword, setShowPassword] = useState(false)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
     const { signIn } = useAuth()
@@ -13,14 +16,21 @@ export default function Login() {
 
     const handleSubmit = async (e) => {
         e.preventDefault()
+        if (!email || !password) {
+            scrollToFirstError(e.target)
+            return
+        }
         setLoading(true)
         setError('')
         try {
             const { error } = await signIn({ email, password }, 'owner')
             if (error) throw error
-            navigate('/', { replace: true })
+            notify.success('Logged in successfully!')
+            navigate('/dashboard', { replace: true })
         } catch (err) {
             setError(err.message)
+            notify.error(err.message || 'Login failed')
+            scrollToFirstError(e.target)
         } finally {
             setLoading(false)
         }
@@ -57,7 +67,7 @@ export default function Login() {
                             <h1 className="text-[52px] font-light leading-[1.05] tracking-normal text-white xl:text-[60px]">
                                 WhatsApp automation that feels under control.
                             </h1>
-                            <p className="mt-5 max-w-lg text-base leading-7 text-white/76">
+                            <p className="mt-5 max-w-lg text-base leading-7 text-white/80">
                                 Build flows, manage conversations, route leads, and keep your team aligned from one focused workspace.
                             </p>
 
@@ -107,80 +117,98 @@ export default function Login() {
                             </div>
 
                             <div className="mt-7">
-                            {error && (
-                                <div className="mb-5 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                                    <Lock className="mt-0.5 h-4 w-4 shrink-0" />
-                                    <span>{error}</span>
+                                {error && (
+                                    <div className="mb-5 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                                        <Lock className="mt-0.5 h-4 w-4 shrink-0" />
+                                        <span>{error}</span>
+                                    </div>
+                                )}
+
+                                <form className="space-y-5" onSubmit={handleSubmit}>
+                                    <label className="block">
+                                        <span className="mb-2 block text-sm font-semibold text-gray-800">Email address</span>
+                                        <span className="relative block">
+                                            <Mail className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+                                            <input
+                                                id="email"
+                                                name="email"
+                                                type="email"
+                                                autoComplete="email"
+                                                required
+                                                className="h-12 w-full rounded border border-gray-300 bg-white py-3 pl-12 pr-4 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-[#128C7E] focus:ring-2 focus:ring-[#25D366]/15"
+                                                placeholder="you@example.com"
+                                                value={email}
+                                                onChange={(e) => setEmail(e.target.value)}
+                                            />
+                                        </span>
+                                    </label>
+
+                                    <label className="block">
+                                        <span className="mb-2 block text-sm font-semibold text-gray-800">Password</span>
+                                        <span className="relative block">
+                                            <Lock className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+                                            <input
+                                                id="password"
+                                                name="password"
+                                                type={showPassword ? 'text' : 'password'}
+                                                autoComplete="current-password"
+                                                required
+                                                className="h-12 w-full rounded border border-gray-300 bg-white py-3 pl-12 pr-12 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-[#128C7E] focus:ring-2 focus:ring-[#25D366]/15"
+                                                placeholder="Enter password"
+                                                value={password}
+                                                onChange={(e) => setPassword(e.target.value)}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowPassword(!showPassword)}
+                                                className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                                                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                                            >
+                                                {showPassword ? (
+                                                    <EyeOff className="h-5 w-5" />
+                                                ) : (
+                                                    <Eye className="h-5 w-5" />
+                                                )}
+                                            </button>
+                                        </span>
+                                    </label>
+
+                                    <button
+                                        type="submit"
+                                        disabled={loading}
+                                        className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#128C7E] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#0f7a6f] focus:outline-none focus:ring-4 focus:ring-[#25D366]/20 disabled:opacity-50"
+                                    >
+                                        {loading ? (
+                                            <Loader2 className="h-5 w-5 animate-spin" />
+                                        ) : (
+                                            <>
+                                                Log in to workspace
+                                                <ArrowRight className="h-4 w-4" />
+                                            </>
+                                        )}
+                                    </button>
+                                </form>
+
+                                <div className="mt-6 grid grid-cols-2 gap-3">
+                                    <a
+                                        href="https://wb.getaipilot.in/agent-login"
+                                        className="flex h-11 items-center gap-2 rounded-lg border border-[#128C7E]/30 bg-[#128C7E]/5 px-3 text-sm font-semibold text-[#128C7E] transition-colors hover:bg-[#128C7E]/10 hover:border-[#128C7E]/50"
+                                    >
+                                        <Users className="h-4 w-4" />
+                                        Team member?
+                                    </a>
+                                    <TrustItem icon={Zap} label="Dashboard first" />
                                 </div>
-                            )}
 
-                            <form className="space-y-5" onSubmit={handleSubmit}>
-                                <label className="block">
-                                    <span className="mb-2 block text-sm font-semibold text-gray-800">Email address</span>
-                                    <span className="relative block">
-                                        <Mail className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-                                        <input
-                                            id="email"
-                                            name="email"
-                                            type="email"
-                                            autoComplete="email"
-                                            required
-                                            className="h-12 w-full rounded border border-gray-300 bg-white py-3 pl-12 pr-4 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-[#128C7E] focus:ring-2 focus:ring-[#25D366]/15"
-                                            placeholder="you@example.com"
-                                            value={email}
-                                            onChange={(e) => setEmail(e.target.value)}
-                                        />
-                                    </span>
-                                </label>
-
-                                <label className="block">
-                                    <span className="mb-2 block text-sm font-semibold text-gray-800">Password</span>
-                                    <span className="relative block">
-                                        <Lock className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-                                        <input
-                                            id="password"
-                                            name="password"
-                                            type="password"
-                                            autoComplete="current-password"
-                                            required
-                                            className="h-12 w-full rounded border border-gray-300 bg-white py-3 pl-12 pr-4 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-[#128C7E] focus:ring-2 focus:ring-[#25D366]/15"
-                                            placeholder="Enter password"
-                                            value={password}
-                                            onChange={(e) => setPassword(e.target.value)}
-                                        />
-                                    </span>
-                                </label>
-
-                                <button
-                                    type="submit"
-                                    disabled={loading}
-                                    className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#128C7E] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#0f7a6f] focus:outline-none focus:ring-4 focus:ring-[#25D366]/20 disabled:opacity-50"
-                                >
-                                    {loading ? (
-                                        <Loader2 className="h-5 w-5 animate-spin" />
-                                    ) : (
-                                        <>
-                                            Log in to workspace
-                                            <ArrowRight className="h-4 w-4" />
-                                        </>
-                                    )}
-                                </button>
-                            </form>
-
-                            <div className="mt-6 grid grid-cols-2 gap-3">
-                                <TrustItem icon={Users} label="Team ready" />
-                                <TrustItem icon={Zap} label="Dashboard first" />
-                            </div>
-
-                            <div className="mt-5 rounded-lg border border-gray-200 bg-[#f8fafc] p-4">
-                                <div className="flex gap-3">
-                                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#128C7E]" />
-                                    <p className="text-sm leading-6 text-gray-600">
-                                        Your session opens the dashboard first. Refreshing keeps you on the current page.
-                                    </p>
+                                <div className="mt-5 rounded-lg border border-gray-200 bg-[#f8fafc] p-4">
+                                    <div className="flex gap-3">
+                                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#128C7E]" />
+                                        <p className="text-sm leading-6 text-gray-600">
+                                            Your session opens the dashboard first. Refreshing keeps you on the current page.
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
                         </div>
                     </div>
                 </section>

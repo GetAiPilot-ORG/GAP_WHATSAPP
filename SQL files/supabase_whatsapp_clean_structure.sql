@@ -191,26 +191,27 @@ create index if not exists idx_w_conversation_notes_conversation_created
 -- 6) Foreign keys added as NOT VALID so existing messy data does not block the cleanup.
 do $$
 begin
-  if not exists (select 1 from pg_constraint where conname = 'w_messages_bot_agent_id_fkey') then
-    alter table public.w_messages
-      add constraint w_messages_bot_agent_id_fkey
-      foreign key (bot_agent_id) references public.bot_agents(id)
-      not valid;
-  end if;
+  -- Always ensure bot_agents foreign keys have ON DELETE SET NULL to allow agent deletion
+  alter table public.w_messages drop constraint if exists w_messages_bot_agent_id_fkey;
+  alter table public.w_messages
+    add constraint w_messages_bot_agent_id_fkey
+    foreign key (bot_agent_id) references public.bot_agents(id)
+    on delete set null
+    not valid;
 
-  if not exists (select 1 from pg_constraint where conname = 'w_conversations_active_bot_agent_id_fkey') then
-    alter table public.w_conversations
-      add constraint w_conversations_active_bot_agent_id_fkey
-      foreign key (active_bot_agent_id) references public.bot_agents(id)
-      not valid;
-  end if;
+  alter table public.w_conversations drop constraint if exists w_conversations_active_bot_agent_id_fkey;
+  alter table public.w_conversations
+    add constraint w_conversations_active_bot_agent_id_fkey
+    foreign key (active_bot_agent_id) references public.bot_agents(id)
+    on delete set null
+    not valid;
 
-  if not exists (select 1 from pg_constraint where conname = 'w_conversations_assigned_bot_id_fkey') then
-    alter table public.w_conversations
-      add constraint w_conversations_assigned_bot_id_fkey
-      foreign key (assigned_bot_id) references public.bot_agents(id)
-      not valid;
-  end if;
+  alter table public.w_conversations drop constraint if exists w_conversations_assigned_bot_id_fkey;
+  alter table public.w_conversations
+    add constraint w_conversations_assigned_bot_id_fkey
+    foreign key (assigned_bot_id) references public.bot_agents(id)
+    on delete set null
+    not valid;
 
   if not exists (select 1 from pg_constraint where conname = 'w_conversations_latest_summary_id_fkey') then
     alter table public.w_conversations

@@ -71,7 +71,6 @@ const WhatsAppLogin = ({ onAccountConnected }) => {
         }
 
         socket.on('connect', () => {
-            console.log('Connected to WebSocket server');
             if (!isConnectionLockedRef.current) setStatus('ready');
             socket.emit('join_session', storedSession, organizationIdRef.current);
         });
@@ -84,7 +83,6 @@ const WhatsAppLogin = ({ onAccountConnected }) => {
         });
 
         socket.on('status', (s) => {
-            console.log('Status Update:', s);
             if (s === 'connected') {
                 setIsRequested(false);
                 setIsConnectionLocked(false);

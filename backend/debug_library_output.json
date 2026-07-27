@@ -1,0 +1,1284 @@
+{
+  "data": [
+    {
+      "name": "account_creation_confirmation_3",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}},\n\nYour new account has been created successfully. \n\nPlease verify {{2}} to complete your profile.",
+      "id": "24128369976803861"
+    },
+    {
+      "name": "address_update",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, your delivery address has been successfully updated to {{2}}. Contact {{3}} for any inquiries.",
+      "id": "27266740292994824"
+    },
+    {
+      "name": "appointment_cancellation_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hello {{1}},\n\nYour upcoming appointment with {{2}} on {{3}} at {{4}} has been canceled.\n\nLet us know if you have any questions or need to reschedule.\n\n",
+      "id": "32453934517586886"
+    },
+    {
+      "name": "appointment_cancelled",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}},\nYour appointment on {{2}} has been cancelled. We hope to see you another time.\n",
+      "id": "26458717700422467"
+    },
+    {
+      "name": "appointment_confirmation_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hello {{1}},\n\nThank you for booking with {{2}}.\n\nYour appointment for {{3}} on {{4}} at {{5}} is confirmed.\n",
+      "id": "25247837718189480"
+    },
+    {
+      "name": "appointment_confirmed",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}},\nYour appointment is scheduled for {{2}}.\n\nService: {{3}}\nConfirmation number: {{4}}\n\nWe're looking forward to your visit.\n\n",
+      "id": "26242815752086740"
+    },
+    {
+      "name": "appointment_reminder",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Reminder: Our technician will visit your location on {{1}} at {{2}} for your broadband installation. Please be available.",
+      "id": "23913908948295311"
+    },
+    {
+      "name": "appointment_reminder_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hello {{1}},\n\nThis is a reminder about your upcoming appointment with {{2}} on {{3}} at {{4}}.\n\nWe look forward to seeing you!\n",
+      "id": "26416901861232231"
+    },
+    {
+      "name": "appointment_reschedule_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hello {{1}},\n\nYour upcoming appointment with {{2}} has been rescheduled for {{3}} at {{4}}. \n\nWe look forward to seeing you!\n",
+      "id": "25456537110646734"
+    },
+    {
+      "name": "appointment_rescheduled",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}},\nYour appointment has been rescheduled to {{2}}.\n\nService: {{3}}\nConfirmation number: {{4}}\n\nWe're looking forward to your visit.\n",
+      "id": "26720015077660826"
+    },
+    {
+      "name": "appointment_scheduling",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, we're scheduling a technician visit for your {{2}} on {{3}} between {{4}} and {{5}}. Please confirm if this time slot works for you.",
+      "id": "10035637126532522"
+    },
+    {
+      "name": "appointment_scheduling_address",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, we're scheduling a technician visit to {{2}} on {{3}} between {{4}} and {{5}}. Please confirm if this time slot works for you.",
+      "id": "9215177361917947"
+    },
+    {
+      "name": "auto_pay_reminder_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, \n\nYour automatic payment for {{2}} is scheduled on {{3}} for {{4}}.\n\nKindly ensure your balance is sufficient to avoid {{5}} fees.",
+      "id": "9991596750890033"
+    },
+    {
+      "name": "auto_pay_reminder_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, this is to remind you of your upcoming auto-pay: \n\nDate: {{2}}\nAccount: {{3}}\nAmount: {{4}}\n\nThank you and have a nice day.",
+      "id": "25369650439317201"
+    },
+    {
+      "name": "auto_pay_reminder_3",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Reminder: \n\nYour scheduled payment for your {{1}} card ending in {{2}} is scheduled for {{3}}. \n\nThank you.",
+      "id": "8191480270865571"
+    },
+    {
+      "name": "back_on_whatsapp",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "We're reaching out because you previously chatted with {{1}}, our {{2}}, here on WhatsApp. \nWe're {{3}} to let you know we're back -- you can continue your conversations with us right here, anytime. To start chatting, just save {{4}} to your contacts and send us a message. ",
+      "id": "27227303476925195"
+    },
+    {
+      "name": "call_permission_request_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Would you like to receive a call from one of our representatives?",
+      "id": "29634251479506637"
+    },
+    {
+      "name": "cancellation_confirmation",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, we've received a cancellation request for your {{2}}. Reply with YES to be assigned a new agent or NO to cancel.",
+      "id": "24048514558136715"
+    },
+    {
+      "name": "card_transaction_alert_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "This is to notify you that your {{1}} card ending in {{2}} was charged {{3}} by {{4}}.",
+      "id": "7186756261451835"
+    },
+    {
+      "name": "card_transaction_alert_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Thank you for using your {{1}} card. This confirms your purchase on {{2}} for {{3}} at {{4}}.",
+      "id": "7421598634541869"
+    },
+    {
+      "name": "crisis_response_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "We activated support services for the {{1}} in the {{2}} area. Please take the following precautions if you live in {{3}} or surrounding areas: {{4}}, {{5}}, {{6}}.",
+      "id": "25440437752302536"
+    },
+    {
+      "name": "crisis_response_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "There is an active {{1}} in the {{2}} area. For live updates on the {{3}} alert in the {{4}} area, visit our website {{5}}.",
+      "id": "25954872517511361"
+    },
+    {
+      "name": "delivery_code_1",
+      "category": "AUTHENTICATION",
+      "language": "en_US",
+      "body": "Your order is arriving soon. *{{1}}* is your verification code. Please show this to the delivery associate.",
+      "id": "9078715575491208"
+    },
+    {
+      "name": "delivery_code_2",
+      "category": "AUTHENTICATION",
+      "language": "en_US",
+      "body": "Hi {{1}},\n\nYour {{2}} order is currently pending shipment. The estimated delivery date is {{3}}, with delivery scheduled between {{4}} and {{5}}.\n\nPlease note, the delivery person may ask for your delivery code {{6}} upon arrival.",
+      "id": "31071826855741545"
+    },
+    {
+      "name": "delivery_code_3",
+      "category": "AUTHENTICATION",
+      "language": "en_US",
+      "body": "Your order is on its way and scheduled to arrive at {{1}}.  Please show verification code *{{2}}* to receive your order.",
+      "id": "7753151734785372"
+    },
+    {
+      "name": "delivery_code_4",
+      "category": "AUTHENTICATION",
+      "language": "en_US",
+      "body": "Please share code *{{1}}* with delivery agent after verifying the package.",
+      "id": "8114779581964762"
+    },
+    {
+      "name": "delivery_code_5",
+      "category": "AUTHENTICATION",
+      "language": "en_US",
+      "body": "Your order of {{1}} items (Order ID: {{2}}) is out for delivery today.\n\nPlease provide the code *{{3}}* to the delivery agent to receive your order.",
+      "id": "8791336387583091"
+    },
+    {
+      "name": "delivery_code_6",
+      "category": "AUTHENTICATION",
+      "language": "en_US",
+      "body": "Your order {{1}} is on its way and scheduled to arrive {{2}}. Please show verification code {{3}} to receive your order.",
+      "id": "9933007910101562"
+    },
+    {
+      "name": "delivery_confirmation_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, your order {{2}} was delivered successfully. \n\nYou can manage your order below. \n",
+      "id": "25180920791524319"
+    },
+    {
+      "name": "delivery_confirmation_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, your order {{2}} was delivered. \n\nNeed to return or replace an item?\nClick to manage your order.\n",
+      "id": "26983828991298786"
+    },
+    {
+      "name": "delivery_confirmation_3",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "{{1}}, your order {{2}} was delivered on {{3}}.\n\nIf you need to return or replace item(s), please click below.",
+      "id": "7371807266243111"
+    },
+    {
+      "name": "delivery_confirmation_4",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "{{1}}, your order was successfully delivered on {{2}}.\n\nThank you for your purchase.\n",
+      "id": "9594528067332433"
+    },
+    {
+      "name": "delivery_confirmation_5",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}},\n\nGreat news! Your order {{2}} was delivered.",
+      "id": "24437125649257784"
+    },
+    {
+      "name": "delivery_failed_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, \n\nWe attempted to deliver your order on {{2}} but were not successful. \n\nPlease contact us at {{3}} to arrange re-delivery. \n\nThank you.",
+      "id": "8267916329891382"
+    },
+    {
+      "name": "delivery_failed_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "We were unable to deliver order {{1}} today. \n\nPlease {{2}} to schedule another delivery attempt.",
+      "id": "26304583929141016"
+    },
+    {
+      "name": "delivery_update_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, your order {{2}} is on its way and should arrive soon.\n\nEstimated delivery:  {{3}}\n\nWe will provide an update when your order is delivered.",
+      "id": "27409864305319588"
+    },
+    {
+      "name": "delivery_update_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, our order {{2}} is out for delivery! \n\nIt should be delivered {{3}} between {{4}} and {{5}}.\n",
+      "id": "27846377451646869"
+    },
+    {
+      "name": "delivery_update_3",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Your order {{1}} is out for delivery! \n\nIt should arrive by {{2}}. \n\nThank you for your business.",
+      "id": "7963688493649750"
+    },
+    {
+      "name": "delivery_update_4",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Your order {{1}} is out for delivery and is expected to arrive by {{2}}.\n\nThank you for your business.",
+      "id": "9970465026331188"
+    },
+    {
+      "name": "device_recovery",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, your broadband connection has been disconnected. To return your device, please follow these steps: \n{{2}} \nYou can also contact us at {{3}} for assistance.",
+      "id": "23952988531029908"
+    },
+    {
+      "name": "disbursement_balance_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Your {{1}} disbursement balance is {{2}}. Kindly note it will expire on {{3}}. New {{4}} disbursements will be announced on a monthly basis. Use the URL below to review the disbursement schedule and to register or change your enrollment status.",
+      "id": "34616764991247777"
+    },
+    {
+      "name": "disbursement_voucher_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "{{1}} vouchers are here! You are eligible to claim your voucher at {{2}} or online via our website {{3}}. Vouchers are valid until {{4}}. Vouchers can be used at many locations. Refer to our website {{5}} for a comprehensive list of all locations that accept vouchers.",
+      "id": "25967986296224801"
+    },
+    {
+      "name": "event_details_reminder_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "You have an upcoming event\nReminder: You RSVP’ed to {{1}} by {{2}}.\n\nThe event starts on {{3}} at {{4}} at {{5}} location.",
+      "id": "28677430001847271"
+    },
+    {
+      "name": "event_details_reminder_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Reminder: {{1}} is coming up and you have RSVP’ed to this event by {{2}}. \n\nSee you at {{3}} at {{4}} local time.\n",
+      "id": "28224366110499998"
+    },
+    {
+      "name": "event_rsvp_confirmation_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Thank you for RSVP’ing to {{1}} by {{2}}. \n\nSee you on {{3}} at {{4}} local time.\n",
+      "id": "25811489128440562"
+    },
+    {
+      "name": "event_rsvp_confirmation_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Your RSVP for {{1}} by {{2}} is confirmed!\n\nThanks!",
+      "id": "6245349432256952"
+    },
+    {
+      "name": "feedback_collection",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, the service request we completed on {{2}} is now closed. Please rate your experience from 1-5 and share any feedback to help us improve.",
+      "id": "23920522974280004"
+    },
+    {
+      "name": "feedback_survey_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}},\n\nThank you for your recent {{2}} on {{3}}.\n\nWe value your feedback and would appreciate you sharing more about your experience with us at the link below.\n\nThis should only take {{4}} minutes. We appreciate your time.",
+      "id": "24742239948737422"
+    },
+    {
+      "name": "feedback_survey_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Thank you for visiting us at {{1}} on {{2}}. \n\nWe value your feedback.\n\nPlease fill out this short survey to let us know how we can continue to improve.",
+      "id": "7044103969034432"
+    },
+    {
+      "name": "followup_missed_calls",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, we missed your call. Please let us know if you're available to reschedule.",
+      "id": "24478402071766523"
+    },
+    {
+      "name": "fraud_alert_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hello {{1}},\n\nWe noticed a {{2}} transaction on your {{3}} from {{4}} for {{5}}.\n\nIf you didn't make this transaction, please call us {{6}} at {{7}}. \n\nYou can also click below to freeze your {{8}}.\n\nThank you!",
+      "id": "7697575843639341"
+    },
+    {
+      "name": "fraud_alert_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}},\n\nThis is {{2}}.\n\nWe identified a {{3}} transaction on your {{4}} card ending in {{5}}:\n\nDate: {{6}}\nMerchant: {{7}}\nAmount: {{8}}\n\nDid you make this purchase?\n",
+      "id": "25486794957631980"
+    },
+    {
+      "name": "fraud_alert_3",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}},\n\nWe noticed a {{2}} charge on your {{3}} account. \n\nPlease verify the details of this transaction.",
+      "id": "25295243786757511"
+    },
+    {
+      "name": "fraud_alert_4",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hello {{1}},\n\nWe detected a suspicious transaction on your {{2}} card ending in {{3}}.\n\nPlease verify if this was you.",
+      "id": "7494266200639207"
+    },
+    {
+      "name": "fraud_awareness_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "We have detected an increase in {{1}}. To protect your card ending in {{2}}, please consider updating your PIN. Click below to see the step-by-step. Do not click on unofficial links. {{3}} will never send you SMS messages asking for your personal information or banking details.",
+      "id": "25921879794146799"
+    },
+    {
+      "name": "group_invite_link",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, your request for {{2}} service from {{3}} was successfully received!\n\nYou can start the service by clicking and joining the group below.\n{{4}}\n\nThank you!",
+      "id": "24454612630875742"
+    },
+    {
+      "name": "group_invite_link_concise",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Your {{1}} request with {{2}} is confirmed. Please join the WhatsApp group to start:\n{{3}} Thank you!",
+      "id": "24107659712245369"
+    },
+    {
+      "name": "group_invite_link_detailed",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}},\nWe are pleased to inform you that your request for {{2}} from {{3}} has been successfully received.\n\nTo facilitate your session, we have created a dedicated WhatsApp group. Please join the group using the link below to proceed with your request:\n{{4}}\n\nThank you for using our service!",
+      "id": "24063446309985615"
+    },
+    {
+      "name": "health_awareness_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Stay up-to-date with your health. Stop by {{1}} by {{2}} to get your free {{3}}. Bring your {{4}} and {{5}}.",
+      "id": "26016735117986783"
+    },
+    {
+      "name": "health_emergency_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "The {{1}} has just declared a health emergency due to {{2}}. To learn more about {{3}} and precautions to take, use the URL below. We will follow up with more details once available.",
+      "id": "25966903949602798"
+    },
+    {
+      "name": "health_emergency_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "A health emergency due to {{1}} has been declared in the {{2}} area. Live updates available on our website {{3}}.",
+      "id": "34997444576521755"
+    },
+    {
+      "name": "identity_compliance_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "This is to notify you that you need to upgrade to a {{1}} by {{2}}. To avoid any inconveniences when travelling, please ensure you make an appointment at your local {{3}}. To find the office closest to you, use our website {{4}}.",
+      "id": "25837459255905819"
+    },
+    {
+      "name": "identity_compliance_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Upgraded {{1}} are now required when traveling at airports. For more information on how to upgrade, use the link below.",
+      "id": "26146864651667975"
+    },
+    {
+      "name": "in_person_banking_user_verification",
+      "category": "AUTHENTICATION",
+      "language": "en_US",
+      "body": "Your personal data will be updated, provide the account executive with the verification code: {{1}}",
+      "id": "9972416792820341"
+    },
+    {
+      "name": "installation_complete",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, your {{2}} installation is complete! Our technician has configured your connection, and you're now ready to go online. If you have any issues, feel free to reply or contact {{3}} for assistance.",
+      "id": "24797948699901004"
+    },
+    {
+      "name": "login_code",
+      "category": "AUTHENTICATION",
+      "language": "en_US",
+      "body": "Your login code is {{1}}. No further action is needed if you didn’t request this.",
+      "id": "24115191244784412"
+    },
+    {
+      "name": "low_balance_warning_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, \n\nThis is to notify you that your {{2}} in your {{3}} account ending in {{4}} is below your pre-set {{5}} of {{6}}. \n\nClick below to add funds or call us.",
+      "id": "25105540505760134"
+    },
+    {
+      "name": "low_balance_warning_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, \n\nAvailable funds in your {{2}} account ending in {{3}} are below your pre-set {{4}} limit.",
+      "id": "7526976360724325"
+    },
+    {
+      "name": "low_balance_warning_3",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, your mobile balance is {{2}}. Please recharge to avoid interruption. ",
+      "id": "23932964443056172"
+    },
+    {
+      "name": "missed_appointment",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, we missed you at your scheduled {{2}} appointment on {{3}}. Please reply to reschedule or contact {{4}} to book a new appointment.",
+      "id": "24302383019401545"
+    },
+    {
+      "name": "network_troubleshooting",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi, we understand you might be experiencing network troubles at {{1}}. \nYou can try these simple steps: \nStep 1: {{2}}, \nStep 2: {{3}}, \nStep 3: {{4}}. \nNeed more help? Contact: {{5}} or view details.",
+      "id": "30408347498811079"
+    },
+    {
+      "name": "operation_disruption_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "This is to notify you that {{1}} at our {{2}} station are halted due to {{3}}. Please avoid the area as we work to rectify. Click the URL below to see alternate {{4}} and/or {{5}} where service is available and running. Live updates on our site, available below.",
+      "id": "25741267928876280"
+    },
+    {
+      "name": "operation_disruption_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Regular maintenance for {{1}} is scheduled for {{2}} and the station in the {{3}} area will be closed until {{4}}. Please plan to use an alternate station if you plan to travel. Click the URL below to see alternate {{5}} and/or {{6}} where service will be available and running.",
+      "id": "25276387812034609"
+    },
+    {
+      "name": "order_action_required_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, before we can process your order {{2}}, we need to verify some information.\n\nPlease contact us at your earliest convenience.\n\nThank you.",
+      "id": "27496992199968869"
+    },
+    {
+      "name": "order_action_required_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "We were unable to process your order {{1}}. \n\nPlease call us at {{2}} for next steps. ",
+      "id": "7407371152723293"
+    },
+    {
+      "name": "order_canceled_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "{{1}}, your order {{2}} has been successfully canceled. \n\nYour refund will be processed in {{3}} business days. \n\nThank you.",
+      "id": "7730046593706119"
+    },
+    {
+      "name": "order_canceled_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "{{1}}, per your request, we have canceled your order {{2}}. \n\nYour {{3}} will be processed in {{4}} business days. \n\nYou can track this below.",
+      "id": "7615704668489273"
+    },
+    {
+      "name": "order_canceled_3",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi, this is to confirm we have successfully canceled your recent order {{1}}. \n\nThank you.",
+      "id": "7466781216746943"
+    },
+    {
+      "name": "order_canceled_4",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hello {{1}}, \n\nYour order {{2}} has been canceled. \n\nA refund will be issued to your original payment method soon.",
+      "id": "9920322834691438"
+    },
+    {
+      "name": "order_confirm_auto_schedule",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, your {{2}} order has been successfully placed! We've scheduled an appointment for {{3}} at your preferred location. Please confirm if this time slot works for you. ",
+      "id": "24130693026591543"
+    },
+    {
+      "name": "order_confirm_manual_schedule",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, your {{2}} order is placed! Reply **Schedule** to pick a time slot for your appointment.",
+      "id": "24336644359264057"
+    },
+    {
+      "name": "order_confirmed",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, \nWe're getting your order {{2}} ready and will let you know when it's on the way.",
+      "id": "26172348719109233"
+    },
+    {
+      "name": "order_delay_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, there is a {{2}} in {{3}} your order {{4}}. \n\nWe're working to resolve it as soon as possible. \n\nWe will follow up with an update. \n\nWe apologize for any inconvenience.\nWe'll send you an updated delivery status when we can.",
+      "id": "25121202590844952"
+    },
+    {
+      "name": "order_delay_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, \n\nItem(s) from your recent order {{2}} are out-of-stock. We will notify you as soon as your item(s) ship. \n\nIf you prefer not to wait, please click below to {{3}} your order. \n\nWe apologize for any inconvenience.",
+      "id": "7393500060731249"
+    },
+    {
+      "name": "order_delivered",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}},\nYour {{2}} has been delivered. Thank you for shopping with us.\n",
+      "id": "26497674199874862"
+    },
+    {
+      "name": "order_management_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}},\n\nThank you for your {{2}}! Your order number is {{3}}.\n\nWe'll start getting {{4}} ready to ship.\n\nEstimated delivery: {{5}} \n\nWe will let you know when your order ships.",
+      "id": "7605953029427093"
+    },
+    {
+      "name": "order_management_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, your order is confirmed and your order number is {{2}}. \n\nEstimated delivery: {{3}}. \n\nWe will follow up with more details as we prepare your order for shipment.",
+      "id": "25799358149664374"
+    },
+    {
+      "name": "order_management_3",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, we've received your order. \n\nYour order number is {{2}}. \n\nEstimated delivery: {{3}}.\n\nClick below to manage your order.",
+      "id": "25019631407676484"
+    },
+    {
+      "name": "order_management_4",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}},\nYour order has been successfully placed and is being processed. Your order number is {{2}}. You can view order details below.",
+      "id": "9218795534910948"
+    },
+    {
+      "name": "order_management_5",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hello {{1}},\n\nWe received your order {{2}}. We’ll send you a status update once your payment is approved.\n\nThank you for shopping with us!",
+      "id": "30181294124803274"
+    },
+    {
+      "name": "order_management_6",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}},\n\nYour order {{2}} has been successfully placed with {{3}} and is being processed.",
+      "id": "25261990103406028"
+    },
+    {
+      "name": "order_management_no_cta_5",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hello {{1}},\n\nWe received your order {{2}}. We’ll send you a status update once your payment is approved.\n\nThank you for shopping with us!",
+      "id": "9653673774701716"
+    },
+    {
+      "name": "order_pick_up_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, your order {{2}} is ready for pick up at {{3}}.\nWhen you arrive, tap the button below and we will bring your order to you. \nSee you soon!\n",
+      "id": "27321243960838158"
+    },
+    {
+      "name": "order_pick_up_3",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Great news! Your order {{1}} is now ready for pick up at {{2}}. \n\nClick \"I'm here\" when you arrive and we will meet you with your products. \n\nSee you soon!",
+      "id": "25819920444265663"
+    },
+    {
+      "name": "order_pick_up_4",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hello {{1}},\n\nYour order {{2}} is now ready for pickup at {{3}}.\n\nPlease remember to bring a photo ID with you.\n\nSee you soon!",
+      "id": "9984414668277152"
+    },
+    {
+      "name": "order_pick_up_no_cta_4",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hello {{1}},\n\nYour order {{2}} is now ready for pickup at {{3}}.\n\nPlease remember to bring a photo ID with you.\n\nSee you soon!",
+      "id": "30175916348674332"
+    },
+    {
+      "name": "order_shipped",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, \nYour order {{2}} has been shipped and is on the way.\n",
+      "id": "34923238033986094"
+    },
+    {
+      "name": "order_update_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}},\n\nWe’re preparing your order {{2}} and will let you know when it’s ready.",
+      "id": "9702266309833513"
+    },
+    {
+      "name": "order_update_no_cta_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}},\n\nWe’re preparing your order {{2}} and will let you know when it’s ready.",
+      "id": "9790065787738638"
+    },
+    {
+      "name": "payment_action_required_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, \n\nPayment for your {{2}} card ending in {{3}} is coming due. \n\nVerify your information to avoid {{4}} fees.",
+      "id": "7855291447816324"
+    },
+    {
+      "name": "payment_action_required_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}},\n\nWe encountered an issue with your recent transaction for {{2}} at {{3}}. \n\nPlease contact us at {{4}} for assistance.",
+      "id": "25405079305773185"
+    },
+    {
+      "name": "payment_action_required_3",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Your scheduled payment of {{1}} for {{2}} could not be processed. \n\nPlease contact us at {{3}} for assistance.",
+      "id": "25795886123335936"
+    },
+    {
+      "name": "payment_confirmation_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}},\n\nWe have received your payment of {{2}} for {{3}}. \n\nThank you for your payment.",
+      "id": "7748437715178221"
+    },
+    {
+      "name": "payment_confirmation_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Your payment of {{1}} for {{2}} has been processed successfully. \n\nWe appreciate your business.",
+      "id": "7423693567719807"
+    },
+    {
+      "name": "payment_confirmation_3",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Payment confirmation:\n\nAccount: {{1}}\nAmount: {{2}}\nDate: {{3}}\n\nThank you and have a nice day.",
+      "id": "7663622466993102"
+    },
+    {
+      "name": "payment_confirmation_4",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hello {{1}},\n\nYour payment of {{2}} for order {{3}} has been approved.",
+      "id": "27780161024940958"
+    },
+    {
+      "name": "payment_due_reminder",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, your {{2}} bill of {{3}} is due on {{4}}. Pay now to avoid service disruption.",
+      "id": "30799683732956107"
+    },
+    {
+      "name": "payment_failed_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, your recent payment of {{2}} for your {{3}} account has failed. \n\nPlease check your account and try again.",
+      "id": "7465796176790614"
+    },
+    {
+      "name": "payment_failed_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}},\n\nWe were unable to process your payment of {{2}} for {{3}}. \n\nPlease update your payment method or contact us for assistance.",
+      "id": "7953991984663832"
+    },
+    {
+      "name": "payment_failed_3",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Your payment was rejected. \n\nAccount: {{1}}\nAmount: {{2}}\nDate: {{3}}\n\nPlease check your account and try again.",
+      "id": "7639114072834099"
+    },
+    {
+      "name": "payment_failed_4",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, we were unable to process your {{2}} bill payment. Please try again or contact our support team.",
+      "id": "30440780538899137"
+    },
+    {
+      "name": "payment_notice_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Your payment for {{1}} will be processed on {{2}}. \n\nThank you!",
+      "id": "7860317794018196"
+    },
+    {
+      "name": "payment_notice_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Thank you for scheduling your payment of {{1}}. \n\nWe will {{2}} on {{3}}.",
+      "id": "8185859501448708"
+    },
+    {
+      "name": "payment_notice_3",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "This is to {{1}} your payment of {{2}} for {{3}} will be processed on {{4}}.",
+      "id": "7277240245738452"
+    },
+    {
+      "name": "payment_overdue_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Your {{1}} payment of {{2}} is overdue by {{3}} days. \n\nPlease pay now to avoid {{4}}. Contact us if you need assistance. ",
+      "id": "7464473810267861"
+    },
+    {
+      "name": "payment_overdue_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, you have a payment overdue:\n\nAccount: {{2}}\nAmount due: {{3}}\nDue date: {{4}}\n\nUse the button below to complete payment via our website.\nPlease ignore this message if you've already paid.\n",
+      "id": "27897487826510406"
+    },
+    {
+      "name": "payment_overdue_3",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Payment is overdue for your {{1}} card ending in {{2}} for {{3}}. \n\nPlease click to pay now and avoid {{4}} fees.",
+      "id": "7391708097615551"
+    },
+    {
+      "name": "payment_overdue_5",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Payment is overdue for your {{1}} card ending in {{2}}. \n\nPlease click to pay now and avoid {{3}} fees.",
+      "id": "25781772281469918"
+    },
+    {
+      "name": "payment_overdue_6",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, you have a payment overdue:\n\nAccount: {{2}}\nDue date: {{3}}\n\n{{4}} to complete payment via our website.",
+      "id": "7607781425942730"
+    },
+    {
+      "name": "payment_overdue_7",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Your {{1}} payment is overdue by {{2}} days.\n\nPlease pay now to avoid {{3}}. Contact us if you need assistance.",
+      "id": "7537490756377588"
+    },
+    {
+      "name": "payment_recharge_reminder_01",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hello! Your {{1}} expires in {{2}}.\nYou can top up your number {{3}} - {{4}} - with {{5}} to avoid interruptions.\n\nOr click the link below to top up with another amount of your choice.\n\nIf you have already topped up, please disregard this message. Thank you!",
+      "id": "24663059256729059"
+    },
+    {
+      "name": "payment_reminder_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hello {{1}}, \n\nYour payment of {{2}} is due on {{3}}.\n\nPlease ignore this message if you've already paid.\n",
+      "id": "9837251279733172"
+    },
+    {
+      "name": "payment_reminder_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Your payment of {{1}} is due on {{2}}. \n\nPay now to avoid {{3}}.\n\nIf you already paid, please ignore this message.",
+      "id": "7646925488678314"
+    },
+    {
+      "name": "payment_reminder_3",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Payment reminder:\n\nAccount: {{1}}\nAmount due: {{2}}\nDue date: {{3}}\n\nPay now to avoid {{4}}.\n\nPlease ignore this if you have already paid.",
+      "id": "7230366443755765"
+    },
+    {
+      "name": "payment_reminder_4",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}},\n\nPayment of {{2}} for your {{3}} card ending in {{4}} is due on {{5}}.\n\nPay now to avoid late fees.\nPlease ignore this message if you've already paid.\n",
+      "id": "27201904162814250"
+    },
+    {
+      "name": "payment_reminder_5",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}},\n\nPayment for your {{2}} card ending in {{3}} is due on {{4}}.\n\nPay now to avoid {{5}}.",
+      "id": "7508195995973099"
+    },
+    {
+      "name": "payment_reminder_6",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Payment reminder:\n\nAccount: {{1}}\nDue date: {{2}}\n\nPay now to avoid {{3}}.\n\nPlease ignore this message if you've already paid.",
+      "id": "7982044358524208"
+    },
+    {
+      "name": "payment_reminder_7",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Your payment is due on {{1}}.\n\nPay now to avoid {{2}}.\n\nIf you've already paid, please ignore this message.",
+      "id": "8079174798800866"
+    },
+    {
+      "name": "payment_reminder_8",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hello {{1}},\n\nYour payment is due on {{2}}.",
+      "id": "26218469094418402"
+    },
+    {
+      "name": "payment_scheduled_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Your payment of {{1}} for your {{2}} account is scheduled for {{3}}. \n\nPlease ensure you have sufficient funds to avoid generating any {{4}} fees.",
+      "id": "25511794875100708"
+    },
+    {
+      "name": "payment_scheduled_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}},\n\nThank you for scheduling your payment of {{2}} for your {{3}} account on {{4}}. \n\nPlease visit your account if you would like to make any changes ahead of this date.",
+      "id": "7171048406351446"
+    },
+    {
+      "name": "payment_scheduled_3",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, this is to remind you of your upcoming scheduled payment: \n\nDate: {{2}}\nAccount: {{3}}\nAmount: {{4}}\n\nThank you and have a nice day.",
+      "id": "7039309662842229"
+    },
+    {
+      "name": "payment_successful",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, your {{2}} bill payment of {{3}} has been successfully received. Your payment date was {{4}}. Thank you!",
+      "id": "24966439792946831"
+    },
+    {
+      "name": "privacy_disclosure_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "We updated our privacy policy on {{1}}. Please click the button below to learn more.",
+      "id": "24095658620131076"
+    },
+    {
+      "name": "product_recall_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "The {{1}} you ordered on {{2}} has been recalled. Please click below to let us know how you would like to proceed.",
+      "id": "26113695394914272"
+    },
+    {
+      "name": "purchase_receipt_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Thank you for your purchase of {{1}} from {{2}}. Your {{3}} PDF is attached.",
+      "id": "26202727922659390"
+    },
+    {
+      "name": "purchase_receipt_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Thank you for using your {{1}} card at {{2}}. Your {{3}} is attached as a PDF.",
+      "id": "7159755964153825"
+    },
+    {
+      "name": "purchase_receipt_3",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hello {{1}},\n\nYour invoice for order {{2}} is attached.\n\nThank you for shopping with us!",
+      "id": "9555500021193993"
+    },
+    {
+      "name": "purchase_transaction_alert",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "This message is to confirm your {{1}} for {{2}} from {{3}} on {{4}}.",
+      "id": "25343736378575326"
+    },
+    {
+      "name": "recharge_failure",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, we were unable to process your mobile recharge. Please try again or contact our support team.",
+      "id": "24165204226478553"
+    },
+    {
+      "name": "recharge_reminder",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, your {{2}} is ending tonight. To continue using without interruption, please recharge.",
+      "id": "10040705906026456"
+    },
+    {
+      "name": "recharge_successful",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, your mobile recharge of {{2}} has been successful! Your new balance is {{3}}. ",
+      "id": "23978089571818098"
+    },
+    {
+      "name": "refund_confirmation_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}},\n\nYour refund for {{2}} has been processed for order {{3}}. You'll be credited back to your original payment method in 3-5 business days.",
+      "id": "9629987670396466"
+    },
+    {
+      "name": "renewal_reminder",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Your {{1}} plan is scheduled to renew on {{2}}. Please maintain sufficient balance to keep the service active.",
+      "id": "30217798674531995"
+    },
+    {
+      "name": "renewal_successful",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, \n\nYour {{2}} plan has been successfully renewed. \nYour new plan details are: \n\nPlan name: {{3}} \nData limit: {{4}} \nValidity: {{5}}\n\nThank you for choosing us!",
+      "id": "24227455260223386"
+    },
+    {
+      "name": "request_contact_info_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, we'd like to have your phone number on file so we can reach you more easily. Please share your contact info below.",
+      "id": "27296303326646558"
+    },
+    {
+      "name": "request_contact_info_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, please share your phone number with us so we can stay in touch and assist you better.",
+      "id": "26307651578911330"
+    },
+    {
+      "name": "request_contact_info_3",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, having your phone number helps us serve you faster. Tap below to share your contact info.",
+      "id": "37245630338357554"
+    },
+    {
+      "name": "rescheduling_request",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, we need to reschedule your {{2}}. Reply **Reschedule** to pick a new time.",
+      "id": "9934495660010617"
+    },
+    {
+      "name": "return_confirmation_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, thank you for returning product(s) from your order {{2}}. \n\nWe are currently processing your return and will notify you of your {{3}} status.",
+      "id": "9266649740125583"
+    },
+    {
+      "name": "return_confirmation_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "We have received item(s) from your order {{1}}. \n\nYour return is complete, and we have processed your {{2}} for {{3}}. \n\nThank you for your business.",
+      "id": "7244622825667395"
+    },
+    {
+      "name": "roaming_reminder",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, your number is currently on a network outside {{2}}. To avoid high pay-as-you-go charges, you can activate an international roaming pack.",
+      "id": "24001178046236568"
+    },
+    {
+      "name": "service_disruption",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Dear Customer, we have scheduled network updates on {{1}} between {{2}} and {{3}}. You may experience temporary service disruption. Thank you for your understanding.",
+      "id": "30644517158496886"
+    },
+    {
+      "name": "severe_weather_alert_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "There is a {{1}} alert in the {{2}} area. We recommend you remain indoors until {{3}}. If you are facing issues related to {{4}} or {{5}}, you can inform us by using the button below and we will follow up for an on-site inspection. We will follow up with key updates and any recommended precautions. For more information on {{6}} preparedness, click the URL below.",
+      "id": "26177905785154615"
+    },
+    {
+      "name": "severe_weather_alert_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "There is a {{1}} alert in the {{2}} area. For more information on precautions to take during a {{3}} click the URL below. For live updates on the {{4}} alert in the {{5}} area, visit our website {{6}}.",
+      "id": "25875669842074608"
+    },
+    {
+      "name": "shifting_journey",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, your broadband connection shifting request is being processed! We'll keep you updated on the status.",
+      "id": "24207866672181865"
+    },
+    {
+      "name": "shipment_confirmation_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, your order has shipped! \n\nYour tracking number is {{2}}. \n\nEstimated delivery is {{3}}.",
+      "id": "24870560632608025"
+    },
+    {
+      "name": "shipment_confirmation_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, great news! Your order {{2}} has shipped.\n\nTracking #: {{3}}\nEstimated delivery: {{4}}\n\nWe will provide updates until delivery.",
+      "id": "24804744792487781"
+    },
+    {
+      "name": "shipment_confirmation_3",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, your order {{2}} has left our {{3}} and is on its way to you! \n\nYour tracking ID is {{4}}. \n\nClick below to track your package.",
+      "id": "25490363040567378"
+    },
+    {
+      "name": "shipment_confirmation_4",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}},\n\nWe're happy to inform you that your order {{2}} has shipped! Click view order details to view the status of your shipment.",
+      "id": "9551068651645998"
+    },
+    {
+      "name": "shipment_confirmation_5",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}},\n\nWe’re happy to inform you that your order {{2}} has shipped! Click below to view the status of your shipment.",
+      "id": "24176291611967357"
+    },
+    {
+      "name": "statement_available_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, \n\nYour {{2}} statement for your account ending in {{3}} is now available. \n\nClick below to see your statement. ",
+      "id": "7542228765855969"
+    },
+    {
+      "name": "statement_available_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "This is to notify you that your latest statement for your {{1}} account is now available. \n\nPlease log into your account to view your statement.",
+      "id": "8591051930983742"
+    },
+    {
+      "name": "support_ticket_acknowledgement",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Your request {{1}} is registered. We will contact you within {{2}} hours.",
+      "id": "24468096999440607"
+    },
+    {
+      "name": "system_outage_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "We have detected a system outage that impacts zip code {{1}}. We expect to restore service by {{2}}. We apologize for the inconvenience.",
+      "id": "26124778843809381"
+    },
+    {
+      "name": "system_outage_2",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "The system outage has been restored for zip code {{1}}. If you are still experiencing an outage in zip code {{2}}, click the button below to alert us.",
+      "id": "26023079460689571"
+    },
+    {
+      "name": "technician_arrival",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Hi {{1}}, our technician will arrive at your location within the next {{2}}. Tap to track real-time location.",
+      "id": "9981594288618314"
+    },
+    {
+      "name": "temporary_password",
+      "category": "AUTHENTICATION",
+      "language": "en_US",
+      "body": "Your temporary password is {{1}}. Please log in and update it as soon as possible.",
+      "id": "23962573546694859"
+    },
+    {
+      "name": "upgrade_confirmation",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "We are pleased to inform you that your internet speed has been upgraded to {{1}} Mbps. Thank you for choosing our services.",
+      "id": "9539442262823792"
+    },
+    {
+      "name": "verify_account",
+      "category": "AUTHENTICATION",
+      "language": "en_US",
+      "body": "This OTP code is for {{1}} your {{2}} account and linking it to {{3}}. \nOTP: {{4}}\nDo not share it with anyone, even to {{5}}, or they'll be able to access your account. ",
+      "id": "25623671287225057"
+    },
+    {
+      "name": "verify_account_2",
+      "category": "AUTHENTICATION",
+      "language": "en_US",
+      "body": "This code is for {{1}} your {{2}} account and linking it to {{3}}. Code: {{4}}\nDo not share it. ",
+      "id": "25672101262394082"
+    },
+    {
+      "name": "verify_code",
+      "category": "AUTHENTICATION",
+      "language": "en_US",
+      "body": "OTP Code: {{1}}. This is your OTP for {{2}}. The OTP is valid for {{3}}. Call {{4}} if you did not perform this request.",
+      "id": "25342933182022286"
+    },
+    {
+      "name": "verify_code_1",
+      "category": "AUTHENTICATION",
+      "language": "en_US",
+      "body": "*{{1}}* is your verification code.",
+      "id": "27345159648464169"
+    },
+    {
+      "name": "verify_otp_usecase",
+      "category": "AUTHENTICATION",
+      "language": "en_US",
+      "body": "OTP Code: {{1}}. This is your OTP code for {{2}}. For your security, do not share this code.",
+      "id": "26431716149822795"
+    },
+    {
+      "name": "verify_password_recovery",
+      "category": "AUTHENTICATION",
+      "language": "en_US",
+      "body": "*{{1}}* is your password recovery code.",
+      "id": "8173436052761768"
+    },
+    {
+      "name": "verify_transaction_1",
+      "category": "AUTHENTICATION",
+      "language": "en_US",
+      "body": "Use code *{{1}}* to authorize your transaction.",
+      "id": "8432120646867795"
+    },
+    {
+      "name": "verify_transaction_2",
+      "category": "AUTHENTICATION",
+      "language": "en_US",
+      "body": "Use code *{{1}}* to verify your transaction of {{2}}. If you did not request this transaction, please contact support.",
+      "id": "24685857544401755"
+    },
+    {
+      "name": "verify_transaction_3",
+      "category": "AUTHENTICATION",
+      "language": "en_US",
+      "body": "Use code *{{1}}* to verify your transaction of {{2}} on your card ending in {{3}}. If you did not request this transaction, please contact support.",
+      "id": "24989008214051565"
+    },
+    {
+      "name": "verify_transaction_4",
+      "category": "AUTHENTICATION",
+      "language": "en_US",
+      "body": "Use code *{{1}}* to verify your transaction of {{2}} on your account ending in {{3}}.  Thank you!",
+      "id": "24501584342846844"
+    },
+    {
+      "name": "verify_transfer_1",
+      "category": "AUTHENTICATION",
+      "language": "en_US",
+      "body": "Your verification code is *{{1}}* for the transfer of {{2}}. Please use this code to complete your transaction.",
+      "id": "25671008049155036"
+    },
+    {
+      "name": "voting_registration_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "To vote on {{1}}, please ensure your voter {{2}} is active. Please click the URL below to understand steps required to renew, if needed.",
+      "id": "26843108768624259"
+    },
+    {
+      "name": "warranty_alert_1",
+      "category": "UTILITY",
+      "language": "en_US",
+      "body": "Thank you for your purchase of {{1}}. Your warranty is active as of {{2}}. Our {{3}} are below, for your reference.",
+      "id": "26345232971774210"
+    }
+  ],
+  "paging": {
+    "cursors": {
+      "before": "MAZDZD",
+      "after": "MTgx"
+    }
+  }
+}

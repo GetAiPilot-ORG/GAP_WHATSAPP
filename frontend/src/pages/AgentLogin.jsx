@@ -21,7 +21,9 @@ export default function AgentLogin() {
     const [showPassword, setShowPassword] = useState(false)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
-    const { signIn, signOut } = useAuth()
+    const [showOnlinePrompt, setShowOnlinePrompt] = useState(false)
+    const [onlinePromptLoading, setOnlinePromptLoading] = useState(false)
+    const { signIn, signOut, apiCall, updateMyOnlineStatus } = useAuth()
     const navigate = useNavigate()
     const autoLoginStarted = useRef(false)
 
@@ -45,7 +47,7 @@ export default function AgentLogin() {
                 throw new Error('This page is only for active team agents. Owners should use the main login page.')
             }
 
-            navigate('/live-chat', { replace: true })
+            setShowOnlinePrompt(true)
         } catch (err) {
             if (err.message.includes('Invalid login credentials')) {
                 setError('Agent ID does not exist or the password is incorrect. Ask your owner for valid credentials.')
@@ -56,6 +58,23 @@ export default function AgentLogin() {
             setLoading(false)
         }
     }
+
+    const handleGoOnline = async () => {
+        setOnlinePromptLoading(true)
+        try {
+            await updateMyOnlineStatus(true)
+        } catch (err) {
+            console.error("Failed to update status on login:", err)
+        } finally {
+            setOnlinePromptLoading(false)
+            navigate('/live-chat', { replace: true })
+        }
+    }
+
+    const handleNotNow = () => {
+        navigate('/live-chat', { replace: true })
+    }
+
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search)
@@ -245,6 +264,39 @@ export default function AgentLogin() {
                     </div>
                 </section>
             </div>
+            {showOnlinePrompt && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in-95 duration-200 border border-gray-100 p-6 text-center">
+                        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 text-[#128C7E] mb-4">
+                            <Sparkles className="h-7 w-7" />
+                        </div>
+                        <h3 className="text-xl font-semibold text-gray-900 mb-2">Set yourself as Online?</h3>
+                        <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+                            Going online allows the auto-assignment system to route new inbound chats to you immediately.
+                        </p>
+                        <div className="flex flex-col gap-2.5">
+                            <button
+                                onClick={handleGoOnline}
+                                disabled={onlinePromptLoading}
+                                className="inline-flex h-11 w-full items-center justify-center rounded-full bg-[#128C7E] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#0f7a6f] focus:outline-none focus:ring-2 focus:ring-[#25D366]/20 disabled:opacity-50"
+                            >
+                                {onlinePromptLoading ? (
+                                    <Loader2 className="h-5 w-5 animate-spin" />
+                                ) : (
+                                    'Go Online'
+                                )}
+                            </button>
+                            <button
+                                onClick={handleNotNow}
+                                disabled={onlinePromptLoading}
+                                className="inline-flex h-11 w-full items-center justify-center rounded-full border border-gray-300 bg-white px-4 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-200"
+                            >
+                                Not now
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </main>
     )
 }

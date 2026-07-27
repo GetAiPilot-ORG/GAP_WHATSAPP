@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { useAuth } from '../context/AuthContext'
+import DiceBearAvatar from './DiceBearAvatar'
 
 const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
 const API_BASE = `${BACKEND_BASE}/api`
@@ -618,9 +619,7 @@ export default function ContactProfileDrawer({
                                         className="h-14 w-14 rounded-full object-cover shadow-sm ring-1 ring-gray-200"
                                     />
                                 ) : (
-                                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-rose-50 text-rose-500 ring-1 ring-rose-100">
-                                        <User className="h-7 w-7" />
-                                    </div>
+                                    <DiceBearAvatar seed={displayName} className="h-14 w-14 rounded-full object-cover shrink-0 shadow-sm ring-1 ring-gray-200" />
                                 )}
                             </div>
                             <div className="min-w-0 flex-1">

@@ -11,7 +11,7 @@ import {
     ClipboardList,
     CreditCard,
     Database,
-    Edit3,
+    Download,
     FileText,
     Filter,
     IndianRupee,
@@ -28,9 +28,13 @@ import {
     Upload,
     UserRound,
     X,
+    MessageSquareText,
 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useDialog } from '../context/DialogContext'
+
+import DiceBearAvatar from '../components/DiceBearAvatar'
 
 const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
 const API_BASE = `${BACKEND_BASE}/api`
@@ -92,6 +96,7 @@ const FIELD_PRESETS = FIELD_GROUPS.flatMap(group => group.fields)
 const FIELD_PRESET_BY_KEY = FIELD_PRESETS.reduce((acc, field) => ({ ...acc, [field.key]: field }), {})
 
 const HIDDEN_CUSTOM_FIELDS = new Set(['profile_photo_url', 'profile_photo_checked_at'])
+const IGNORED_IMPORT_COLUMNS = new Set(['sr no', 'sr. no', 's.no', 's no', 'serial no', 'serial number', 'no', '#'])
 
 const emptyDraft = {
     id: null,
@@ -104,10 +109,36 @@ const emptyDraft = {
 }
 
 export default function Contacts() {
-    const { session, apiCall } = useAuth()
+    const navigate = useNavigate()
+    const { session, apiCall, memberProfile } = useAuth()
     const { alertDialog } = useDialog()
     const queryClient = useQueryClient()
     const fileInputRef = useRef(null)
+
+    const [startingConversation, setStartingConversation] = useState(false)
+
+    const handleDirectMessage = async () => {
+        if (!activeContact?.id) return
+        setStartingConversation(true)
+        try {
+            const res = await apiCall(`${API_BASE}/conversations/start`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    contact_id: activeContact.id,
+                    wa_account_id: activeContact.wa_account_id || null
+                })
+            })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) throw new Error(data.error || 'Failed to start conversation')
+
+            // Redirect to live chat with the phone query param
+            navigate(`/live-chat?phone=${activeContact.phone || activeContact.wa_id}`)
+        } catch (err) {
+            alertDialog(err.message, { title: 'Failed to open chat', tone: 'danger' })
+        } finally {
+            setStartingConversation(false)
+        }
+    }
 
     const [searchTerm, setSearchTerm] = useState('')
     const [tagFilter, setTagFilter] = useState('')
@@ -116,9 +147,98 @@ export default function Contacts() {
     const [activeContact, setActiveContact] = useState(null)
     const [drawerMode, setDrawerMode] = useState('view')
     const [draft, setDraft] = useState(emptyDraft)
-    const [importStatus, setImportStatus] = useState('')
+    const [importStatus, setImportStatus] = useState(null)
+    const [isActionMenuOpen, setIsActionMenuOpen] = useState(false)
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false)
+    const [isDeleteAllModalOpen, setIsDeleteAllModalOpen] = useState(false)
+    const [deleteAllConfirmName, setDeleteAllConfirmName] = useState('')
+    const [deleteAllConfirmText, setDeleteAllConfirmText] = useState('')
+    const actionMenuRef = useRef(null)
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (actionMenuRef.current && !actionMenuRef.current.contains(event.target)) {
+                setIsActionMenuOpen(false)
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside)
+        return () => document.removeEventListener('mousedown', handleClickOutside)
+    }, [])
+
+    const handleDownloadSample = async () => {
+        try {
+            const ExcelJS = await import('exceljs')
+            const workbook = new ExcelJS.Workbook()
+            const worksheet = workbook.addWorksheet('Sample Contacts')
+
+            worksheet.columns = [
+                { header: 'Name', key: 'name', width: 25 },
+                { header: 'Phone', key: 'phone', width: 22 },
+                { header: 'Tag', key: 'tag', width: 15 },
+                { header: 'Account', key: 'account', width: 25 }
+            ]
+
+            worksheet.getRow(1).eachCell((cell) => {
+                cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } }
+                cell.alignment = { vertical: 'middle', horizontal: 'center' }
+                cell.border = {
+                    top: { style: 'thin' }, left: { style: 'thin' },
+                    bottom: { style: 'thin' }, right: { style: 'thin' }
+                }
+            })
+
+            const rows = [
+                { name: 'Rahul Sharma', phone: '+91 98765 43210', tag: 'VIP', account: 'Main Account' },
+                { name: 'Priya Singh', phone: '+91 87654 32109', tag: 'Lead', account: 'Sales Account' },
+                { name: 'Amit Kumar', phone: '+91 76543 21098', tag: 'Follow-up', account: 'Support Account' },
+                { name: 'Neha Gupta', phone: '+91 65432 10987', tag: 'Customer', account: 'Main Account' },
+                { name: 'Vikram Singh', phone: '+91 54321 09876', tag: 'New', account: 'Sales Account' }
+            ]
+
+            rows.forEach((rowData, index) => {
+                const row = worksheet.addRow(rowData)
+                if (index % 2 === 0) {
+                    row.eachCell((cell) => {
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } }
+                    })
+                }
+                row.eachCell((cell) => {
+                    cell.alignment = { vertical: 'middle', horizontal: 'left' }
+                    cell.border = {
+                        top: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+                        left: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+                        bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+                        right: { style: 'thin', color: { argb: 'FFE5E7EB' } }
+                    }
+                })
+            })
+
+            const buffer = await workbook.xlsx.writeBuffer()
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+            const url = URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.href = url
+            link.download = 'sample_contacts.xlsx'
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            URL.revokeObjectURL(url)
+        } catch (error) {
+            console.error('Error generating sample file:', error)
+            alertDialog('Could not generate sample file.', { title: 'Error', tone: 'danger' })
+        }
+    }
 
     const authEnabled = !!session?.access_token
+    const isAdmin = ['admin', 'owner'].includes(String(memberProfile?.role || '').toLowerCase())
+    const adminConfirmName = String(
+        memberProfile?.name ||
+        session?.user?.user_metadata?.full_name ||
+        session?.user?.user_metadata?.name ||
+        session?.user?.email ||
+        ''
+    ).trim()
 
     const isHumanContact = (c) => {
         const waId = String(c?.wa_id || '').trim().toLowerCase()
@@ -133,7 +253,7 @@ export default function Contacts() {
     const { data: contacts = [], isLoading: contactsLoading, error: contactsError } = useQuery({
         queryKey: ['contacts', session?.access_token],
         queryFn: async () => {
-            const res = await apiCall(`${API_BASE}/contacts`)
+            const res = await apiCall(`${API_BASE}/contacts?include_unsaved=true`)
             if (!res.ok) {
                 const body = await res.text().catch(() => '')
                 throw new Error(body || `Failed to fetch contacts (${res.status})`)
@@ -184,16 +304,42 @@ export default function Contacts() {
 
     const getPhone = (contact) => formatPhoneForDisplay(contact?.phone || contact?.wa_id) || ''
 
+    const getProfilePhoto = (contact) => {
+        return (
+            contact?.profile_photo_url ||
+            contact?.profilePhotoUrl ||
+            contact?.photo_url ||
+            contact?.avatar_url ||
+            contact?.custom_fields?.profile_photo_url ||
+            ''
+        )
+    }
+
     const getAccountLabel = (contactOrAccount) => {
-        const account = contactOrAccount?.wa_account_id
-            ? accounts.find(item => item.id === contactOrAccount.wa_account_id) || contactOrAccount.account
-            : contactOrAccount?.account || contactOrAccount
+        if (!contactOrAccount) return 'Unassigned'
+
+        const isContact = Object.prototype.hasOwnProperty.call(contactOrAccount, 'wa_account_id')
+            || Object.prototype.hasOwnProperty.call(contactOrAccount, 'wa_id')
+            || Object.prototype.hasOwnProperty.call(contactOrAccount, 'phone')
+
+        const account = isContact
+            ? (contactOrAccount.wa_account_id
+                ? accounts.find(item => item.id === contactOrAccount.wa_account_id) || contactOrAccount.account
+                : contactOrAccount.account)
+            : contactOrAccount
         if (!account) return 'Unassigned'
         return account.name || account.display_phone_number || account.phone_number_id || 'WhatsApp account'
     }
 
     const visibleCustomFields = (contact) => Object.entries(contact?.custom_fields || {})
-        .filter(([key, value]) => !HIDDEN_CUSTOM_FIELDS.has(key) && value !== null && value !== undefined && String(value).trim() !== '')
+        .filter(([key, value]) => {
+            const normalizedKey = String(key || '').trim().toLowerCase()
+            return !HIDDEN_CUSTOM_FIELDS.has(key)
+                && !IGNORED_IMPORT_COLUMNS.has(normalizedKey)
+                && value !== null
+                && value !== undefined
+                && String(value).trim() !== ''
+        })
 
     const getFieldMeta = (key) => {
         const normalized = String(key || '').trim()
@@ -262,6 +408,21 @@ export default function Contacts() {
         .map(tag => tag.trim())
         .filter(Boolean)
 
+    const setDraftTags = (tags) => {
+        const uniqueTags = Array.from(new Set(tags.map(tag => String(tag || '').trim()).filter(Boolean)))
+        setDraft(prev => ({ ...prev, tagsText: uniqueTags.join(', ') }))
+    }
+
+    const addDraftTag = (tag) => {
+        const cleanTag = String(tag || '').trim()
+        if (!cleanTag) return
+        setDraftTags([...parseTags(draft.tagsText), cleanTag])
+    }
+
+    const removeDraftTag = (tagToRemove) => {
+        setDraftTags(parseTags(draft.tagsText).filter(tag => tag !== tagToRemove))
+    }
+
     const fieldsToObject = (fields) => fields.reduce((acc, field) => {
         const key = String(field.key || '').trim()
         if (key) acc[key] = String(field.value ?? '').trim()
@@ -311,6 +472,38 @@ export default function Contacts() {
             setActiveContact(null)
             setDrawerMode('view')
             queryClient.invalidateQueries({ queryKey: ['contacts'] })
+        },
+    })
+
+    const resetDeleteAllModal = () => {
+        setDeleteAllConfirmName('')
+        setDeleteAllConfirmText('')
+        setIsDeleteAllModalOpen(false)
+    }
+
+    const deleteAllMutation = useMutation({
+        mutationFn: async () => {
+            const res = await apiCall(`${API_BASE}/contacts/all`, {
+                method: 'DELETE',
+                body: JSON.stringify({
+                    confirm_name: deleteAllConfirmName,
+                    confirm_delete: deleteAllConfirmText,
+                }),
+            })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) throw new Error(data.error || `Failed to delete contacts (${res.status})`)
+            return data
+        },
+        onSuccess: (data) => {
+            resetDeleteAllModal()
+            setActiveContact(null)
+            setDrawerMode('view')
+            queryClient.invalidateQueries({ queryKey: ['contacts'] })
+            setImportStatus({
+                type: 'success',
+                message: `Deleted ${data.deleted_count || 0} contact${Number(data.deleted_count || 0) === 1 ? '' : 's'}.`,
+            })
+            setTimeout(() => setImportStatus(null), 8000)
         },
     })
 
@@ -381,63 +574,253 @@ export default function Contacts() {
         if (!file) return
 
         try {
-            setImportStatus('Importing CSV...')
-            const text = await file.text()
-            const lines = text.split(/\r?\n/).filter(line => line.trim())
-            if (lines.length < 2) throw new Error('CSV must include a header row and at least one contact')
+            setImportStatus({ type: 'info', message: 'Reading file...' })
 
-            const headers = parseCsvLine(lines[0])
-            const normalized = headers.map(header => header.toLowerCase().trim())
-            const nameIdx = normalized.findIndex(header => header.includes('name'))
-            const phoneIdx = normalized.findIndex(header => header.includes('phone') || header.includes('mobile') || header.includes('number'))
-            const tagsIdx = normalized.findIndex(header => header.includes('tag'))
-            const accountIdx = normalized.findIndex(header => header.includes('account'))
-            if (phoneIdx === -1) throw new Error('CSV needs a phone/mobile/number column')
+            let parsedLines = []
+            if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+                const XLSX = await import('xlsx')
+                const arrayBuffer = await file.arrayBuffer()
+                const workbook = XLSX.read(arrayBuffer, { type: 'array' })
 
-            const reserved = new Set([nameIdx, phoneIdx, tagsIdx, accountIdx].filter(index => index >= 0))
-            let imported = 0
-            let failed = 0
-            for (const line of lines.slice(1)) {
-                const cols = parseCsvLine(line)
-                const phone = cols[phoneIdx]
-                if (!phone) continue
-                const accountText = accountIdx >= 0 ? String(cols[accountIdx] || '').trim().toLowerCase() : ''
-                const account = accountText
-                    ? accounts.find(acc => [acc.id, acc.name, acc.display_phone_number, acc.phone_number_id].some(value => String(value || '').toLowerCase() === accountText))
-                    : null
-                const custom_fields = headers.reduce((acc, header, index) => {
-                    if (reserved.has(index)) return acc
-                    const key = String(header || '').trim()
-                    const value = String(cols[index] || '').trim()
-                    if (key && value) acc[key] = value
-                    return acc
-                }, {})
+                for (const sheetName of workbook.SheetNames) {
+                    const worksheet = workbook.Sheets[sheetName]
+                    const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' })
+                    const lines = rawData.map(row => row.map(cell => String(cell !== undefined && cell !== null ? cell : '').trim()))
+                        .filter(row => row.some(cell => cell !== ''))
 
-                try {
-                    const res = await apiCall(`${API_BASE}/contacts`, {
-                        method: 'POST',
-                        body: JSON.stringify({
-                            name: nameIdx >= 0 ? cols[nameIdx] : '',
-                            phone,
-                            tags: tagsIdx >= 0 ? cols[tagsIdx] : '',
-                            wa_account_id: account?.id || null,
-                            custom_fields,
-                        }),
-                    })
-                    if (!res.ok) throw new Error('failed')
-                    imported++
-                } catch {
-                    failed++
+                    if (lines.length > 0) {
+                        parsedLines = lines
+                        break
+                    }
+                }
+
+                if (parsedLines.length === 0) throw new Error('Excel file is completely empty')
+            } else {
+                const text = await file.text()
+                parsedLines = text.split(/\r?\n/).filter(line => line.trim()).map(line => parseCsvLine(line))
+            }
+
+            if (parsedLines.length === 0) throw new Error('File is empty')
+
+            let headers = parsedLines[0]
+            let normalized = headers.map(header => header.toLowerCase().trim())
+            let nameIdx = normalized.findIndex(header => header.includes('name'))
+            let phoneIdx = normalized.findIndex(header => header.includes('phone') || header.includes('mobile') || header.includes('number') || header.includes('whatsapp') || header.includes('contact') || header === 'wa' || header === 'ph')
+            let tagsIdx = normalized.findIndex(header => header.includes('tag'))
+            let accountIdx = normalized.findIndex(header => header.includes('account'))
+
+            // Auto-detect phone column if header name is completely unrecognized
+            if (phoneIdx === -1 && parsedLines.length > 1) {
+                phoneIdx = parsedLines[1].findIndex(cell => /^\+?[0-9\s-()]{10,20}$/.test(cell) && cell.replace(/\D/g, '').length >= 10)
+            }
+
+            // If still not found, maybe there is no header row and the first row is data
+            if (phoneIdx === -1) {
+                phoneIdx = parsedLines[0].findIndex(cell => /^\+?[0-9\s-()]{10,20}$/.test(cell) && cell.replace(/\D/g, '').length >= 10)
+                if (phoneIdx !== -1) {
+                    // Prepend dummy headers since the first row is actually data
+                    headers = parsedLines[0].map((_, i) => i === phoneIdx ? 'phone' : `column_${i + 1}`)
+                    parsedLines.unshift(headers)
+                    normalized = headers
                 }
             }
 
-            setImportStatus(`Imported ${imported} contact${imported === 1 ? '' : 's'}${failed ? `, skipped ${failed}` : ''}. Extra CSV columns were saved as custom fields.`)
-            queryClient.invalidateQueries({ queryKey: ['contacts'] })
+            if (phoneIdx === -1) throw new Error(`File needs a phone column (or auto-detectable phone numbers). Found columns: ${headers.join(', ') || 'none'}`)
+
+            const ignoredColumnIndexes = headers
+                .map((header, index) => IGNORED_IMPORT_COLUMNS.has(String(header || '').trim().toLowerCase()) ? index : -1)
+                .filter(index => index >= 0)
+            const reserved = new Set([nameIdx, phoneIdx, tagsIdx, accountIdx, ...ignoredColumnIndexes].filter(index => index >= 0))
+            let imported = 0
+            let failed = 0
+            let skipped = 0
+            const batchErrors = []
+
+            const contactsToImport = parsedLines.slice(1);
+            const total = contactsToImport.length;
+
+            setImportStatus({ type: 'info', message: 'Importing contacts...', progress: { current: 0, total } });
+
+            const BATCH_SIZE = 500;
+
+            for (let i = 0; i < total; i += BATCH_SIZE) {
+                const chunk = contactsToImport.slice(i, i + BATCH_SIZE);
+                const payload = [];
+
+                for (const cols of chunk) {
+                    if (!cols || cols.length === 0) continue;
+                    const phone = cols[phoneIdx];
+                    if (!phone) continue;
+                    const accountText = accountIdx >= 0 ? String(cols[accountIdx] || '').trim().toLowerCase() : '';
+                    const account = accountText
+                        ? accounts.find(acc => [acc.id, acc.name, acc.display_phone_number, acc.phone_number_id].some(value => String(value || '').toLowerCase() === accountText))
+                        : null;
+                    const custom_fields = headers.reduce((acc, header, index) => {
+                        if (reserved.has(index)) return acc;
+                        const key = String(header || '').trim();
+                        const value = String(cols[index] || '').trim();
+                        if (key && value) acc[key] = value;
+                        return acc;
+                    }, {});
+
+                    payload.push({
+                        name: nameIdx >= 0 ? cols[nameIdx] : '',
+                        phone,
+                        tags: tagsIdx >= 0 ? cols[tagsIdx] : '',
+                        wa_account_id: account?.id || null,
+                        custom_fields,
+                    });
+                }
+
+                if (payload.length > 0) {
+                    try {
+                        const res = await apiCall(`${API_BASE}/contacts/batch`, {
+                            method: 'POST',
+                            body: JSON.stringify({ contacts: payload }),
+                        });
+                        if (!res.ok) {
+                            const errData = await res.json().catch(() => ({}));
+                            throw new Error(errData.error || 'Batch import failed');
+                        }
+                        const data = await res.json();
+                        imported += data.imported || 0;
+                        skipped += Number(data.skipped_existing || 0) + Number(data.skipped_duplicate_rows || 0) + Number(data.skipped_invalid_rows || 0);
+
+                        if (data.contacts && Array.isArray(data.contacts)) {
+                            queryClient.setQueriesData({ queryKey: ['contacts'] }, (old) => {
+                                const prev = Array.isArray(old) ? old : [];
+                                const newIds = new Set(data.contacts.map(c => c.id));
+                                return [...data.contacts, ...prev.filter(c => !newIds.has(c.id))];
+                            });
+                        }
+                    } catch (err) {
+                        console.error('Batch error:', err);
+                        failed += payload.length;
+                        if (err?.message && batchErrors.length < 3) batchErrors.push(err.message);
+                        if (err.message && err.message.toLowerCase().includes('limit')) {
+                            throw err; // Stop if it's a billing limit error
+                        }
+                    }
+                }
+
+                setImportStatus({ type: 'info', message: 'Importing contacts...', progress: { current: Math.min(i + BATCH_SIZE, total), total } });
+            }
+
+            if (failed && imported === 0) {
+                throw new Error(batchErrors[0] || `Import failed for ${failed} contacts`);
+            }
+
+            setImportStatus({
+                type: failed ? 'error' : 'success',
+                message: `Imported ${imported} contact${imported === 1 ? '' : 's'}${skipped ? `, skipped ${skipped}` : ''}${failed ? `, failed ${failed}: ${batchErrors[0] || 'Some rows could not be imported'}` : ''}. Extra columns were saved as custom fields.`
+            });
+            setTimeout(() => setImportStatus(null), 8000);
+            queryClient.invalidateQueries({ queryKey: ['contacts'] });
         } catch (err) {
-            setImportStatus('')
-            alertDialog(err.message, { title: 'Import failed', tone: 'danger' })
+            setImportStatus({ type: 'error', message: err.message || 'Import failed' });
+            setTimeout(() => setImportStatus(null), 8000);
+            alertDialog(err.message, { title: 'Import failed', tone: 'danger' });
         }
     }
+
+    const handleExportExcel = async () => {
+        const toExport = filteredContacts.length > 0 ? filteredContacts : contacts;
+        if (!toExport || toExport.length === 0) return;
+
+        const formatHeader = (key) => {
+            return String(key).split(/[_-\s]+/)
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                .join(' ');
+        };
+
+        const baseHeaders = ['Name', 'Phone', 'Tags', 'Account', 'Joined', 'Last Active'];
+        const customFieldsHeaders = new Set();
+        toExport.forEach(contact => {
+            visibleCustomFields(contact).forEach(([key]) => customFieldsHeaders.add(key));
+        });
+        const customHeadersArray = Array.from(customFieldsHeaders);
+
+        const headers = [...baseHeaders, ...customHeadersArray.map(formatHeader)];
+
+        // Dynamic import to avoid initial bundle size increase
+        const ExcelJS = await import('exceljs');
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet('Contacts');
+
+        sheet.addRow(headers);
+
+        const headerRow = sheet.getRow(1);
+        headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+        headerRow.height = 25;
+        headerRow.eachCell((cell) => {
+            cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FF4F46E5' } // Indigo 600
+            };
+            cell.border = {
+                top: { style: 'thin' },
+                left: { style: 'thin' },
+                bottom: { style: 'thin' },
+                right: { style: 'thin' }
+            };
+        });
+
+        toExport.forEach(contact => {
+            const row = [];
+            row.push(getDisplayName(contact));
+
+            const phone = getPhone(contact) || contact.wa_id || '';
+            row.push(phone.startsWith('+') ? phone : (phone ? `+${phone}` : ''));
+
+            row.push((contact.tags || []).join(', '));
+            row.push(getAccountLabel(contact));
+            row.push(contact.created_at ? format(new Date(contact.created_at), 'MMM d, yyyy') : '');
+            row.push(contact.last_active ? format(new Date(contact.last_active), 'MMM d, yyyy h:mm a') : '');
+
+            const contactFields = Object.fromEntries(visibleCustomFields(contact));
+            customHeadersArray.forEach(header => {
+                row.push(contactFields[header] || '');
+            });
+
+            const addedRow = sheet.addRow(row);
+
+            addedRow.eachCell((cell) => {
+                cell.alignment = { vertical: 'middle', horizontal: 'left' };
+                cell.border = {
+                    top: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+                    left: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+                    bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+                    right: { style: 'thin', color: { argb: 'FFE5E7EB' } }
+                };
+            });
+
+            const phoneCell = addedRow.getCell(2);
+            phoneCell.numFmt = '@';
+        });
+
+        sheet.columns.forEach((column) => {
+            let maxLength = 0;
+            column.eachCell({ includeEmpty: true }, (cell) => {
+                const columnLength = cell.value ? cell.value.toString().length : 10;
+                if (columnLength > maxLength) {
+                    maxLength = columnLength;
+                }
+            });
+            column.width = Math.min(Math.max(maxLength + 2, 12), 50);
+        });
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `Contacts_Export_${format(new Date(), 'yyyyMMdd_HHmmss')}.xlsx`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     const resetFilters = () => {
         setSearchTerm('')
@@ -458,86 +841,143 @@ export default function Contacts() {
     ]
     const tagOptions = [{ value: '', label: 'All tags' }, ...allTags.map(tag => ({ value: tag, label: tag }))]
     const fieldOptions = [{ value: '', label: 'All fields' }, ...allFieldKeys.map(key => ({ value: key, label: getFieldMeta(key).label }))]
+    const fieldPresetOptions = [
+        { value: '', label: 'Custom field' },
+        ...FIELD_PRESETS.map(field => ({ value: field.key, label: field.label })),
+    ]
+    const canConfirmDeleteAll = Boolean(
+        isAdmin &&
+        adminConfirmName &&
+        deleteAllConfirmName.trim() === adminConfirmName &&
+        deleteAllConfirmText.trim().toLowerCase() === 'delete all contacts'
+    )
 
     return (
         <div className="min-h-full bg-gray-50/70">
-            <div className="space-y-5 px-4 py-5 lg:px-7">
+            <div className="space-y-5 p-2 sm:p-5 lg:px-7">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-950">Contacts</h1>
-                        <p className="mt-1 text-sm text-gray-500">Manage customer profiles, account ownership, tags, and flexible business data.</p>
+                    <div className="flex items-start justify-between w-full lg:w-auto">
+                        <div>
+                            <h1 className="text-2xl font-bold text-gray-950 flex items-center gap-2">
+                                Contacts
+                            </h1>
+                            <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-gray-500">Manage customer profiles, account ownership, and tags.</p>
+                        </div>
                     </div>
-                    <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center">
+                    <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:flex-wrap sm:items-center sm:w-auto">
+
                         <input
                             ref={fileInputRef}
                             type="file"
-                            accept=".csv,text/csv"
+                            accept=".csv, .xls, .xlsx"
                             className="hidden"
-                            onChange={handleImportCsv}
+                            onChange={(e) => {
+                                handleImportCsv(e)
+                                setIsImportModalOpen(false)
+                                setIsActionMenuOpen(false)
+                            }}
                         />
-                        <button
-                            type="button"
-                            onClick={() => fileInputRef.current?.click()}
-                            className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
-                        >
-                            <Upload className="h-4 w-4" />
-                            Import CSV
-                        </button>
-                        <button
-                            type="button"
-                            onClick={openNewContact}
-                            className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm shadow-indigo-100 hover:bg-indigo-700"
-                        >
-                            <Plus className="h-4 w-4" />
-                            Add Contact
-                        </button>
+                        <div className="relative" ref={actionMenuRef}>
+                            <button
+                                type="button"
+                                onClick={() => setIsActionMenuOpen(!isActionMenuOpen)}
+                                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 focus:outline-none transition-colors"
+                            >
+                                Actions
+                                <ChevronDown className={`h-4 w-4 transition-transform ${isActionMenuOpen ? 'rotate-180' : ''}`} />
+                            </button>
+                            {isActionMenuOpen && (
+                                <div className="absolute right-0 top-full mt-2 w-48 z-10 rounded-xl border border-gray-100 bg-white shadow-lg shadow-gray-200/50 ring-1 ring-black ring-opacity-5 focus:outline-none">
+                                    <div className="py-1">
+                                        <button
+                                            onClick={() => {
+                                                setIsActionMenuOpen(false)
+                                                setIsImportModalOpen(true)
+                                            }}
+                                            data-tour="contacts-import"
+                                            className="group flex w-full items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                        >
+                                            <Upload className="h-4 w-4 text-gray-400 group-hover:text-gray-600" />
+                                            Import Contacts
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setIsActionMenuOpen(false)
+                                                handleExportExcel()
+                                            }}
+                                            className="group flex w-full items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                        >
+                                            <Download className="h-4 w-4 text-gray-400 group-hover:text-gray-600" />
+                                            Export Excel
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setIsActionMenuOpen(false)
+                                                openNewContact()
+                                            }}
+                                            data-tour="contacts-add"
+                                            className="group flex w-full items-center gap-3 px-4 py-2 text-sm font-semibold text-indigo-600 hover:bg-indigo-50"
+                                        >
+                                            <Plus className="h-4 w-4 text-indigo-500" />
+                                            Add Contact
+                                        </button>
+                                        {isAdmin ? (
+                                            <button
+                                                onClick={() => {
+                                                    setIsActionMenuOpen(false)
+                                                    setIsDeleteAllModalOpen(true)
+                                                }}
+                                                className="group flex w-full items-center gap-3 border-t border-gray-100 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
+                                            >
+                                                <Trash2 className="h-4 w-4 text-red-500" />
+                                                Delete all contacts
+                                            </button>
+                                        ) : null}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <div className="grid grid-cols-3 gap-2 sm:gap-3 lg:grid-cols-4">
                     {[
                         { label: 'Total contacts', value: stats.total, icon: UserRound },
                         { label: 'With account', value: stats.assigned, icon: Building2 },
                         { label: 'Tagged', value: stats.withTags, icon: Tag },
-                        { label: 'Custom data', value: stats.withFields, icon: Database },
                     ].map(item => (
-                        <div key={item.label} className="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
-                            <div className="flex items-center justify-between">
-                                <div className="text-xs font-medium text-gray-500">{item.label}</div>
-                                <item.icon className="h-4 w-4 text-gray-400" />
+                        <div key={item.label} className="rounded-xl border border-gray-200 bg-white p-2 sm:px-4 sm:py-3 shadow-sm flex flex-col justify-between">
+                            <div className="flex items-center justify-between gap-1">
+                                <div className="text-[10px] sm:text-xs font-medium text-gray-500 truncate leading-tight">{item.label}</div>
+                                <item.icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-gray-400 shrink-0" />
                             </div>
-                            <div className="mt-2 text-2xl font-bold text-gray-950">{item.value}</div>
+                            <div className="mt-1.5 sm:mt-2 text-lg sm:text-2xl font-bold text-gray-950 leading-none">{item.value}</div>
                         </div>
                     ))}
                 </div>
 
-                {importStatus ? (
-                    <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-800">
-                        {importStatus}
-                    </div>
-                ) : null}
 
-                {(contactsError || saveMutation.error || deleteMutation.error) ? (
+                {(contactsError || saveMutation.error || deleteMutation.error || deleteAllMutation.error) ? (
                     <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                         <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                        <span>{contactsError?.message || saveMutation.error?.message || deleteMutation.error?.message}</span>
+                        <span>{contactsError?.message || saveMutation.error?.message || deleteMutation.error?.message || deleteAllMutation.error?.message}</span>
                     </div>
                 ) : null}
 
-                <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                    <div className="grid grid-cols-1 gap-3 xl:flex xl:flex-row">
+                <div data-tour="contacts-filters" className="rounded-xl border border-gray-200 bg-white p-2.5 sm:p-4 shadow-sm">
+                    <div className="flex flex-col gap-2 xl:flex-row xl:gap-3">
                         <div className="relative flex-1">
-                            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+                            <Search className="absolute left-2.5 sm:left-3 top-1/2 h-4 w-4 sm:h-5 sm:w-5 -translate-y-1/2 text-gray-400" />
                             <input
                                 value={searchTerm}
                                 onChange={(event) => setSearchTerm(event.target.value)}
-                                placeholder="Search name, phone, tag, account, invoice, address, amount..."
-                                className="w-full rounded-lg border border-gray-300 py-2.5 pl-10 pr-3 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20"
+                                placeholder="Search name, phone, tag..."
+                                className="w-full rounded-lg border border-gray-300 py-1.5 pl-8 pr-2.5 text-xs sm:text-sm sm:py-2 sm:pl-10 sm:pr-3 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20"
                             />
                         </div>
                         <CustomSelect value={accountFilter} onChange={setAccountFilter} options={accountOptions} className="xl:w-44" />
                         <CustomSelect value={tagFilter} onChange={setTagFilter} options={tagOptions} className="xl:w-40" />
-                        <CustomSelect value={fieldFilter} onChange={setFieldFilter} options={fieldOptions} className="xl:w-40" />
+                        <CustomSelect value={fieldFilter} onChange={setFieldFilter} options={fieldOptions} className="xl:w-44" />
                         <button type="button" onClick={resetFilters} className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
                             <Filter className="h-4 w-4" />
                             Reset
@@ -545,7 +985,7 @@ export default function Contacts() {
                     </div>
                 </div>
 
-                <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div data-tour="contacts-table" className="hidden md:block overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                     <div className="overflow-x-auto">
                         <table className="w-full min-w-[980px] text-left text-sm">
                             <thead className="border-b border-gray-200 bg-gray-50 text-xs font-semibold uppercase text-gray-500">
@@ -554,6 +994,7 @@ export default function Contacts() {
                                     <th className="px-5 py-3">Account</th>
                                     <th className="px-5 py-3">Tags</th>
                                     <th className="px-5 py-3">Business data</th>
+                                    <th className="px-5 py-3">Broadcasts</th>
                                     <th className="px-5 py-3">Activity</th>
                                     <th className="px-5 py-3 text-right">Action</th>
                                 </tr>
@@ -561,19 +1002,25 @@ export default function Contacts() {
                             <tbody className="divide-y divide-gray-100">
                                 {contactsLoading ? (
                                     <tr>
-                                        <td colSpan="6" className="px-5 py-10 text-center text-sm text-gray-500">Loading contacts...</td>
+                                        <td colSpan="7" className="px-5 py-10 text-center text-sm text-gray-500">Loading contacts...</td>
                                     </tr>
                                 ) : filteredContacts.length === 0 ? (
                                     <tr>
-                                        <td colSpan="6" className="px-5 py-10 text-center text-sm text-gray-500">No contacts match this view.</td>
+                                        <td colSpan="7" className="px-5 py-10 text-center text-sm text-gray-500">No contacts match this view.</td>
                                     </tr>
                                 ) : filteredContacts.map(contact => (
                                     <tr key={contact.id} onClick={() => openContact(contact)} className="cursor-pointer bg-white transition hover:bg-gray-50">
                                         <td className="px-5 py-4">
                                             <div className="flex items-center gap-3">
-                                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-green-400 to-emerald-600 text-sm font-bold text-white shadow-sm">
-                                                    {String(getDisplayName(contact)).slice(0, 2).toUpperCase()}
-                                                </div>
+                                                {getProfilePhoto(contact) ? (
+                                                    <img
+                                                        src={getProfilePhoto(contact)}
+                                                        alt={getDisplayName(contact)}
+                                                        className="h-10 w-10 rounded-full object-cover shadow-sm shrink-0"
+                                                    />
+                                                ) : (
+                                                    <DiceBearAvatar seed={getDisplayName(contact)} className="h-10 w-10 rounded-full object-cover shadow-sm shrink-0" />
+                                                )}
                                                 <div className="min-w-0">
                                                     <div className="truncate font-semibold text-gray-950">{getDisplayName(contact)}</div>
                                                     <div className="mt-0.5 flex items-center gap-1 font-mono text-xs text-gray-500">
@@ -598,11 +1045,16 @@ export default function Contacts() {
                                             </div>
                                         </td>
                                         <td className="px-5 py-4">
-                                            {topFields(contact).length > 0 ? (
-                                                <BusinessDataCell fields={visibleCustomFields(contact)} />
+                                            {topFields(contact).length ? (
+                                                <BusinessDataCell fields={topFields(contact)} />
                                             ) : (
-                                                <span className="text-xs text-gray-400">No custom data</span>
+                                                <span className="text-xs text-gray-400">No fields</span>
                                             )}
+                                        </td>
+                                        <td className="px-5 py-4">
+                                            <span className="inline-flex items-center gap-1 rounded-md  px-2.5 py-1 text-xs font-semibold text-indigo-700">
+                                                {contact.broadcast_count || 0}
+                                            </span>
                                         </td>
                                         <td className="px-5 py-4 text-xs text-gray-500">
                                             <div className="flex items-center gap-1">
@@ -622,7 +1074,86 @@ export default function Contacts() {
                     </div>
                     <div className="flex flex-col gap-1 border-t border-gray-200 px-4 py-3 text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                         <span>Showing <strong className="text-gray-800">{filteredContacts.length}</strong> of <strong className="text-gray-800">{contacts.length}</strong> contacts</span>
-                        <span>{allFieldKeys.length} custom field types</span>
+                    </div>
+                </div>
+
+                {/* Mobile Card List (Apple X Meta High-Density Layout) */}
+                <div className="block md:hidden space-y-1.5">
+                    {contactsLoading ? (
+                        <div className="rounded-xl border border-gray-200 bg-white p-5 text-center text-xs text-gray-500 shadow-sm">Loading contacts...</div>
+                    ) : filteredContacts.length === 0 ? (
+                        <div className="rounded-xl border border-gray-200 bg-white p-5 text-center text-xs text-gray-500 shadow-sm">No contacts match this view.</div>
+                    ) : (
+                        filteredContacts.map(contact => (
+                            <div
+                                key={contact.id}
+                                onClick={() => openContact(contact)}
+                                className="rounded-xl border border-gray-100 bg-white p-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-all hover:border-indigo-300 hover:shadow active:scale-[0.99] cursor-pointer"
+                            >
+                                <div className="flex items-center gap-2.5">
+                                    {/* Avatar */}
+                                    {getProfilePhoto(contact) ? (
+                                        <img
+                                            src={getProfilePhoto(contact)}
+                                            alt={getDisplayName(contact)}
+                                            className="h-8 w-8 rounded-full object-cover shadow-sm shrink-0"
+                                        />
+                                    ) : (
+                                        <DiceBearAvatar seed={getDisplayName(contact)} className="h-8 w-8 rounded-full object-cover shadow-sm shrink-0" />
+                                    )}
+
+                                    {/* Core Details */}
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-1.5">
+                                            <h3 className="truncate text-xs font-bold text-gray-950">{getDisplayName(contact)}</h3>
+                                            {/* Account Name Badge */}
+                                            <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-gray-50 px-1 py-0.2 text-[8px] font-semibold text-gray-500 border border-gray-100">
+                                                {getAccountLabel(contact)}
+                                            </span>
+                                        </div>
+
+                                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[9px] sm:text-[10px] text-gray-400 font-mono">
+                                            <span className="flex items-center gap-0.5">
+                                                <Phone className="h-2.5 w-2.5" />
+                                                {getPhone(contact) || contact.wa_id || '-'}
+                                            </span>
+                                            <span className="h-1 w-1 rounded-full bg-gray-200" />
+                                            <span className="flex items-center gap-0.5">
+                                                <Calendar className="h-2.5 w-2.5" />
+                                                {contact.last_active ? format(new Date(contact.last_active), 'MMM d, yyyy') : contact.created_at ? format(new Date(contact.created_at), 'MMM d, yyyy') : '-'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Action Button & Tags */}
+                                    <div className="flex items-center gap-1 shrink-0">
+                                        <span className="inline-flex shrink-0 items-center rounded bg-indigo-50 border border-indigo-100/50 px-1.5 py-0.2 text-[8px] font-bold text-indigo-600">
+                                            BC: {contact.broadcast_count || 0}
+                                        </span>
+                                        {(contact.tags && contact.tags.length > 0) && (
+                                            <div className="flex gap-0.5">
+                                                {contact.tags.slice(0, 1).map(tag => (
+                                                    <span key={tag} className="rounded bg-blue-50 border border-blue-100/50 px-1.5 py-0.2 text-[8px] font-bold text-blue-600 truncate max-w-[50px]">{tag}</span>
+                                                ))}
+                                                {contact.tags.length > 1 ? (
+                                                    <span className="rounded bg-gray-50 border border-gray-100 px-1 py-0.2 text-[8px] font-bold text-gray-500">+{contact.tags.length - 1}</span>
+                                                ) : null}
+                                            </div>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={(event) => { event.stopPropagation(); openContact(contact) }}
+                                            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                                        >
+                                            <MoreHorizontal className="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                    <div className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-[10px] text-gray-500 shadow-sm text-center">
+                        Showing <strong className="text-gray-800">{filteredContacts.length}</strong> of <strong className="text-gray-800">{contacts.length}</strong> contacts
                     </div>
                 </div>
             </div>
@@ -630,7 +1161,7 @@ export default function Contacts() {
             {(activeContact || drawerMode === 'edit') ? (
                 <div className="fixed inset-0 z-50 overflow-hidden">
                     <div className="absolute inset-0 bg-gray-950/30" onClick={() => { setActiveContact(null); setDrawerMode('view') }} />
-                    <div className="absolute inset-y-0 right-0 w-full max-w-2xl bg-white shadow-2xl">
+                    <div className="absolute inset-y-0 right-0 w-full max-w-[500px] bg-white shadow-2xl">
                         <div className="flex h-full flex-col">
                             <div className="border-b border-gray-200 px-5 py-4">
                                 <div className="flex items-start justify-between gap-4">
@@ -656,9 +1187,15 @@ export default function Contacts() {
                                     <div className="space-y-5">
                                         <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
                                             <div className="flex items-center gap-4">
-                                                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-green-400 to-emerald-600 text-xl font-bold text-white">
-                                                    {String(getDisplayName(activeContact)).slice(0, 2).toUpperCase()}
-                                                </div>
+                                                {getProfilePhoto(activeContact) ? (
+                                                    <img
+                                                        src={getProfilePhoto(activeContact)}
+                                                        alt={getDisplayName(activeContact)}
+                                                        className="h-16 w-16 rounded-full object-cover shrink-0 shadow-sm"
+                                                    />
+                                                ) : (
+                                                    <DiceBearAvatar seed={getDisplayName(activeContact)} className="h-16 w-16 rounded-full object-cover shrink-0 shadow-sm" />
+                                                )}
                                                 <div className="min-w-0">
                                                     <div className="text-lg font-bold text-gray-950">{getDisplayName(activeContact)}</div>
                                                     <div className="mt-1 font-mono text-sm text-gray-500">{getPhone(activeContact) || activeContact.wa_id || '-'}</div>
@@ -669,6 +1206,7 @@ export default function Contacts() {
                                                 <InfoRow label="WhatsApp ID" value={activeContact.wa_id || '-'} mono />
                                                 <InfoRow label="Joined" value={activeContact.created_at ? format(new Date(activeContact.created_at), 'MMM d, yyyy') : '-'} />
                                                 <InfoRow label="Last active" value={activeContact.last_active ? format(new Date(activeContact.last_active), 'MMM d, yyyy h:mm a') : '-'} />
+                                                <InfoRow label="Broadcasts Sent" value={String(activeContact.broadcast_count || 0)} />
                                             </div>
                                         </section>
 
@@ -686,22 +1224,17 @@ export default function Contacts() {
 
                                         <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
                                             <div className="mb-3 flex items-center justify-between">
-                                                <h3 className="text-sm font-bold text-gray-950">Flexible data</h3>
-                                                <Layers3 className="h-4 w-4 text-gray-400" />
+                                                <h3 className="text-sm font-bold text-gray-950">Business data</h3>
+                                                <Database className="h-4 w-4 text-gray-400" />
                                             </div>
                                             {selectedFields.length ? (
-                                                <div className="divide-y divide-gray-100">
+                                                <div className="grid gap-3 sm:grid-cols-2">
                                                     {selectedFields.map(([key, value]) => (
-                                                        <div key={key} className="grid grid-cols-[150px_1fr] gap-4 py-3 text-sm">
-                                                            <div className="font-medium text-gray-500">{key}</div>
-                                                            <div className="break-words font-semibold text-gray-900">{String(value)}</div>
-                                                        </div>
+                                                        <InfoRow key={key} label={getFieldMeta(key).label} value={String(value)} />
                                                     ))}
                                                 </div>
                                             ) : (
-                                                <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
-                                                    No invoice, address, amount, period, or other custom data saved yet.
-                                                </div>
+                                                <span className="text-sm text-gray-500">No custom fields saved yet</span>
                                             )}
                                         </section>
                                     </div>
@@ -728,93 +1261,145 @@ export default function Contacts() {
                                                 </Field>
                                             </div>
                                             <Field label="Tags" className="mt-4">
-                                                <input value={draft.tagsText} onChange={event => updateDraft({ tagsText: event.target.value })} className="field-input" placeholder="lead, vip, renewal" />
+                                                <div className="space-y-3">
+                                                    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_220px]">
+                                                        <input
+                                                            value={draft.tagsText}
+                                                            onChange={event => updateDraft({ tagsText: event.target.value })}
+                                                            className="field-input"
+                                                            placeholder="lead, vip, renewal"
+                                                        />
+                                                        <CustomSelect
+                                                            value=""
+                                                            onChange={(value) => addDraftTag(value)}
+                                                            options={[
+                                                                { value: '', label: allTags.length ? 'Select existing tag' : 'No saved tags yet' },
+                                                                ...allTags
+                                                                    .filter(tag => !parseTags(draft.tagsText).includes(tag))
+                                                                    .map(tag => ({ value: tag, label: tag }))
+                                                            ]}
+                                                        />
+                                                    </div>
+                                                    {parseTags(draft.tagsText).length ? (
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {parseTags(draft.tagsText).map(tag => (
+                                                                <span key={tag} className="inline-flex items-center gap-1.5 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                                                                    {tag}
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => removeDraftTag(tag)}
+                                                                        className="rounded-full p-0.5 text-blue-500 hover:bg-blue-100 hover:text-blue-800"
+                                                                        aria-label={`Remove ${tag}`}
+                                                                    >
+                                                                        <X className="h-3 w-3" />
+                                                                    </button>
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <p className="text-xs text-gray-500">Existing tags dropdown se select karein ya comma separated custom tags type karein.</p>
+                                                    )}
+                                                </div>
                                             </Field>
                                         </section>
 
                                         <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                                            <div className="mb-4 flex items-center justify-between gap-3">
+                                            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                                 <div>
-                                                    <h3 className="text-sm font-bold text-gray-950">Flexible fields</h3>
-                                                    <p className="mt-1 text-xs text-gray-500">Save invoice, address, amount, period, plan, notes, or any business-specific data.</p>
+                                                    <h3 className="text-sm font-bold text-gray-950">Custom fields</h3>
+                                                    <p className="mt-1 text-xs text-gray-500">Invoice, address, course, payment ya business-specific data yahan save hota hai.</p>
                                                 </div>
-                                                <button type="button" onClick={() => addField()} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
-                                                    <Plus className="h-4 w-4" />
-                                                    Field
+                                                <button
+                                                    type="button"
+                                                    onClick={() => addField()}
+                                                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                                                >
+                                                    <Plus className="h-3.5 w-3.5" />
+                                                    Add field
                                                 </button>
                                             </div>
 
-                                            <div className="mb-4 grid gap-2 sm:grid-cols-2">
-                                                {FIELD_GROUPS.map(group => (
-                                                    <div key={group.label} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                                                        <div className="mb-2 flex items-center justify-between gap-2">
-                                                            <div className="flex items-center gap-2 text-sm font-bold text-gray-800">
-                                                                <group.icon className="h-4 w-4 text-gray-500" />
-                                                                {group.label}
-                                                            </div>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => addFieldGroup(group)}
-                                                                className="rounded-md px-2 py-1 text-xs font-bold text-green-700 hover:bg-green-50"
-                                                            >
-                                                                Add set
-                                                            </button>
-                                                        </div>
-                                                        <div className="flex flex-wrap gap-1.5">
-                                                            {group.fields.map(field => (
-                                                                <button
-                                                                    key={field.key}
-                                                                    type="button"
-                                                                    onClick={() => addField(field.key, '')}
-                                                                    className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-600 hover:border-green-200 hover:bg-green-50 hover:text-green-700"
-                                                                >
-                                                                    {field.label}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                ))}
+                                            <div className="mb-4 flex flex-wrap gap-2">
+                                                {FIELD_GROUPS.map(group => {
+                                                    const Icon = group.icon
+                                                    return (
+                                                        <button
+                                                            key={group.label}
+                                                            type="button"
+                                                            onClick={() => addFieldGroup(group)}
+                                                            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+                                                        >
+                                                            <Icon className="h-3.5 w-3.5" />
+                                                            {group.label}
+                                                        </button>
+                                                    )
+                                                })}
                                             </div>
 
-                                            <div className="space-y-2">
-                                                {draft.fields.length === 0 ? (
-                                                    <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">No custom fields. Add only the data this customer needs.</div>
-                                                ) : draft.fields.map((field, index) => (
-                                                    <div key={`${index}-${field.key}`} className="grid gap-2 rounded-lg border border-gray-100 bg-white p-2 sm:grid-cols-[190px_1fr_40px]">
-                                                        <div>
-                                                            <input
-                                                                value={field.key}
-                                                                onChange={event => updateField(index, { key: event.target.value })}
-                                                                className="field-input"
-                                                                placeholder="field name"
-                                                                list="contact-field-presets"
-                                                            />
-                                                        </div>
-                                                        <FieldValueInput field={field} onChange={value => updateField(index, { value })} meta={getFieldMeta(field.key)} />
-                                                        <button type="button" onClick={() => removeField(index)} className="flex h-10 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600">
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                            <datalist id="contact-field-presets">
-                                                {FIELD_PRESETS.map(field => <option key={field.key} value={field.key}>{field.label}</option>)}
-                                            </datalist>
+                                            {draft.fields.length ? (
+                                                <div className="space-y-3">
+                                                    {draft.fields.map((field, index) => {
+                                                        const meta = getFieldMeta(field.key)
+                                                        return (
+                                                            <div key={`${field.key || 'field'}-${index}`} className="grid gap-2 rounded-lg border border-gray-100 bg-gray-50 p-3 sm:grid-cols-[140px_minmax(0,1fr)_40px]">
+                                                                <div className="space-y-2">
+                                                                    <CustomSelect
+                                                                        value={FIELD_PRESET_BY_KEY[field.key] ? field.key : ''}
+                                                                        onChange={value => updateField(index, { key: value })}
+                                                                        options={fieldPresetOptions}
+                                                                    />
+                                                                    {!FIELD_PRESET_BY_KEY[field.key] ? (
+                                                                        <input
+                                                                            value={field.key}
+                                                                            onChange={event => updateField(index, { key: event.target.value })}
+                                                                            className="field-input"
+                                                                            placeholder="Field name"
+                                                                        />
+                                                                    ) : null}
+                                                                </div>
+                                                                <FieldValueInput
+                                                                    field={field}
+                                                                    meta={meta}
+                                                                    onChange={value => updateField(index, { value })}
+                                                                />
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => removeField(index)}
+                                                                    className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600"
+                                                                    aria-label={`Remove ${meta.label}`}
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </button>
+                                                            </div>
+                                                        )
+                                                    })}
+                                                </div>
+                                            ) : (
+                                                <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
+                                                    No custom fields yet.
+                                                </div>
+                                            )}
                                         </section>
+
                                     </form>
                                 )}
                             </div>
 
                             <div className="border-t border-gray-200 bg-white px-5 py-4">
                                 {drawerMode === 'view' && activeContact ? (
-                                    <div className="flex justify-between gap-3">
+                                    <div className="flex justify-between gap-3 w-full">
                                         <button type="button" onClick={() => deleteMutation.mutate(activeContact)} disabled={deleteMutation.isPending} className="inline-flex items-center gap-2 rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">
                                             <Trash2 className="h-4 w-4" />
                                             Delete
                                         </button>
-                                        <button type="button" onClick={() => { setDraft(hydrateDraft(activeContact)); setDrawerMode('edit') }} className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800">
-                                            <Edit3 className="h-4 w-4" />
-                                            Edit contact
+                                        <button
+                                            type="button"
+                                            onClick={handleDirectMessage}
+                                            disabled={startingConversation}
+                                            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                                        >
+                                            <MessageSquareText className="h-4 w-4" />
+                                            {startingConversation ? 'Opening chat...' : 'Direct Message'}
                                         </button>
                                     </div>
                                 ) : (
@@ -832,6 +1417,181 @@ export default function Contacts() {
                     </div>
                 </div>
             ) : null}
+
+            {isImportModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto overflow-x-hidden bg-black/50 p-4 backdrop-blur-sm">
+                    <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-bold text-gray-900">Import Contacts</h3>
+                            <button
+                                onClick={() => setIsImportModalOpen(false)}
+                                className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+                        <p className="mb-6 text-sm text-gray-500">
+                            Download the sample Excel or CSV file to see the required format, or directly upload your file if it's ready.
+                        </p>
+
+                        <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                            <button
+                                onClick={handleDownloadSample}
+                                className="flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
+                            >
+                                <Download className="h-4 w-4" />
+                                Download Sample
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setIsImportModalOpen(false)
+                                    fileInputRef.current?.click()
+                                }}
+                                className="flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
+                            >
+                                <Upload className="h-4 w-4" />
+                                Import File
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {isDeleteAllModalOpen && (
+                <div className="fixed inset-0 z-[120] flex items-center justify-center overflow-y-auto overflow-x-hidden bg-gray-950/40 p-4 backdrop-blur-sm">
+                    <div className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-gray-200 bg-white text-gray-950 shadow-2xl">
+                        <div className="p-6">
+                            <div className="flex items-start justify-between gap-4">
+                                <div>
+                                    <h3 className="text-xl font-bold">Delete All Contacts</h3>
+                                    <p className="mt-3 text-sm leading-6 text-gray-600">
+                                        This will permanently delete all individual contacts in this workspace. Sirf admin/owner is action ko complete kar sakta hai.
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={resetDeleteAllModal}
+                                    disabled={deleteAllMutation.isPending}
+                                    className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50"
+                                    aria-label="Close delete all contacts modal"
+                                >
+                                    <X className="h-5 w-5" />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="border-y border-gray-200 bg-gray-50 p-6">
+                            <label className="block">
+                                <span className="text-sm font-semibold text-gray-800">To confirm, type your admin name</span>
+                                <span className="mt-2 block rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900">
+                                    {adminConfirmName || 'Admin name'}
+                                </span>
+                                <input
+                                    value={deleteAllConfirmName}
+                                    onChange={event => setDeleteAllConfirmName(event.target.value)}
+                                    disabled={deleteAllMutation.isPending}
+                                    className="mt-3 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-950 outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 disabled:opacity-50"
+                                    autoComplete="off"
+                                />
+                            </label>
+
+                            <label className="mt-5 block">
+                                <span className="text-sm font-semibold text-gray-800">To confirm, type "delete all contacts"</span>
+                                <input
+                                    value={deleteAllConfirmText}
+                                    onChange={event => setDeleteAllConfirmText(event.target.value)}
+                                    disabled={deleteAllMutation.isPending}
+                                    className="mt-3 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-950 outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 disabled:opacity-50"
+                                    autoComplete="off"
+                                />
+                            </label>
+                        </div>
+
+                        <div className="p-6">
+                            <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                                <span>Deleting contacts cannot be undone. Export contacts first if you need a backup.</span>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-between border-t border-gray-200 bg-white p-4">
+                            <button
+                                type="button"
+                                onClick={resetDeleteAllModal}
+                                disabled={deleteAllMutation.isPending}
+                                className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => deleteAllMutation.mutate()}
+                                disabled={!canConfirmDeleteAll || deleteAllMutation.isPending}
+                                className="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-500 disabled:shadow-none"
+                            >
+                                {deleteAllMutation.isPending ? 'Deleting...' : 'Delete All Contacts'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {importStatus && (
+                <div className={`fixed bottom-6 right-6 z-[110] w-80 overflow-hidden rounded-xl shadow-2xl ring-1 animate-in slide-in-from-bottom-5 fade-in duration-300 ${importStatus.type === 'success' ? 'bg-green-50 ring-green-100/50' :
+                    importStatus.type === 'error' ? 'bg-red-50 ring-red-100/50' :
+                        'bg-blue-50 ring-blue-100/50'
+                    }`}>
+                    <div className="p-4">
+                        <div className="flex items-start gap-3">
+                            {importStatus.type === 'info' && <div className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-blue-500 animate-pulse" />}
+                            {importStatus.type === 'success' && <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-green-200/50"><Check className="h-3 w-3 text-green-700" strokeWidth={3} /></div>}
+                            {importStatus.type === 'error' && <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />}
+
+                            <div className="flex-1 min-w-0">
+                                <p className={`text-sm font-medium ${importStatus.type === 'success' ? 'text-green-900' :
+                                    importStatus.type === 'error' ? 'text-red-900' :
+                                        'text-blue-900'
+                                    }`}>{importStatus.message}</p>
+                                {importStatus.progress && (
+                                    <div className="mt-3">
+                                        <div className={`flex items-center justify-between text-xs font-semibold mb-1.5 ${importStatus.type === 'success' ? 'text-green-700' :
+                                            importStatus.type === 'error' ? 'text-red-700' :
+                                                'text-blue-700'
+                                            }`}>
+                                            <span>{Math.round((importStatus.progress.current / importStatus.progress.total) * 100)}%</span>
+                                            <span>{importStatus.progress.current} / {importStatus.progress.total}</span>
+                                        </div>
+                                        <div className={`h-1.5 w-full overflow-hidden rounded-full ${importStatus.type === 'success' ? 'bg-green-200/50' :
+                                            importStatus.type === 'error' ? 'bg-red-200/50' :
+                                                'bg-blue-200/50'
+                                            }`}>
+                                            <div
+                                                className={`h-full rounded-full transition-all duration-300 ease-out ${importStatus.type === 'success' ? 'bg-green-600' :
+                                                    importStatus.type === 'error' ? 'bg-red-600' :
+                                                        'bg-blue-600'
+                                                    }`}
+                                                style={{ width: `${Math.max(2, (importStatus.progress.current / importStatus.progress.total) * 100)}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {importStatus.type !== 'info' && (
+                                <button
+                                    onClick={() => setImportStatus(null)}
+                                    className={`shrink-0 rounded-lg p-1 transition-colors ${importStatus.type === 'success' ? 'text-green-600 hover:bg-green-100' :
+                                        importStatus.type === 'error' ? 'text-red-600 hover:bg-red-100' :
+                                            'text-blue-600 hover:bg-blue-100'
+                                        }`}
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
@@ -866,16 +1626,16 @@ function CustomSelect({ value, onChange, options, className = '' }) {
                 type="button"
                 onClick={() => setOpen(current => !current)}
                 onBlur={() => setTimeout(() => setOpen(false), 120)}
-                className={`flex h-[42px] w-full min-w-36 items-center justify-between gap-3 rounded-lg border bg-white px-3 text-left text-sm font-semibold shadow-sm outline-none transition ${open ? 'border-green-500 ring-2 ring-green-500/20' : 'border-gray-300 hover:border-gray-400'}`}
+                className="w-full apple-select-trigger h-9 sm:h-[42px] text-xs sm:text-sm"
             >
-                <span className="min-w-0">
-                    <span className="block truncate text-gray-900">{selected?.label || 'Select'}</span>
-                    {selected?.helper ? <span className="block truncate text-[10px] font-medium text-gray-400">{selected.helper}</span> : null}
+                <span className="min-w-0 text-left">
+                    <span className="block truncate text-[#1d1d1f]">{selected?.label || 'Select'}</span>
+                    {selected?.helper ? <span className="block truncate text-[9.5px] font-medium text-gray-400 leading-tight">{selected.helper}</span> : null}
                 </span>
-                <ChevronDown className={`h-4 w-4 shrink-0 text-gray-500 transition ${open ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-gray-505 transition ${open ? 'rotate-180 text-gray-800' : ''}`} strokeWidth={1.8} />
             </button>
             {open ? (
-                <div className="absolute right-0 z-[70] mt-1 max-h-72 w-full min-w-48 overflow-y-auto rounded-lg border border-gray-200 bg-white p-1 shadow-xl">
+                <div className="absolute right-0 z-[70] mt-1 max-h-72 w-full min-w-48 overflow-y-auto apple-select-dropdown wa-chat-scroll">
                     {options.map(option => {
                         const active = option.value === value
                         return (
@@ -887,13 +1647,13 @@ function CustomSelect({ value, onChange, options, className = '' }) {
                                     onChange(option.value)
                                     setOpen(false)
                                 }}
-                                className={`flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm ${active ? 'bg-green-50 text-green-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                                className={`apple-select-option ${active ? 'apple-select-option-selected' : ''}`}
                             >
-                                <span className="min-w-0">
-                                    <span className="block truncate font-semibold">{option.label}</span>
-                                    {option.helper ? <span className="block truncate text-[11px] text-gray-400">{option.helper}</span> : null}
+                                <span className="min-w-0 text-left">
+                                    <span className="block truncate">{option.label}</span>
+                                    {option.helper ? <span className="block truncate text-[10px] text-gray-400 leading-tight mt-0.5">{option.helper}</span> : null}
                                 </span>
-                                {active ? <Check className="h-4 w-4 shrink-0" /> : null}
+                                {active ? <Check className="h-3.5 w-3.5 shrink-0 text-black ml-2" strokeWidth={2} /> : null}
                             </button>
                         )
                     })}
