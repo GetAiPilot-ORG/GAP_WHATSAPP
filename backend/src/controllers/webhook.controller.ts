@@ -837,6 +837,7 @@ export async function handleWebhook(req: any, res: Response) {
           sendTypingIndicator({
             phone_number_id,
             message_id: wa_message_id,
+            to: from,
           }).catch((err: any) => {
             webhookError("typing_indicator.async.failed", err, {
               requestId,
@@ -1266,7 +1267,7 @@ export async function handleWebhook(req: any, res: Response) {
               const currentPromise = previousPromise.then(async () => {
                   try {
                       if (phone_number_id && wa_message_id) {
-                        sendTypingIndicator({ phone_number_id, message_id: wa_message_id }).catch(() => {});
+                        sendTypingIndicator({ phone_number_id, message_id: wa_message_id, to: from }).catch(() => {});
                       }
                       const botResult = await getBotAgentReply({
                         organization_id,
@@ -1280,7 +1281,7 @@ export async function handleWebhook(req: any, res: Response) {
                         agentId: botResult?.agent?.id || null,
                         agentName: botResult?.agent?.name || null,
                       });
-                      
+
                       if (botResult?.reply) {
                         let botWaMessageId: string | null = null;
                         let storedBotReply: any = null;
@@ -1357,6 +1358,7 @@ export async function handleWebhook(req: any, res: Response) {
                             phone_number_id,
                           );
                           botWaMessageId = sendResult?.messages?.[0]?.id || null;
+
                           storedBotReply = await storeMessage({
                             organization_id,
                             contact_id: contact.id,
@@ -1375,6 +1377,7 @@ export async function handleWebhook(req: any, res: Response) {
                             sender_type: "ai_agent",
                             automation_source: "ai_agent",
                           } as any);
+
                           io.emit("new_message", {
                             from: metadata?.display_phone_number || phone_number_id,
                             phone: from,
@@ -1391,7 +1394,7 @@ export async function handleWebhook(req: any, res: Response) {
                             is_bot_reply: true,
                           });
                         }
-                        
+
                         webhookLog("bot_agent.reply.sent", {
                           requestId,
                           botWaMessageId: botWaMessageId,
