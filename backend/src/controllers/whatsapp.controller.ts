@@ -702,8 +702,12 @@ export async function getTemplates(req: any, res: Response) {
       return res.json([]);
     }
 
-    const account = accounts[0];
+    const account = accounts.find((a: any) => Boolean(decryptToken(a.access_token_encrypted))) || accounts[0];
     const token = decryptToken(account.access_token_encrypted);
+    if (!token) {
+      return res.status(400).json({ error: "No valid Meta access token found. Please click Connect Meta to link your WhatsApp account." });
+    }
+
     const waba_id = account.whatsapp_business_account_id;
 
     const response = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${waba_id}/message_templates?fields=id,name,language,status,category,components,quality_score,rejected_reason&limit=250`, {
@@ -742,12 +746,13 @@ export async function getTemplateContext(req: any, res: Response) {
       .eq('organization_id', orgId)
       .neq('status', 'disconnected')
       .not('whatsapp_business_account_id', 'is', null)
-      .order('created_at', { ascending: false })
-      .limit(1);
-    const account = accounts?.[0];
+      .order('created_at', { ascending: false });
+
+    const account = accounts?.find((a: any) => Boolean(decryptToken(a.access_token_encrypted))) || accounts?.[0];
     if (!account) return res.status(400).json({ error: 'No connected Meta account found' });
 
     const token = decryptToken(account.access_token_encrypted);
+    if (!token) return res.status(400).json({ error: 'No valid Meta access token found. Please click Connect Meta to link your account.' });
     const headers = { Authorization: `Bearer ${token}` };
     const base = `https://graph.facebook.com/${GRAPH_API_VERSION}/${account.whatsapp_business_account_id}`;
     const [catalogResponse, flowResponse] = await Promise.all([

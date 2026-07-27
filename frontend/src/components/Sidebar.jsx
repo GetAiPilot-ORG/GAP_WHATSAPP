@@ -214,7 +214,7 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
                         ) : null}
                     </div>
 
-                    <nav data-tour="sidebar-nav" className="flex-1 overflow-y-auto px-2 py-3">
+                    <nav data-tour="sidebar-nav" className="flex-1 overflow-y-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden px-2 py-3">
                         <div className="space-y-1">
                             {filteredNavigation.slice(0, 3).map(item => {
                                 if (item.subItems) {
@@ -385,7 +385,7 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
                             </div>
                         ) : null}
 
-                        <nav className="flex-1 overflow-y-auto px-3 py-4">
+                        <nav className="flex-1 overflow-y-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden px-3 py-4">
                             <div className="space-y-1">
                                 {filteredNavigation.map(item => {
                                     if (item.subItems) {

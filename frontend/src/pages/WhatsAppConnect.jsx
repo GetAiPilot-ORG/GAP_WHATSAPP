@@ -158,13 +158,17 @@ export default function WhatsAppConnect() {
         if (!confirmed) return
 
         try {
-            const res = await fetch(`${API_BASE}/whatsapp/accounts/${id}`, {
+            const res = await apiCall(`${API_BASE}/whatsapp/accounts/${id}`, {
                 method: 'DELETE',
-                headers: { ...getAuthHeader() },
             })
-            if (res.ok) setAccounts(prev => prev.filter(a => a.id !== id))
-        } catch {
-            alertDialog('Failed to disconnect account', { title: 'Disconnect failed', tone: 'danger' })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) throw new Error(data?.error || 'Failed to disconnect account')
+
+            await fetchAccounts()
+            await fetchBilling()
+        } catch (err) {
+            console.error('[WhatsAppConnect] Disconnect error:', err)
+            alertDialog(err?.message || 'Failed to disconnect account', { title: 'Disconnect failed', tone: 'danger' })
         }
     }
 
@@ -186,9 +190,6 @@ export default function WhatsAppConnect() {
             if (!res.ok) throw new Error(data.error || 'Connection failed')
             setEmbedStatus('saved')
             setEmbedError('')
-            if (Array.isArray(data.accounts) && data.accounts.length > 0) {
-                setAccounts(prev => mergeAccounts(prev, data.accounts))
-            }
             await fetchAccounts()
             await fetchBilling()
             setTimeout(() => setEmbedStatus('idle'), 5000)

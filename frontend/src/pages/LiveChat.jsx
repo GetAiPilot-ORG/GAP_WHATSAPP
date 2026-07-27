@@ -4080,22 +4080,28 @@ export default function LiveChat() {
                             {/* Input Area */}
                             <div data-tour="chat-composer" className={`px-2 py-1.5 sm:px-4 sm:py-2.5 lg:px-5 ${isInternalNote ? 'border-t border-amber-200 bg-amber-50' : 'bg-[#f0f2f5]'}`}>
                                 {!botEnabled && (
-                                    <div className="mx-auto mb-2 flex w-full max-w-[1180px] items-center justify-between gap-3 rounded-xl bg-amber-50 px-4 py-2 border border-amber-200 text-xs text-amber-800 animate-in fade-in duration-200">
-                                        <div className="flex items-center gap-2">
-                                            <span className="relative flex h-2 w-2 shrink-0">
-                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                                    <div className="mx-auto mb-2 flex w-full max-w-[1180px] items-center justify-between gap-3 rounded-xl border border-amber-200/80 bg-gradient-to-r from-amber-50/90 via-amber-50/70 to-white/90 px-3.5 py-2 shadow-xs backdrop-blur-md animate-in fade-in duration-200">
+                                        <div className="flex items-center gap-2.5 min-w-0">
+                                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-800 ring-1 ring-amber-200/80">
+                                                <Bot className="h-4 w-4" />
                                             </span>
-                                            <span className="font-semibold text-amber-900">
-                                                🤖 AI Agent is paused for this conversation. You are talking directly with the customer.
-                                            </span>
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <span className="relative flex h-2 w-2 shrink-0">
+                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                                                </span>
+                                                <span className="truncate text-xs font-medium text-amber-950 sm:text-sm">
+                                                    AI Agent is paused for this conversation. You are talking directly with the customer.
+                                                </span>
+                                            </div>
                                         </div>
                                         <button
                                             type="button"
                                             onClick={() => toggleBotForConversation(true, selectedBotId || workspaceAutoReplyBot?.id || null)}
-                                            className="rounded-lg bg-white px-2.5 py-1 text-[11px] font-bold text-amber-950 shadow-sm border border-amber-200 hover:bg-amber-100 transition-colors shrink-0"
+                                            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-300/80 bg-white px-3 py-1.5 text-xs font-bold text-amber-950 shadow-xs hover:bg-amber-100/70 hover:border-amber-400 transition-all active:scale-[0.98]"
                                         >
-                                            Resume AI Bot
+                                            <Bot className="h-3.5 w-3.5 text-amber-700" />
+                                            <span>Resume AI Bot</span>
                                         </button>
                                     </div>
                                 )}

@@ -63,8 +63,20 @@ export function startCronJobs() {
 
             if (!accounts || accounts.length === 0) return;
 
+            const cronStart = Date.now();
+            let syncedCount = 0;
+            let skippedCount = 0;
+
             for (const account of accounts) {
                 if (account.connection_type === 'meta_cloud_api' || account.whatsapp_business_account_id) {
+                    // Multi-instance Lock Check: Skip if synced by another server instance in the last 5 minutes
+                    const lastCheckMs = account.last_health_check_at ? new Date(account.last_health_check_at).getTime() : 0;
+                    if (Date.now() - lastCheckMs < 5 * 60 * 1000) {
+                        skippedCount++;
+                        console.log(`[AccountHealth] Multi-instance lock: Skipping redundant sync for account ${account.id} (synced ${Math.floor((Date.now() - lastCheckMs)/1000)}s ago)`);
+                        continue;
+                    }
+
                     const { getMetaAccountDiagnostics } = await import('./services/meta.service.js');
                     const { AccountHealthService } = await import('./services/accountHealth.service.js');
 
@@ -86,10 +98,12 @@ export function startCronJobs() {
                             business_id: diag.business_verification?.business_id || null,
                             diagnostics_json: diag,
                         }).catch(err => console.error('[AccountHealth] Cron update error:', err.message));
+                        syncedCount++;
                     }
                 }
             }
-            console.log(`[AccountHealth] ✅ Periodic health sync completed for ${accounts.length} accounts.`);
+            const durationMs = Date.now() - cronStart;
+            console.log(`[AccountHealth] ✅ Periodic health sync completed: ${syncedCount} synced, ${skippedCount} skipped in ${durationMs}ms.`);
         } catch (e) {
             console.error('[AccountHealth] Periodic health sync cron error:', e);
         }

@@ -1,7 +1,8 @@
 import { Response } from 'express';
 import { supabase } from '../config/supabase.js';
 import { encryptToken } from '../utils/crypto.js';
-import { getMetaErrorMessage, getMetaAccountDiagnostics, toSafeWhatsappAccount, buildAccountReadinessSummary, subscribeMetaAppToWaba } from '../services/meta.service.js';
+import { AccountHealthService } from '../services/accountHealth.service.js';
+import { getMetaErrorMessage, getMetaAccountDiagnostics, toSafeWhatsappAccount, buildAccountReadinessSummary, subscribeMetaAppToWaba, normalizeMessagingLimitTier } from '../services/meta.service.js';
 import { enforceWhatsAppCloudNumberLimit } from '../services/billing.service.js';
 import { sessions } from '../services/whatsapp.service.js';
 import * as fs from 'fs';
@@ -150,6 +151,7 @@ export async function connectCallback(req: any, res: Response) {
                         console.error(`Registration API exception for ${phone_number_id}:`, regErr);
                     }
 
+                    const now = new Date().toISOString();
                     const { data, error } = await supabase.from('w_wa_accounts').upsert({
                         organization_id: targetOrgId,
                         whatsapp_business_account_id: currentWabaId,
@@ -157,7 +159,11 @@ export async function connectCallback(req: any, res: Response) {
                         display_phone_number,
                         name: item.verified_name || display_phone_number || 'WhatsApp Business',
                         access_token_encrypted: encryptToken(finalToken),
-                        status: 'connected'
+                        status: 'connected',
+                        connection_status: 'CONNECTED',
+                        token_status: 'VALID',
+                        has_access_token: true,
+                        last_health_check_at: now
                     }, { onConflict: 'phone_number_id' }).select();
 
                     if (error) {
@@ -165,9 +171,41 @@ export async function connectCallback(req: any, res: Response) {
                         discoveryErrors.push(`Could not save phone ${display_phone_number || phone_number_id}: ${error.message}`);
                     } else if (data && data[0]) {
                         const diagnostics = await getMetaAccountDiagnostics(data[0]);
+
+                        const tokenStatus = diagnostics.reconnect_required || diagnostics.issue_codes?.includes('token_expired')
+                            ? 'EXPIRED'
+                            : (diagnostics.issue_codes?.includes('token_missing') ? 'MISSING' : 'VALID');
+
+                        const bizStatus = diagnostics.business_verification?.status
+                            ? String(diagnostics.business_verification.status).toUpperCase()
+                            : 'UNKNOWN';
+
+                        const qualityRating = diagnostics.phone_number_access?.quality_rating
+                            ? String(diagnostics.phone_number_access.quality_rating).toUpperCase()
+                            : 'UNKNOWN';
+
+                        const rawLimit = diagnostics.phone_number_access?.messaging_limit_tier || diagnostics.phone_number_access?.messaging_limit;
+                        const messagingLimit = rawLimit ? normalizeMessagingLimitTier(rawLimit) : null;
+                        const webhookStatus = diagnostics.webhook_subscription && !diagnostics.webhook_subscription.error ? 'SUBSCRIBED' : 'NOT_SUBSCRIBED';
+
+                        const updatedAccount = await AccountHealthService.updateHealth(data[0].id, {
+                            connection_status: tokenStatus === 'EXPIRED' ? 'TOKEN_INVALID' : 'CONNECTED',
+                            token_status: tokenStatus as any,
+                            business_verification_status: bizStatus as any,
+                            business_name: diagnostics.business_verification?.business_name || null,
+                            business_id: diagnostics.business_verification?.business_id || null,
+                            quality_rating: qualityRating as any,
+                            messaging_limit: messagingLimit,
+                            webhook_status: webhookStatus,
+                            diagnostics_json: diagnostics,
+                        }).catch(err => {
+                            console.error('[ConnectCallback] Failed to persist initial health update:', err.message);
+                            return data[0];
+                        }) || data[0];
+
                         insertedAccounts.push({
-                            ...toSafeWhatsappAccount(data[0]),
-                            ...buildAccountReadinessSummary(data[0]),
+                            ...toSafeWhatsappAccount(updatedAccount),
+                            ...buildAccountReadinessSummary(updatedAccount),
                             send_ready: diagnostics.send_ready,
                             diagnostics_summary: diagnostics.send_ready ? 'Cloud API send access verified.' : diagnostics.issues.join(', '),
                             diagnostics
