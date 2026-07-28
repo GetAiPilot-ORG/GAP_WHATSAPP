@@ -1,9 +1,42 @@
 import { supabase } from '../config/supabase.js';
 import { decryptToken } from '../utils/crypto.js';
+import { AccountHealthService } from './accountHealth.service.js';
 import dotenv from "dotenv";
 dotenv.config({ path: "./.env" });
 
 const GRAPH_API_VERSION = process.env.META_GRAPH_VERSION || 'v21.0';
+
+export async function fetchWithMetaBackoff(url: string, init?: RequestInit, maxRetries = 3): Promise<Response> {
+    let attempt = 0;
+    while (attempt <= maxRetries) {
+        const start = Date.now();
+        try {
+            const res = await fetch(url, init);
+            const durationMs = Date.now() - start;
+            if (res.status === 429 && attempt < maxRetries) {
+                const backoffMs = Math.pow(2, attempt) * 1000 + Math.floor(Math.random() * 500);
+                console.warn(`[MetaAPI Rate Limit] HTTP 429 on ${url}. Retrying in ${backoffMs}ms (attempt ${attempt + 1}/${maxRetries})...`);
+                await new Promise(r => setTimeout(r, backoffMs));
+                attempt++;
+                continue;
+            }
+            if (durationMs > 3000) {
+                console.warn(`[MetaAPI Latency Warning] Request to ${url} took ${durationMs}ms`);
+            }
+            return res;
+        } catch (err: any) {
+            if (attempt < maxRetries) {
+                const backoffMs = Math.pow(2, attempt) * 1000 + Math.floor(Math.random() * 500);
+                console.warn(`[MetaAPI Network Exception] Retrying in ${backoffMs}ms (attempt ${attempt + 1}/${maxRetries}): ${err.message}`);
+                await new Promise(r => setTimeout(r, backoffMs));
+                attempt++;
+                continue;
+            }
+            throw err;
+        }
+    }
+    return fetch(url, init);
+}
 
 export async function inspectMetaTokenPermissions(token: string) {
     const appId = process.env.META_APP_ID;
@@ -14,7 +47,7 @@ export async function inspectMetaTokenPermissions(token: string) {
 
     try {
         const debugUrl = `https://graph.facebook.com/debug_token?input_token=${encodeURIComponent(token)}&access_token=${encodeURIComponent(`${appId}|${appSecret}`)}`;
-        const response = await fetch(debugUrl);
+        const response = await fetchWithMetaBackoff(debugUrl);
         const data: any = await response.json();
         if (!response.ok || data.error) {
             return {
@@ -110,7 +143,7 @@ export function getMetaErrorMessage(data: any, fallback: string) {
 export async function subscribeMetaAppToWaba(wabaId: string, token: string) {
     if (!wabaId || !token) throw new Error('WABA ID and access token are required to enable webhooks.');
 
-    const response = await fetch(
+    const response = await fetchWithMetaBackoff(
         `https://graph.facebook.com/${GRAPH_API_VERSION}/${encodeURIComponent(wabaId)}/subscribed_apps`,
         {
             method: 'POST',
@@ -153,8 +186,20 @@ export function buildAccountReadinessSummary(account: any) {
 export function toSafeWhatsappAccount(account: any) {
     if (!account) return account;
     const { access_token_encrypted, ...safe } = account;
+    const hasAccessToken = Boolean(access_token_encrypted || account.has_access_token);
+    
+    const lastCheckMs = account.last_health_check_at ? new Date(account.last_health_check_at).getTime() : null;
+    const cacheAgeSeconds = lastCheckMs ? Math.max(0, Math.floor((Date.now() - lastCheckMs) / 1000)) : null;
+    const isStale = lastCheckMs ? (Date.now() - lastCheckMs) > 86400000 : true;
+
     return {
         ...safe,
+        has_access_token: hasAccessToken,
+        verified_at: account.last_health_check_at || account.updated_at || null,
+        cache_age_seconds: cacheAgeSeconds,
+        is_stale: isStale,
+        last_sync_status: account.last_sync_status || 'UNKNOWN',
+        health: AccountHealthService.buildHealthSummary(account),
         ...buildAccountReadinessSummary(account)
     };
 }
@@ -201,7 +246,7 @@ export async function getMetaAccountDiagnostics(account: any) {
 
     if (account?.phone_number_id) {
         try {
-            const phoneRes = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${account.phone_number_id}?fields=id,display_phone_number,verified_name,quality_rating,platform_type,code_verification_status&access_token=${encodeURIComponent(token)}`);
+            const phoneRes = await fetchWithMetaBackoff(`https://graph.facebook.com/${GRAPH_API_VERSION}/${account.phone_number_id}?fields=id,display_phone_number,verified_name,quality_rating,messaging_limit_tier,platform_type,code_verification_status&access_token=${encodeURIComponent(token)}`);
             const phoneJson: any = await phoneRes.json();
             diagnostics.phone_number_access = phoneJson;
             if (!phoneRes.ok || phoneJson.error) {
@@ -224,7 +269,7 @@ export async function getMetaAccountDiagnostics(account: any) {
 
     if (account?.whatsapp_business_account_id) {
         try {
-            const businessRes = await fetch(
+            const businessRes = await fetchWithMetaBackoff(
                 `https://graph.facebook.com/${GRAPH_API_VERSION}/${account.whatsapp_business_account_id}?fields=id,name,account_review_status,business_verification_status,owner_business_info&access_token=${encodeURIComponent(token)}`
             );
             const businessJson: any = await businessRes.json();
@@ -241,7 +286,7 @@ export async function getMetaAccountDiagnostics(account: any) {
         }
 
         try {
-            const wabaRes = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${account.whatsapp_business_account_id}/phone_numbers?access_token=${encodeURIComponent(token)}`);
+            const wabaRes = await fetchWithMetaBackoff(`https://graph.facebook.com/${GRAPH_API_VERSION}/${account.whatsapp_business_account_id}/phone_numbers?access_token=${encodeURIComponent(token)}`);
             const wabaJson: any = await wabaRes.json();
             diagnostics.waba_access = wabaJson;
             if (!wabaRes.ok || wabaJson.error) {
@@ -262,7 +307,7 @@ export async function getMetaAccountDiagnostics(account: any) {
         }
 
         try {
-            const subscriptionRes = await fetch(
+            const subscriptionRes = await fetchWithMetaBackoff(
                 `https://graph.facebook.com/${GRAPH_API_VERSION}/${account.whatsapp_business_account_id}/subscribed_apps?access_token=${encodeURIComponent(token)}`
             );
             const subscriptionJson: any = await subscriptionRes.json();
@@ -408,4 +453,16 @@ export async function uploadMetaProfilePicture(file: any, token: string) {
     }
 
     return uploadJson.h;
+}
+
+export function normalizeMessagingLimitTier(rawTier: any): string {
+    if (!rawTier) return 'UNKNOWN';
+    const val = String(rawTier).toUpperCase().trim();
+    if (val.includes('250')) return '250';
+    if (val.includes('2K') || val.includes('2000')) return '2,000';
+    if (val.includes('1K') || val.includes('1000')) return '1,000';
+    if (val.includes('10K') || val.includes('10000')) return '10,000';
+    if (val.includes('100K') || val.includes('100000')) return '100,000';
+    if (val.includes('UNLIMITED')) return 'Unlimited';
+    return val;
 }

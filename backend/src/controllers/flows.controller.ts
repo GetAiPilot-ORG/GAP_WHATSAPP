@@ -43,6 +43,8 @@ export async function createFlow(req: any, res: Response) {
     const orgId = req.organization_id;
     try {
         const nodes = Array.isArray(req.body?.nodes) ? req.body.nodes : [];
+        const startNode = nodes.find((n: any) => n?.type === 'startBotFlow');
+        const matchType = String(req.body?.match_type || startNode?.data?.config?.matchType || startNode?.data?.matchType || 'string').toLowerCase().trim();
         const triggerKeywords = getFlowTriggerKeywords({ ...req.body, nodes }, nodes);
         const waAccountScope = normalizeFlowAccountScope(req.body?.wa_account_scope);
         const waAccountIds = waAccountScope === 'selected' ? normalizeFlowAccountIds(req.body?.wa_account_ids) : [];
@@ -53,6 +55,7 @@ export async function createFlow(req: any, res: Response) {
             trigger_type: req.body?.trigger_type || 'keyword',
             trigger_keywords: triggerKeywords,
             triggers: triggerKeywords,
+            match_type: matchType,
             wa_account_scope: waAccountScope,
             wa_account_ids: waAccountIds,
             nodes,
@@ -92,11 +95,14 @@ export async function updateFlow(req: any, res: Response) {
                 : [];
         }
         if (req.body.status !== undefined && ['draft', 'paused', 'archived'].includes(req.body.status)) updateData.status = req.body.status;
-        if (updateData.nodes !== undefined || req.body.triggers !== undefined || req.body.trigger_keywords !== undefined) {
+        if (updateData.nodes !== undefined || req.body.triggers !== undefined || req.body.trigger_keywords !== undefined || req.body.match_type !== undefined) {
             const nodes = updateData.nodes !== undefined ? updateData.nodes : req.body.nodes;
+            const startNode = (nodes || []).find((n: any) => n?.type === 'startBotFlow');
+            const matchType = String(req.body.match_type || startNode?.data?.config?.matchType || startNode?.data?.matchType || 'string').toLowerCase().trim();
             const triggerKeywords = getFlowTriggerKeywords({ ...req.body, nodes }, nodes);
             updateData.trigger_keywords = triggerKeywords;
             updateData.triggers = triggerKeywords;
+            updateData.match_type = matchType;
         }
         updateData.updated_at = new Date().toISOString();
         updateData.updated_by_user_id = req.user?.id || null;

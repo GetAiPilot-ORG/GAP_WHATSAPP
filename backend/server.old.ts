@@ -5503,14 +5503,14 @@ async function sendTeamInviteEmail(params: {
   });
   await sendEmail(
     params.email,
-    `Invitation to join GAP FlowPilot Team`,
+    `Invitation to join GAP WhatsApp Pilot Team`,
     `
         <div style="margin:0; padding:0; background:#f5f7fa;">
             <div style="font-family:Arial,Helvetica,sans-serif; max-width:640px; margin:0 auto; padding:32px 20px;">
                 <div style="background:#ffffff; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden;">
                     <div style="padding:28px 32px 22px 32px; border-bottom:1px solid #eef2f7;">
                         <div style="display:inline-block; padding:6px 10px; border-radius:999px; background:#e9fbf1; color:#128C7E; font-size:12px; font-weight:700; line-height:1;">
-                            GAP FlowPilot invitation
+                            GAP WhatsApp Pilot invitation
                         </div>
                         <h1 style="margin:18px 0 8px 0; color:#111827; font-size:28px; line-height:1.25; font-weight:500;">
                             You have been invited to join the team
@@ -5556,7 +5556,7 @@ async function sendTeamInviteEmail(params: {
 
                     <div style="padding:18px 32px; background:#f8fafc; border-top:1px solid #eef2f7;">
                         <p style="margin:0; color:#6b7280; font-size:12px; line-height:1.6;">
-                            For security, this invitation expires in ${INVITE_TTL_HOURS} hour${INVITE_TTL_HOURS === 1 ? "" : "s"}. This email was sent from the GAP FlowPilot dashboard.
+                            For security, this invitation expires in ${INVITE_TTL_HOURS} hour${INVITE_TTL_HOURS === 1 ? "" : "s"}. This email was sent from the GAP WhatsApp Pilot dashboard.
                         </p>
                     </div>
                 </div>
@@ -12957,7 +12957,7 @@ app.post("/api/twilio/buy-number", authMiddleware, async (req: any, res) => {
     // Buy the number
     const purchasedNumber = await twilioClient.incomingPhoneNumbers.create({
       phoneNumber,
-      friendlyName: `GAP FlowPilot - Org ${orgId}`,
+      friendlyName: `GAP WhatsApp Pilot - Org ${orgId}`,
     });
 
     // Save it to w_wa_accounts as a connected/setup number (or pending)

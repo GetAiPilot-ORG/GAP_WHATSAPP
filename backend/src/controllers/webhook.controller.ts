@@ -5,7 +5,7 @@ import { io } from '../socket.js';
 import { performAutoAssignment } from '../services/assignment.service.js';
 
 import { storeMessage, upsertConversation, refundWhatsappMessage } from '../services/messages.service.js';
-import { sendTextMessage, applyReactionUpdate, downloadMetaMedia, sendInteractiveButtons, sendFlowMediaMessageMeta, sendInteractiveList } from '../services/messages.sender.js';
+import { sendTextMessage, applyReactionUpdate, downloadMetaMedia, sendInteractiveButtons, sendFlowMediaMessageMeta, sendInteractiveList, sendTypingIndicator } from '../services/messages.sender.js';
 import { processFlowEngine } from '../services/flows.service.js';
 import { upsertContact } from '../services/contacts.service.js';
 import { getBotAgentReply } from '../services/ai.service.js';
@@ -825,6 +825,28 @@ export async function handleWebhook(req: any, res: Response) {
 
       // E. Bot Auto-Reply
       try {
+        // Send Meta WhatsApp typing indicator immediately & non-blockingly if bot is enabled for automated response
+        const isBotEnabled = conv?.bot_enabled !== false;
+        if (isBotEnabled && phone_number_id && wa_message_id) {
+          webhookLog("typing_indicator.async.dispatch", {
+            requestId,
+            phone_number_id,
+            wa_message_id,
+            conversation_id: conv.id,
+          });
+          sendTypingIndicator({
+            phone_number_id,
+            message_id: wa_message_id,
+            to: from,
+          }).catch((err: any) => {
+            webhookError("typing_indicator.async.failed", err, {
+              requestId,
+              wa_message_id,
+              phone_number_id,
+            });
+          });
+        }
+
         // Intercept human handoff request via button selection or keyword
         const incomingText = text?.toLowerCase().trim();
         const interactiveId = msg.interactive?.button_reply?.id || null;
@@ -1244,6 +1266,9 @@ export async function handleWebhook(req: any, res: Response) {
               const previousPromise = botLockMap.get(conv.id) || Promise.resolve();
               const currentPromise = previousPromise.then(async () => {
                   try {
+                      if (phone_number_id && wa_message_id) {
+                        sendTypingIndicator({ phone_number_id, message_id: wa_message_id, to: from }).catch(() => {});
+                      }
                       const botResult = await getBotAgentReply({
                         organization_id,
                         conversation_id: conv.id,
@@ -1256,7 +1281,7 @@ export async function handleWebhook(req: any, res: Response) {
                         agentId: botResult?.agent?.id || null,
                         agentName: botResult?.agent?.name || null,
                       });
-                      
+
                       if (botResult?.reply) {
                         let botWaMessageId: string | null = null;
                         let storedBotReply: any = null;
@@ -1333,6 +1358,7 @@ export async function handleWebhook(req: any, res: Response) {
                             phone_number_id,
                           );
                           botWaMessageId = sendResult?.messages?.[0]?.id || null;
+
                           storedBotReply = await storeMessage({
                             organization_id,
                             contact_id: contact.id,
@@ -1351,6 +1377,7 @@ export async function handleWebhook(req: any, res: Response) {
                             sender_type: "ai_agent",
                             automation_source: "ai_agent",
                           } as any);
+
                           io.emit("new_message", {
                             from: metadata?.display_phone_number || phone_number_id,
                             phone: from,
@@ -1367,7 +1394,7 @@ export async function handleWebhook(req: any, res: Response) {
                             is_bot_reply: true,
                           });
                         }
-                        
+
                         webhookLog("bot_agent.reply.sent", {
                           requestId,
                           botWaMessageId: botWaMessageId,

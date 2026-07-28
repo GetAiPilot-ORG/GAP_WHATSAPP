@@ -4,9 +4,10 @@ import axios from 'axios';
 import FlowEditor from '../components/flow-builder/FlowEditor';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
+import { useWhatsAppAccounts } from '../context/WhatsAppAccountContext';
 import { notify } from '../services/notificationService';
 import { FLOW_TEMPLATE_CATEGORIES, FLOW_TEMPLATES, buildFlowFromTemplate } from '../components/flow-builder/flowTemplates';
-import TourButton from '../onboarding/TourButton';
+
 
 function FlowBuilderLoading() {
     return (
@@ -54,8 +55,7 @@ export default function FlowBuilder() {
     const [selectedTemplate, setSelectedTemplate] = useState(FLOW_TEMPLATES[0]);
     const [templateDraft, setTemplateDraft] = useState(() => getDefaultTemplateDraft(FLOW_TEMPLATES[0]));
     const [templateStarStats, setTemplateStarStats] = useState({});
-    const [waAccounts, setWaAccounts] = useState([]);
-    const [waAccountsLoading, setWaAccountsLoading] = useState(true);
+    const { accounts: waAccounts, isLoading: waAccountsLoading } = useWhatsAppAccounts();
     const [selectedWaAccount, setSelectedWaAccount] = useState(() => localStorage.getItem('selected_wa_account_id') || 'All');
 
     const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
@@ -124,8 +124,8 @@ export default function FlowBuilder() {
         if (session?.access_token) {
             fetchFlows();
             fetchTemplateStars();
-            fetchWaAccounts();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [session]);
 
     useEffect(() => {
@@ -243,21 +243,6 @@ export default function FlowBuilder() {
         }
     };
 
-    const fetchWaAccounts = async () => {
-        setWaAccountsLoading(true);
-        try {
-            const res = await axios.get(`${API_URL}/api/whatsapp/accounts`, {
-                headers: { 'Authorization': `Bearer ${session?.access_token}` }
-            });
-            setWaAccounts(Array.isArray(res.data) ? res.data : []);
-        } catch (error) {
-            console.error('Failed to fetch WhatsApp accounts:', error);
-            setWaAccounts([]);
-        } finally {
-            setWaAccountsLoading(false);
-        }
-    };
-
     const getAccountSwitchKey = (account) => account?.display_phone_number || account?.phone_number_id || account?.id || 'All';
     const selectedAccount = selectedWaAccount === 'All'
         ? null
@@ -370,7 +355,6 @@ export default function FlowBuilder() {
                     </p>
                 </div>
                 <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:w-auto sm:items-center sm:gap-3">
-                    <TourButton className="hidden sm:block" />
                     <button
                         onClick={() => setShowTemplatesModal(true)}
                         data-tour="flows-templates"
@@ -887,28 +871,6 @@ function FlowAccountSelector({ accounts, scope, selectedIds, onScopeChange, onSe
 
 function getAccountLabel(account) {
     return account?.display_phone_number || account?.phone_number_id || account?.name || 'WhatsApp account';
-}
-
-function getFlowAccountBadges(flow, accounts) {
-    const scope = flow?.wa_account_scope || 'all';
-    if (scope !== 'selected') {
-        return [{ key: 'all', label: 'All connected numbers', className: 'bg-blue-50 text-blue-700' }];
-    }
-
-    const ids = Array.isArray(flow?.wa_account_ids) ? flow.wa_account_ids : [];
-    if (ids.length === 0) {
-        return [{ key: 'none', label: 'No number selected', className: 'bg-red-50 text-red-700' }];
-    }
-
-    return ids.map((id) => {
-        const account = accounts.find((item) => item.id === id);
-        const isMeta = Boolean(account?.whatsapp_business_account_id);
-        return {
-            key: id,
-            label: account ? `${getAccountLabel(account)} ${isMeta ? 'Meta' : 'QR'}` : `Account ${id.slice(0, 6)}`,
-            className: isMeta ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700',
-        };
-    });
 }
 
 function TemplateGalleryModal({
