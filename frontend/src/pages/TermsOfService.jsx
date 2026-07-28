@@ -9,7 +9,7 @@ import './TermsOfService.css';
 
 /* ─── Constants ─────────────────────────────────────────────── */
 const COMPANY_NAME = 'GetAiPilot';
-const PRODUCT_NAME = 'GAP FlowPilot';
+const PRODUCT_NAME = 'GAP WhatsApp Pilot';
 const DOMAIN = 'getaipilot.in';
 const SUPPORT_EMAIL = 'getaipilott@gmail.com';
 const LEGAL_EMAIL = 'legal@getaipilot.in';

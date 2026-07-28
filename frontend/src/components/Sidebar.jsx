@@ -85,7 +85,7 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
     })
 
     const selectedAccountLabel = useMemo(() => {
-        if (selectedWaAccount === 'All') return 'GAP FlowPilot'
+        if (selectedWaAccount === 'All') return 'GAP WhatsApp Pilot'
         const account = waAccounts.find(item => String(getAccountSwitchKey(item)) === String(selectedWaAccount))
         return account?.name || account?.display_phone_number || account?.phone_number_id || 'Selected account'
     }, [selectedWaAccount, waAccounts])
@@ -159,7 +159,7 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
                             title={selectedAccountLabel}
                         >
                             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white ring-1 ring-gray-200">
-                                <img src="/logo.png" alt="GAP FlowPilot" className="h-[17px] w-[17px] object-contain" />
+                                <img src="/logo.png" alt="GAP WhatsApp Pilot" className="h-[17px] w-[17px] object-contain" />
                             </span>
                             <span className={labelTransition(isExpanded, 'flex min-w-0 flex-1 items-center gap-2')}>
                                 <span className="truncate font-medium text-gray-700">{selectedAccountLabel}</span>
@@ -340,7 +340,7 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
                                 title={selectedAccountLabel}
                             >
                                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white ring-1 ring-gray-200">
-                                    <img src="/logo.png" alt="GAP FlowPilot" className="h-5 w-5 object-contain" />
+                                    <img src="/logo.png" alt="GAP WhatsApp Pilot" className="h-5 w-5 object-contain" />
                                 </span>
                                 <span className="min-w-0 flex-1">
                                     <span className="block truncate">{selectedAccountLabel}</span>

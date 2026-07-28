@@ -4,7 +4,7 @@ import './HomePage.css';
 
 /* ─── Constants ─────────────────────────────────────────────── */
 const COMPANY = 'GetAiPilot';
-const PRODUCT = 'GAP FlowPilot';
+const PRODUCT = 'GAP WhatsApp Pilot';
 const DOMAIN = 'getaipilot.in';
 const SUPPORT_EMAIL = 'getaipilott@gmail.com';
 
@@ -101,7 +101,7 @@ export default function HomePage() {
                   <span className="bg-amber-400/80" />
                   <span className="bg-emerald-400/80" />
                 </div>
-                <div className="hp-hero__mockup-title">gap-flowpilot.app / workspace / dashboard</div>
+                <div className="hp-hero__mockup-title">gap-whatsapp-pilot.app / workspace / dashboard</div>
               </div>
               <img
                 src="/images/hero-dashboard.png"

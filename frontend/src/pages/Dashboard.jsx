@@ -351,7 +351,7 @@ export default function Dashboard() {
 
                                                         <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700">
                                                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                                                            <span className="text-[9px] font-bold uppercase tracking-wider">
+                                                            <span className="text-[9px] font-bold tracking-wider">
                                                                 Active
                                                             </span>
                                                         </div>
@@ -519,7 +519,7 @@ function Header({ range, setRange, isFetching, refetch, freshness }) {
     return (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-gray-200 pb-4">
             <div>
-                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-blue-600">
+                <div className="flex items-center gap-1.5 text-sm font-bold uppercase tracking-wider text-blue-600">
                     <Grid2X2 className="h-3.5 w-3.5" />
                     Command Center
                 </div>
@@ -569,35 +569,55 @@ function BillingOverviewStrip({ overview }) {
 
     return (
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto]">
-            <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-2xs hover:border-gray-300 transition-all">
+            <div className="group relative rounded-lg border border-gray-200 bg-white p-4 shadow-2xs hover:border-gray-300 hover:shadow-xs transition-all duration-200 ease-out flex flex-col justify-between h-full min-h-[110px] antialiased">
                 <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Wallet Balance</p>
-                    <div className="h-7 w-7 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
+                    <span className="text-xs font-semibold tracking-wider text-gray-500">Wallet Balance</span>
+                    <div className="h-7 w-7 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100 shrink-0">
                         <Wallet className="h-3.5 w-3.5" />
                     </div>
                 </div>
-                <p className="mt-2 text-xl font-bold text-gray-900 tracking-tight tabular-nums">
-                    {formatINRFromPaise(overview?.wallet?.balance_paise)}
-                </p>
-                <p className="mt-0.5 text-xs text-gray-500">Auto-deducted for Meta messages</p>
+                <div className="my-2">
+                    <p className="text-xl sm:text-[22px] font-bold text-gray-900 tracking-tight tabular-nums">
+                        {formatINRFromPaise(overview?.wallet?.balance_paise)}
+                    </p>
+                    <p className="mt-0.5 text-xs font-semibold text-gray-500">
+                        Auto-deducted for Meta messages
+                    </p>
+                </div>
             </div>
 
-            <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-2xs hover:border-gray-300 transition-all">
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">This Month Spend</p>
-                <p className="mt-2 text-xl font-bold text-gray-900 tracking-tight tabular-nums">
-                    {formatINRFromPaise(overview?.spend?.month_spend_paise)}
-                </p>
-                <p className="mt-0.5 text-xs text-gray-500">Marketing, Utility & Auth usage</p>
+            <div className="group relative rounded-lg border border-gray-200 bg-white p-4 shadow-2xs hover:border-gray-300 hover:shadow-xs transition-all duration-200 ease-out flex flex-col justify-between h-full min-h-[110px] antialiased">
+                <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold tracking-wider text-gray-500">This Month Spend</span>
+                    <div className="h-7 w-7 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100 shrink-0">
+                        <TrendingUp className="h-3.5 w-3.5" />
+                    </div>
+                </div>
+                <div className="my-2">
+                    <p className="text-xl sm:text-[22px] font-bold text-gray-900 tracking-tight tabular-nums">
+                        {formatINRFromPaise(overview?.spend?.month_spend_paise)}
+                    </p>
+                    <p className="mt-0.5 text-xs font-semibold text-gray-500">
+                        Marketing, Utility & Auth usage
+                    </p>
+                </div>
             </div>
 
-            <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-2xs hover:border-gray-300 transition-all">
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Marketing / Utility</p>
-                <p className="mt-2 text-xl font-bold text-gray-900 tracking-tight tabular-nums">
-                    {formatINRFromPaise(marketing?.charged_amount_paise)} / {formatINRFromPaise(utility?.charged_amount_paise)}
-                </p>
-                <p className="mt-0.5 text-xs text-gray-500">
-                    {fmt(marketing?.message_count)} mkt, {fmt(utility?.message_count)} utility
-                </p>
+            <div className="group relative rounded-lg border border-gray-200 bg-white p-4 shadow-2xs hover:border-gray-300 hover:shadow-xs transition-all duration-200 ease-out flex flex-col justify-between h-full min-h-[110px] antialiased">
+                <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold tracking-wider text-gray-500">Marketing / Utility</span>
+                    <div className="h-7 w-7 rounded-md bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shrink-0">
+                        <BarChart3 className="h-3.5 w-3.5" />
+                    </div>
+                </div>
+                <div className="my-2">
+                    <p className="text-xl sm:text-[22px] font-bold text-gray-900 tracking-tight tabular-nums">
+                        {formatINRFromPaise(marketing?.charged_amount_paise)} / {formatINRFromPaise(utility?.charged_amount_paise)}
+                    </p>
+                    <p className="mt-0.5 text-xs font-semibold text-gray-500">
+                        {fmt(marketing?.message_count)} marketing, {fmt(utility?.message_count)} utility
+                    </p>
+                </div>
             </div>
 
             <Link
@@ -631,7 +651,7 @@ function MetricCard({ icon, label, value, detail, warning, accentColor, loading 
         <div className="dash-kpi-card group relative rounded-lg border border-gray-200 bg-white p-4 shadow-2xs hover:border-gray-300 hover:shadow-xs transition-all duration-200 ease-out flex flex-col justify-between h-full min-h-[110px] antialiased">
             <div className="flex items-center justify-between gap-2">
                 <span
-                    className="text-xs font-extrabold uppercase tracking-wider"
+                    className="text-xs font-extrabold tracking-wider"
                     style={{ color: '#1e293b' }}
                 >
                     {label}
@@ -649,7 +669,7 @@ function MetricCard({ icon, label, value, detail, warning, accentColor, loading 
                     <div className="h-7 w-20 bg-gray-100 rounded animate-pulse" />
                 ) : (
                     <p
-                        className="text-2xl sm:text-3xl font-black tracking-tight tabular-nums"
+                        className="text-3xl sm:text-2xl lg:text-[22px] font-bold tracking-tight tabular-nums"
                         style={{ color: '#0f172a' }}
                     >
                         {value}
@@ -789,9 +809,8 @@ function PastelInteractiveCard({
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
             style={{ willChange: 'transform' }}
-            className={`px-4 py-0 rounded-xl border cursor-pointer flex items-center justify-between h-full overflow-hidden transition-colors ${badgeBg} ${
-                isActive ? `${hoverBorder} ring-1 ring-opacity-50` : borderColor
-            }`}
+            className={`px-4 py-0 rounded-xl border cursor-pointer flex items-center justify-between h-full overflow-hidden transition-colors ${badgeBg} ${isActive ? `${hoverBorder} ring-1 ring-opacity-50` : borderColor
+                }`}
         >
             {/* Left: color dot + label + subtitle stacked */}
             <div className="flex items-center gap-2.5 min-w-0">
@@ -800,7 +819,7 @@ function PastelInteractiveCard({
                     style={{ backgroundColor: color }}
                 />
                 <div className="min-w-0">
-                    <p className={`text-[10px] font-extrabold uppercase tracking-widest leading-none ${textColor}`}>{title}</p>
+                    <p className={`text-[10px] font-extrabold tracking-widest leading-none ${textColor}`}>{title}</p>
                     <p className={`text-[10px] font-medium mt-0.5 truncate ${subColor}`}>{subtitle}</p>
                 </div>
             </div>
@@ -860,7 +879,7 @@ function PieFixedTooltip({ data }) {
                     style={{ backgroundColor: display.color, boxShadow: `0 0 6px ${display.color}80` }}
                 />
                 <div className="text-left">
-                    <p className="text-[10px] font-extrabold uppercase tracking-widest text-gray-300 leading-none">{display.name}</p>
+                    <p className="text-[10px] font-extrabold tracking-widest text-gray-300 leading-none">{display.name}</p>
                     <p className="text-base font-black text-white tabular-nums leading-tight">{fmt(display.value)}</p>
                     {display.detail && (
                         <p className="text-[10px] text-gray-400 font-medium leading-none mt-0.5">{display.detail}</p>
@@ -919,7 +938,7 @@ function UsagePerformanceDashboard({ model, range, rangeLabel, loading, overview
 
     const capabilityCards = [
         {
-            title: 'Replies handled',
+            title: 'Replies Handled',
             description: 'AI + human responses',
             value: `${fmt(n(model.metrics.aiAgent) + n(model.metrics.humanAgent))}`,
             detail: `${fmt(model.metrics.aiAgent)} AI / ${fmt(model.metrics.humanAgent)} team`,
@@ -929,7 +948,7 @@ function UsagePerformanceDashboard({ model, range, rangeLabel, loading, overview
             icon: Bot,
         },
         {
-            title: 'Broadcast output',
+            title: 'Broadcast Output',
             description: 'Campaign messages sent',
             value: fmt(model.campaigns.sent),
             detail: `${fmt(model.campaigns.failed)} failed broadcast messages`,
@@ -968,7 +987,7 @@ function UsagePerformanceDashboard({ model, range, rangeLabel, loading, overview
             <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-2xs hover:border-gray-300 transition-all">
                 <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
                     <div>
-                        <p className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                        <p className="text-xs font-bold text-gray-900 tracking-wider">
                             Message Status Composition
                         </p>
                         <p className="text-[11px] text-gray-500 font-medium">
@@ -1026,7 +1045,7 @@ function UsagePerformanceDashboard({ model, range, rangeLabel, loading, overview
                             <span className="text-3xl font-black text-gray-900 leading-none tabular-nums tracking-tight">
                                 {fmt(totalPieVolume)}
                             </span>
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mt-1">
+                            <span className="text-[10px] font-bold tracking-wider text-gray-400 mt-1">
                                 Messages
                             </span>
                         </div>
@@ -1063,19 +1082,36 @@ function CustomLineTooltip({ active, payload }) {
 
 function UsageCapabilityCard({ title, value, detail, description, series, color, gradientId, icon, compact }) {
     const data = series ? series.map((val, i) => ({ name: i, value: n(val) })) : []
+    const cardRef = useRef(null)
+
+    useGSAP(() => {
+        if (!cardRef.current) return
+        gsap.fromTo(cardRef.current.querySelector('.card-desc'),
+            { opacity: 0, y: 6 },
+            { opacity: 1, y: 0, duration: 0.5, ease: 'power2.out', delay: 0.15, clearProps: 'opacity,transform' }
+        )
+    }, { scope: cardRef })
 
     if (compact) {
         return (
-            <div className="rounded-lg border border-gray-200 bg-white shadow-2xs hover:border-gray-300 hover:shadow-xs transition-all flex flex-col h-full overflow-hidden">
+            <div ref={cardRef} className="rounded-lg border border-gray-200 bg-white shadow-2xs hover:border-gray-300 hover:shadow-xs transition-all flex flex-col h-full overflow-hidden">
                 {/* Top: icon + title row */}
                 <div className="px-3 pt-2.5 flex items-center gap-1.5">
                     {icon ? createElement(icon, { className: 'h-3 w-3 shrink-0', style: { color } }) : null}
-                    <h3 className="text-[10px] font-extrabold tracking-wider uppercase truncate" style={{ color: '#94a3b8' }}>{title}</h3>
+                    <h3 className="text-[10px] font-extrabold tracking-wider truncate" style={{ color: '#94a3b8' }}>{title}</h3>
                 </div>
-                {/* Middle: value + description stacked tight */}
+                {/* Middle: value + description and detail */}
                 <div className="px-3 pt-1 pb-0">
                     <p className="text-[28px] font-black tracking-tight tabular-nums leading-none" style={{ color: '#0f172a' }}>{value}</p>
-                    <p className="text-[10px] font-medium leading-tight mt-0.5 truncate" style={{ color: '#cbd5e1' }}>{description || detail}</p>
+                    <div className="card-desc flex flex-wrap items-center gap-1 text-[10px] font-medium leading-tight mt-1 text-gray-500">
+                        <span>{description}</span>
+                        {detail && (
+                            <>
+                                <span className="text-gray-300 font-bold">·</span>
+                                <span className="text-gray-400">{detail}</span>
+                            </>
+                        )}
+                    </div>
                 </div>
                 {/* Bottom: sparkline bleeding to edge */}
                 {data.length > 0 && (
@@ -1110,14 +1146,14 @@ function UsageCapabilityCard({ title, value, detail, description, series, color,
     }
 
     return (
-        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-2xs hover:border-gray-300 transition-all flex items-center justify-between min-h-[105px]">
+        <div ref={cardRef} className="rounded-lg border border-gray-200 bg-white p-4 shadow-2xs hover:border-gray-300 transition-all flex items-center justify-between min-h-[105px]">
             <div className="space-y-1">
                 <div className="flex items-center gap-1.5">
                     {icon ? createElement(icon, { className: 'h-3.5 w-3.5', style: { color } }) : null}
                     <h3 className="text-xs font-bold text-gray-900 tracking-tight">{title}</h3>
                 </div>
                 <p className="text-2xl font-black text-gray-900 tracking-tight tabular-nums">{value}</p>
-                <p className="text-[11px] text-gray-500 font-medium">{detail}</p>
+                <p className="card-desc text-[11px] text-gray-500 font-medium">{detail}</p>
             </div>
 
             {data.length > 0 && (
@@ -1167,7 +1203,7 @@ function MiniStat({ icon, label, value }) {
             <span className="mb-1.5 flex h-6 w-6 items-center justify-center rounded-md bg-gray-50 border border-gray-200 text-gray-700">
                 {createElement(icon, { className: 'h-3.5 w-3.5' })}
             </span>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{label}</p>
+            <p className="text-[10px] font-bold tracking-wider text-gray-500">{label}</p>
             <p className="mt-0.5 text-base font-bold text-gray-900 tabular-nums">{value}</p>
         </div>
     )
