@@ -1,6 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Plus, Edit2, Trash2, Play, Copy, Pause, TrendingUp, Zap, Activity, X, LayoutTemplate, Star, Search, Sparkles, Clock, Layers, CheckCircle2, Smartphone, ShieldCheck, QrCode, Info, ChevronRight, MessageSquare, LifeBuoy, Send, MoreHorizontal, ArrowLeft } from 'lucide-react';
+import gsap from 'gsap';
+import { useGSAP } from '@gsap/react';
 import axios from 'axios';
+
+gsap.registerPlugin(useGSAP);
 import FlowEditor from '../components/flow-builder/FlowEditor';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
@@ -35,6 +39,7 @@ function FlowBuilderLoading() {
 }
 
 export default function FlowBuilder() {
+    const dashboardRef = useRef(null);
     const { session } = useAuth();
     const { alertDialog, confirmDialog } = useDialog();
     const [flows, setFlows] = useState([]);
@@ -321,6 +326,21 @@ export default function FlowBuilder() {
             iconColor: 'text-blue-600'
         };
     };
+    useGSAP(() => {
+        if (loading || waAccountsLoading || editingFlow) return;
+
+        // Animate stats cards
+        gsap.fromTo('.stat-card-anim', 
+            { opacity: 0, y: 20 },
+            { opacity: 1, y: 0, duration: 0.6, stagger: 0.08, ease: 'power3.out' }
+        );
+        
+        // Animate flow cards
+        gsap.fromTo('.flow-card-anim', 
+            { opacity: 0, y: 24 },
+            { opacity: 1, y: 0, duration: 0.7, stagger: 0.06, ease: 'power3.out', delay: 0.15 }
+        );
+    }, { scope: dashboardRef, dependencies: [loading, waAccountsLoading, editingFlow] });
 
     if (editingFlow) {
         return <FlowEditor flow={editingFlow} waAccounts={waAccounts} onClose={() => { setEditingFlow(null); fetchFlows(); }} />;
@@ -345,28 +365,28 @@ export default function FlowBuilder() {
     }
 
     return (
-        <div className="space-y-3.5 sm:space-y-5 p-3 sm:p-5 lg:p-6">
+        <div ref={dashboardRef} className="space-y-6 sm:space-y-8 p-4 sm:p-6 lg:p-8 max-w-[1400px] mx-auto font-sans tracking-tight">
             {/* Header */}
-            <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-zinc-100 pb-5">
                 <div>
-                    <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Flow Builder</h1>
-                    <p className="text-xs sm:text-sm text-gray-500 mt-0.5 sm:mt-1">
+                    <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900 tracking-tight leading-tight fb-font-cabinet">Flow Builder</h1>
+                    <p className="text-xs sm:text-sm text-zinc-500 mt-1 tracking-tight">
                         Create automated message flows for your WhatsApp automation
                     </p>
                 </div>
-                <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:w-auto sm:items-center sm:gap-3">
+                <div className="grid grid-cols-2 gap-3 w-full sm:flex sm:w-auto sm:items-center sm:gap-3">
                     <button
                         onClick={() => setShowTemplatesModal(true)}
                         data-tour="flows-templates"
-                        className="inline-flex h-9 sm:h-10 items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 transition-all active:scale-[0.98] w-full"
+                        className="fb-btn-outline px-4 py-2 sm:py-2.5 text-xs sm:text-sm inline-flex items-center justify-center gap-2 cursor-pointer w-full sm:w-auto"
                     >
-                        <LayoutTemplate className="h-4 w-4" />
+                        <LayoutTemplate className="h-4 w-4 text-zinc-500" />
                         Flow Templates
                     </button>
                     <button
                         onClick={() => setShowCreateModal(true)}
                         data-tour="flows-create"
-                        className="inline-flex h-9 sm:h-10 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3 sm:px-4 text-xs sm:text-sm font-semibold text-white shadow-sm hover:bg-blue-750 transition-all active:scale-[0.98] w-full"
+                        className="fb-btn-dark px-4 py-2 sm:py-2.5 text-xs sm:text-sm inline-flex items-center justify-center gap-2 cursor-pointer w-full sm:w-auto"
                     >
                         <Plus className="h-4 w-4" />
                         Create Flow
@@ -374,108 +394,102 @@ export default function FlowBuilder() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(360px,0.7fr)]">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.7fr)]">
                 {/* Which number will this flow run on Card */}
-                <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-3.5 sm:p-6 flex flex-col justify-between md:flex-row md:items-center gap-3 sm:gap-6">
+                <div className="rounded-2xl border border-zinc-200 bg-zinc-50/50 p-6 flex flex-col justify-between md:flex-row md:items-center gap-6">
                     <div className="flex-1">
-                        <div className="flex items-start gap-2.5 sm:gap-3">
-                            <div className="mt-0.5 flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-lg sm:rounded-xl bg-blue-600 text-white shadow-sm">
-                                <Info className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
+                        <div className="flex items-start gap-3.5">
+                            <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-700 border border-zinc-200 shadow-sm">
+                                <Info className="h-5 w-5" />
                             </div>
                             <div>
-                                <h2 className="text-sm sm:text-base font-bold text-blue-950">Which number will this flow run on?</h2>
-                                <p className="mt-1 text-xs sm:text-sm leading-relaxed text-blue-900/90">
+                                <h2 className="text-base sm:text-lg font-semibold text-zinc-900 fb-font-outfit tracking-tight">Which number will this flow run on?</h2>
+                                <p className="mt-1.5 text-xs sm:text-sm leading-relaxed text-zinc-500 max-w-[65ch]">
                                     Har flow ko all connected numbers ya selected WhatsApp numbers par run kar sakte hain. Customer jis number par message bhejta hai, reply usi receiving number se jayega.
                                 </p>
                             </div>
                         </div>
-                        <div className="mt-3 sm:mt-4 flex flex-wrap gap-1.5 text-[10px] sm:text-xs">
-                            <span className="rounded-md bg-white px-2 py-0.5 font-semibold text-blue-800 ring-1 ring-blue-100/50 shadow-sm">
+                        <div className="mt-5 flex flex-wrap gap-2 text-[10px] sm:text-xs">
+                            <span className="fb-tag fb-tag-zinc shadow-sm">
                                 Current switch: {selectedAccount ? (selectedAccount.display_phone_number || selectedAccount.phone_number_id || selectedAccount.name) : 'All connected accounts'}
                             </span>
-                            <span className="rounded-md bg-white px-2 py-0.5 text-blue-700 ring-1 ring-blue-100/50 shadow-sm">
+                            <span className="fb-tag fb-tag-zinc shadow-sm">
                                 {waAccounts.length} connected number(s)
                             </span>
-                            <span className="rounded-md bg-white px-2 py-0.5 text-blue-700 ring-1 ring-blue-100/50 shadow-sm">
+                            <span className="fb-tag fb-tag-zinc shadow-sm">
                                 Duplicate trigger protection active
                             </span>
                         </div>
                     </div>
                     {/* Visual Graphic Mockup */}
-                    <div className="hidden md:block shrink-0 select-none pointer-events-none">
-                        <svg width="180" height="110" viewBox="0 0 180 110" fill="none">
-                            <circle cx="130" cy="55" r="45" fill="#E0F2FE" opacity="0.6" />
-                            <circle cx="50" cy="65" r="25" fill="#F0FDFA" opacity="0.6" />
+                    <div className="hidden md:block shrink-0 select-none pointer-events-none pr-2">
+                        <svg width="180" height="90" viewBox="0 0 180 90" fill="none" className="opacity-95">
+                            <rect x="5" y="5" width="170" height="80" rx="12" fill="white" stroke="#e4e4e7" strokeWidth="1.5" />
+                            {/* Node 1 (Trigger Node) */}
+                            <rect x="18" y="30" width="46" height="20" rx="6" fill="#f0fdf4" stroke="#86efac" strokeWidth="1.2" />
+                            <circle cx="27" cy="40" r="3" fill="#10B981" />
+                            <text x="35" y="43" fill="#047857" fontSize="8.5" fontWeight="600" fontFamily="sans-serif">IN</text>
                             
-                            {/* Card 1 */}
-                            <g filter="drop-shadow(0px 2px 4px rgba(59,130,246,0.06))">
-                                <rect x="30" y="15" width="80" height="32" rx="6" fill="white" />
-                                <rect x="38" y="22" width="40" height="4" rx="2" fill="#E2E8F0" />
-                                <rect x="38" y="30" width="25" height="3" rx="1.5" fill="#F1F5F9" />
-                                <circle cx="98" cy="31" r="5" fill="#3B82F6" opacity="0.8" />
-                            </g>
+                            {/* Curved connection lines */}
+                            <path d="M64 40 C 80 40, 85 58, 110 58" stroke="#10b981" strokeWidth="1.5" strokeDasharray="5 3" className="animate-flow-dash" />
+                            <path d="M64 40 C 80 40, 85 22, 110 22" stroke="#cbd5e1" strokeWidth="1.2" strokeDasharray="4 4" className="animate-flow-dash-slow" />
                             
-                            {/* Card 2 (WhatsApp Card) */}
-                            <g filter="drop-shadow(0px 4px 10px rgba(0,0,0,0.06))">
-                                <rect x="65" y="45" width="95" height="45" rx="8" fill="white" />
-                                <rect x="75" y="56" width="50" height="5" rx="2.5" fill="#cbd5e1" />
-                                <rect x="75" y="66" width="35" height="4" rx="2" fill="#e2e8f0" />
-                                
-                                <circle cx="138" cy="67" r="11" fill="#25D366" />
-                                {/* WhatsApp phone path inside circle */}
-                                <path d="M135.5 66.5a2 2 0 0 0 2 2m-2-3.5a3.5 3.5 0 0 1 3.5 3.5" stroke="white" strokeWidth="1" strokeLinecap="round" />
-                                <path d="M134.7 64.7a0.8 0 0 0-.8.8v1.2a3.2 3.2 0 0 0 3.2 3.2h1.2a0.8 0 0 0 .8-.8v-.6a0.4 0 0 0-.2-.4l-1-.4a0.4 0 0 0-.5.2l-.2.2a2 2 0 0 1-1-1l.2-.2a0.4 0 0 0 .2-.5l-.4-1a0.4 0 0 0-.4-.2h-.6Z" fill="white" />
-                            </g>
+                            {/* Node 2 (Active Target) */}
+                            <rect x="110" y="48" width="46" height="20" rx="6" fill="#eff6ff" stroke="#93c5fd" strokeWidth="1.2" />
+                            <circle cx="119" cy="58" r="3.5" fill="#3b82f6" />
+                            <circle cx="119" cy="58" r="6" stroke="#3b82f6" strokeWidth="1" className="animate-radar-ping" style={{ transformOrigin: '119px 58px' }} />
+                            <text x="127" y="61" fill="#1d4ed8" fontSize="8.5" fontWeight="600" fontFamily="sans-serif">WA</text>
                             
-                            {/* Connection line */}
-                            <path d="M70 31c0 8-10 8-10 14" stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="3 3" />
-                            <circle cx="60" cy="45" r="2" fill="#3B82F6" />
+                            {/* Node 3 (Offline Target) */}
+                            <rect x="110" y="12" width="46" height="20" rx="6" fill="#f4f4f5" stroke="#e4e4e7" strokeWidth="1.2" />
+                            <circle cx="119" cy="22" r="2.5" fill="#cbd5e1" />
+                            <text x="127" y="25" fill="#71717a" fontSize="8.5" fontWeight="500" fontFamily="sans-serif">OFF</text>
                         </svg>
                     </div>
                 </div>
 
                 {/* Connected access types Card */}
-                <div className="rounded-2xl border border-gray-200 bg-white p-3.5 sm:p-6 flex flex-col justify-between shadow-sm">
-                    <div className="mb-3 sm:mb-4 flex items-center justify-between">
-                        <h2 className="text-xs sm:text-sm font-bold text-gray-900">Connected access types</h2>
-                        <Smartphone className="h-3.5 w-3.5 text-gray-400" />
+                <div className="fb-premium-card p-6 flex flex-col justify-between">
+                    <div className="mb-4 flex items-center justify-between">
+                        <h2 className="text-sm font-semibold text-zinc-900 tracking-tight fb-font-outfit">Connected access types</h2>
+                        <Smartphone className="h-4.5 w-4.5 text-zinc-400" />
                     </div>
-                    <div className="flex flex-col gap-2 sm:gap-3">
+                    <div className="flex flex-col gap-3">
                         {/* Meta API Row */}
-                        <div className="flex items-center justify-between border border-gray-100 rounded-xl p-2 sm:p-3 bg-white hover:bg-gray-50/50 transition-colors">
-                            <div className="flex items-center gap-2.5 sm:gap-3">
-                                <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg flex items-center justify-center bg-green-50 text-green-600 shrink-0">
-                                    <ShieldCheck className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
+                        <div className="flex items-center justify-between border border-zinc-100 rounded-xl p-3 bg-zinc-50/50 hover:bg-zinc-50 transition-colors">
+                            <div className="flex items-center gap-3">
+                                <div className="h-9 w-9 rounded-lg flex items-center justify-center bg-emerald-50 border border-emerald-100 text-emerald-600 shrink-0 shadow-sm">
+                                    <ShieldCheck className="h-5 w-5" />
                                 </div>
                                 <div className="min-w-0">
-                                    <h3 className="text-xs sm:text-sm font-semibold text-gray-900">Meta API</h3>
-                                    <p className="text-[10px] sm:text-[11px] leading-tight text-gray-500 truncate max-w-[200px] xl:max-w-[170px]">
+                                    <h3 className="text-xs sm:text-sm font-semibold text-zinc-900 fb-font-outfit">Meta API</h3>
+                                    <p className="text-[10px] sm:text-[11px] leading-tight text-zinc-400 truncate max-w-[200px] xl:max-w-[170px]">
                                         Templates, broadcasts, profile sync...
                                     </p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-1.5 pl-2">
-                                <span className="text-base sm:text-xl font-bold text-gray-900">{metaAccounts.length}</span>
-                                <ChevronRight className="h-3.5 w-3.5 text-gray-400" />
+                                <span className="text-sm sm:text-base font-semibold text-zinc-900 fb-font-cabinet">{metaAccounts.length}</span>
+                                <ChevronRight className="h-3.5 w-3.5 text-zinc-400" />
                             </div>
                         </div>
 
                         {/* QR Session Row */}
-                        <div className="flex items-center justify-between border border-gray-100 rounded-xl p-2 sm:p-3 bg-white hover:bg-gray-50/50 transition-colors">
-                            <div className="flex items-center gap-2.5 sm:gap-3">
-                                <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg flex items-center justify-center bg-amber-50 text-amber-600 shrink-0">
-                                    <QrCode className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
+                        <div className="flex items-center justify-between border border-zinc-100 rounded-xl p-3 bg-zinc-50/50 hover:bg-zinc-50 transition-colors">
+                            <div className="flex items-center gap-3">
+                                <div className="h-9 w-9 rounded-lg flex items-center justify-center bg-blue-50 border border-blue-100 text-blue-600 shrink-0 shadow-sm">
+                                    <QrCode className="h-5 w-5" />
                                 </div>
                                 <div className="min-w-0">
-                                    <h3 className="text-xs sm:text-sm font-semibold text-gray-900">QR Session</h3>
-                                    <p className="text-[10px] sm:text-[11px] leading-tight text-gray-500 truncate max-w-[200px] xl:max-w-[170px]">
+                                    <h3 className="text-xs sm:text-sm font-semibold text-zinc-900 fb-font-outfit">QR Session</h3>
+                                    <p className="text-[10px] sm:text-[11px] leading-tight text-zinc-400 truncate max-w-[200px] xl:max-w-[170px]">
                                         Chats and flow replies only...
                                     </p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-1.5 pl-2">
-                                <span className="text-base sm:text-xl font-bold text-gray-900">{qrAccounts.length}</span>
-                                <ChevronRight className="h-3.5 w-3.5 text-gray-400" />
+                                <span className="text-sm sm:text-base font-semibold text-zinc-900 fb-font-cabinet">{qrAccounts.length}</span>
+                                <ChevronRight className="h-3.5 w-3.5 text-zinc-400" />
                             </div>
                         </div>
                     </div>
@@ -483,76 +497,65 @@ export default function FlowBuilder() {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-3 gap-2 sm:gap-4 pb-1 sm:pb-0">
+            <div className="grid grid-cols-3 gap-4 sm:gap-6 pb-2">
                 {/* Total Flows */}
-                <div className="bg-white p-2.5 sm:p-5 rounded-2xl border border-gray-150 shadow-sm flex flex-col sm:flex-row items-center sm:items-center text-center sm:text-left gap-1.5 sm:gap-4 hover:shadow-md transition-shadow w-full min-w-0 flex-1">
-                    <div className="h-8 w-8 sm:h-12 sm:w-12 rounded-lg sm:rounded-xl bg-gradient-to-tr from-blue-600 to-sky-400 text-white flex items-center justify-center shadow-md shadow-blue-500/20 shrink-0">
-                        <TrendingUp className="h-4.5 w-4.5 sm:h-6 sm:w-6 text-white" />
-                    </div>
-                    <div className="min-w-0 w-full">
-                        <p className="text-[9px] sm:text-xs font-semibold text-gray-400 uppercase tracking-wider leading-none sm:leading-normal">Total Flows</p>
-                        <p className="text-sm sm:text-2xl font-bold text-gray-900 mt-0.5 sm:mt-1 truncate">{flows.length}</p>
-                    </div>
+                <div className="stat-card-anim fb-premium-card p-5 flex flex-col gap-1 text-left w-full min-w-0 flex-1">
+                    <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider leading-none fb-font-outfit">Total Flows</p>
+                    <p className="text-2xl sm:text-4xl font-semibold text-zinc-900 tracking-tight mt-2 fb-font-cabinet">{flows.length}</p>
                 </div>
 
                 {/* Active Flows */}
-                <div className="bg-white p-2.5 sm:p-5 rounded-2xl border border-gray-150 shadow-sm flex flex-col sm:flex-row items-center sm:items-center text-center sm:text-left gap-1.5 sm:gap-4 hover:shadow-md transition-shadow w-full min-w-0 flex-1">
-                    <div className="h-8 w-8 sm:h-12 sm:w-12 rounded-lg sm:rounded-xl bg-gradient-to-tr from-emerald-600 to-green-400 text-white flex items-center justify-center shadow-md shadow-emerald-500/20 shrink-0">
-                        <Play className="h-4.5 w-4.5 sm:h-5 sm:w-5 fill-current text-white" />
-                    </div>
-                    <div className="min-w-0 w-full">
-                        <p className="text-[9px] sm:text-xs font-semibold text-gray-400 uppercase tracking-wider leading-none sm:leading-normal">Active Flows</p>
-                        <p className="text-sm sm:text-2xl font-bold text-gray-900 mt-0.5 sm:mt-1 truncate">
-                            {flows.filter(f => f.status === 'active').length}
-                        </p>
-                    </div>
+                <div className="stat-card-anim fb-premium-card p-5 flex flex-col gap-1 text-left w-full min-w-0 flex-1">
+                    <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider leading-none fb-font-outfit">Active Flows</p>
+                    <p className="text-2xl sm:text-4xl font-semibold text-zinc-900 tracking-tight mt-2 fb-font-cabinet">
+                        {flows.filter(f => f.status === 'active').length}
+                    </p>
                 </div>
 
                 {/* Messages Sent */}
-                <div className="bg-white p-2.5 sm:p-5 rounded-2xl border border-gray-150 shadow-sm flex flex-col sm:flex-row items-center sm:items-center text-center sm:text-left gap-1.5 sm:gap-4 hover:shadow-md transition-shadow w-full min-w-0 flex-1">
-                    <div className="h-8 w-8 sm:h-12 sm:w-12 rounded-lg sm:rounded-xl bg-gradient-to-tr from-purple-600 to-fuchsia-400 text-white flex items-center justify-center shadow-md shadow-purple-500/20 shrink-0">
-                        <Send className="h-4.5 w-4.5 sm:h-5 sm:w-5 text-white fill-white/20" />
-                    </div>
-                    <div className="min-w-0 w-full">
-                        <p className="text-[9px] sm:text-xs font-semibold text-gray-400 uppercase tracking-wider leading-none sm:leading-normal">Messages Sent</p>
-                        <p className="text-sm sm:text-2xl font-bold text-gray-900 mt-0.5 sm:mt-1 truncate">
-                            {flows.reduce((sum, f) => sum + (f.messagesSent || 0), 0).toLocaleString()}
-                        </p>
-                    </div>
+                <div className="stat-card-anim fb-premium-card p-5 flex flex-col gap-1 text-left w-full min-w-0 flex-1">
+                    <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider leading-none fb-font-outfit">Messages Sent</p>
+                    <p className="text-2xl sm:text-4xl font-semibold text-zinc-900 tracking-tight mt-2 fb-font-cabinet">
+                        {flows.reduce((sum, f) => sum + (f.messagesSent || 0), 0).toLocaleString()}
+                    </p>
                 </div>
             </div>
 
             {/* Flows List */}
-            <div data-tour="flows-list" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div data-tour="flows-list" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 mt-2">
                 {flows.map(flow => {
                     const theme = getFlowCardTheme(flow.name);
                     const IconComp = theme.icon;
 
                     return (
-                        <div key={flow.id} className="flex flex-col bg-white rounded-2xl border border-gray-200 hover:shadow-lg transition-shadow p-3.5 sm:p-5">
-                            <div className="flex-1 flex flex-col justify-between gap-4">
-                                <div className="flex items-start justify-between gap-2.5 sm:gap-4">
+                        <div key={flow.id} className="flow-card-anim flex flex-col fb-premium-card p-6">
+                            <div className="flex-1 flex flex-col justify-between gap-5">
+                                <div className="flex items-start justify-between gap-3">
                                     <div className="flex items-start flex-1 min-w-0">
-                                        <div className={`h-8 w-8 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 border ${theme.bgColor}`}>
-                                            <IconComp className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
+                                        <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 border shadow-sm ${theme.bgColor}`}>
+                                            <IconComp className="h-5 w-5" />
                                         </div>
-                                        <div className="ml-2.5 sm:ml-3 min-w-0 flex-1">
+                                        <div className="ml-3.5 min-w-0 flex-1">
                                             <div className="flex flex-wrap items-center gap-1.5">
-                                                <h3 className="font-bold text-gray-900 truncate text-xs sm:text-base" title={flow.name}>
+                                                <h3 className="font-semibold text-zinc-900 truncate text-sm sm:text-base leading-tight fb-font-outfit" title={flow.name}>
                                                     {flow.name}
                                                 </h3>
-                                                <span className={`px-1.5 sm:px-2 py-0.2 sm:py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold border uppercase tracking-wider shrink-0 ${
+                                                <span className={`fb-tag ${
                                                     flow.status === 'active'
-                                                        ? 'bg-green-50 text-green-700 border-green-200'
-                                                        : flow.status === 'paused'
-                                                        ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                                        : 'bg-gray-50 text-gray-600 border-gray-200'
-                                                }`}>
+                                                        ? 'fb-tag-emerald'
+                                                        : 'fb-tag-zinc'
+                                                } inline-flex items-center gap-1.5`}>
+                                                    {flow.status === 'active' && (
+                                                        <span className="relative flex h-1.5 w-1.5 shrink-0">
+                                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                                                        </span>
+                                                    )}
                                                     {flow.status}
                                                 </span>
                                             </div>
                                             {flow.description && (
-                                                <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5 sm:mt-1 line-clamp-2 leading-relaxed">
+                                                <p className="text-xs text-zinc-500 mt-1.5 line-clamp-2 leading-relaxed font-normal">
                                                     {flow.description}
                                                 </p>
                                             )}
@@ -561,58 +564,59 @@ export default function FlowBuilder() {
                                     <div className="flex items-center gap-1 shrink-0">
                                         <button
                                             onClick={() => toggleFlowStatus(flow)}
-                                            className={`p-1 sm:p-1.5 rounded-lg border transition-all ${
-                                                flow.status === 'active'
-                                                    ? 'text-amber-600 border-amber-200 bg-amber-50 hover:bg-amber-100'
-                                                    : 'text-green-600 border-green-200 bg-green-50 hover:bg-green-100'
-                                            }`}
+                                            className="fb-btn-action p-2 cursor-pointer"
                                             title={flow.status === 'active' ? 'Pause Flow' : 'Activate Flow'}
                                         >
-                                            {flow.status === 'active' ? <Pause className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> : <Play className="h-3 w-3 sm:h-3.5 sm:w-3.5 fill-current" />}
+                                            {flow.status === 'active' ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
                                         </button>
                                         <button
                                             onClick={() => handleDuplicateFlow(flow)}
-                                            className="p-1 sm:p-1.5 text-gray-400 hover:text-gray-600 border border-gray-200 hover:bg-gray-50 rounded-lg flex items-center justify-center transition-all"
+                                            className="fb-btn-action p-2 cursor-pointer"
                                             title="Duplicate"
                                         >
-                                            <Copy className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                                            <Copy className="h-3.5 w-3.5" />
                                         </button>
                                         <button
                                             onClick={() => handleDeleteFlow(flow.id)}
-                                            className="p-1 sm:p-1.5 text-gray-400 hover:text-red-600 border border-gray-200 hover:bg-red-50 rounded-lg flex items-center justify-center transition-all"
+                                            className="fb-btn-action fb-btn-action-delete p-2 cursor-pointer"
                                             title="Delete"
                                         >
-                                            <Trash2 className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                                            <Trash2 className="h-3.5 w-3.5" />
                                         </button>
                                     </div>
                                 </div>
 
                                 <div>
-                                    <div className="bg-gray-50/50 rounded-xl p-2.5 sm:p-3 border border-gray-100 grid grid-cols-3 gap-2 text-center text-xs">
+                                    <div className="bg-zinc-50 rounded-xl p-3.5 border border-zinc-100 grid grid-cols-3 gap-2 text-left text-xs">
                                         <div>
-                                            <span className="block text-[8.5px] sm:text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Nodes</span>
-                                            <span className="block text-xs sm:text-sm font-bold text-gray-900 mt-0.5">{Array.isArray(flow.nodes) ? flow.nodes.length : 0}</span>
+                                            <span className="block text-[9px] font-semibold text-zinc-400 uppercase tracking-wider leading-none">Nodes</span>
+                                            <span className="block text-sm font-bold text-zinc-900 mt-1.5 fb-font-outfit leading-none">{Array.isArray(flow.nodes) ? flow.nodes.length : 0}</span>
                                         </div>
                                         <div>
-                                            <span className="block text-[8.5px] sm:text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Messages Sent</span>
-                                            <span className="block text-xs sm:text-sm font-bold text-gray-900 mt-0.5">{(flow.messagesSent || 0).toLocaleString()}</span>
+                                            <span className="block text-[9px] font-semibold text-zinc-400 uppercase tracking-wider leading-none">Sent Messages</span>
+                                            <div className="flex items-center gap-1.5 mt-1.5">
+                                                <span className="block text-sm font-bold text-zinc-900 fb-font-outfit leading-none">{(flow.messagesSent || 0).toLocaleString()}</span>
+                                                <svg width="24" height="10" viewBox="0 0 24 10" fill="none" className="opacity-80">
+                                                    <path d="M2 8 L6 6.5 L10 3.5 L14 5 L22 1" stroke={flow.status === 'active' ? '#10b981' : '#a1a1aa'} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                                                </svg>
+                                            </div>
                                         </div>
                                         <div className="min-w-0">
-                                            <span className="block text-[8.5px] sm:text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Runs on</span>
-                                            <span className="block text-[8.5px] sm:text-[10px] font-bold text-blue-700 mt-1 truncate bg-blue-50/60 rounded px-1.5 py-0.5 border border-blue-100/30">
+                                            <span className="block text-[9px] font-semibold text-zinc-400 uppercase tracking-wider leading-none">Runs on</span>
+                                            <span className="block text-[9px] font-semibold text-blue-750 bg-blue-50/60 border border-blue-100/30 rounded px-1.5 py-0.5 mt-1.5 truncate text-center fb-font-outfit">
                                                 {flow.wa_account_scope === 'all' ? 'All numbers' : `${flow.wa_account_ids?.length || 0} selected`}
                                             </span>
                                         </div>
                                     </div>
 
-                                    <div className="flex items-start justify-between gap-4 mt-3.5 sm:mt-4">
+                                    <div className="flex items-start justify-between gap-4 mt-4">
                                         <div className="flex-1 min-w-0">
-                                            <span className="block text-[8.5px] sm:text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Triggers</span>
+                                            <span className="block text-[9px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">Triggers</span>
                                             <TriggersContainer triggers={flow.triggers} />
                                         </div>
                                         <div className="text-right shrink-0 self-start">
-                                            <span className="text-[8.5px] sm:text-[10px] font-semibold text-gray-400 block uppercase tracking-wider">Last edited</span>
-                                            <span className="text-[10px] sm:text-xs font-semibold text-gray-600 block mt-0.5">
+                                            <span className="text-[9px] font-semibold text-zinc-400 block uppercase tracking-wider">Last edited</span>
+                                            <span className="text-[10px] font-medium text-zinc-500 block mt-1.5">
                                                 {formatRelativeTime(flow.updated_at || flow.created_at)}
                                             </span>
                                         </div>
@@ -620,20 +624,20 @@ export default function FlowBuilder() {
                                 </div>
                             </div>
 
-                            <div className="mt-3.5 sm:mt-5 pt-3 sm:pt-4 border-t border-gray-100 flex gap-2">
+                            <div className="mt-5 pt-4 border-t border-zinc-100 flex gap-2.5">
                                 <button
                                     onClick={() => setEditingFlow(flow)}
-                                    className="flex-1 px-3 sm:px-4 py-1.5 sm:py-2 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm font-semibold text-gray-700 hover:bg-gray-50 flex items-center justify-center gap-1.5 shadow-sm transition-colors"
+                                    className="flex-1 fb-btn-dark px-4 py-2 text-xs sm:text-sm font-medium flex items-center justify-center gap-1.5 cursor-pointer"
                                 >
-                                    <Edit2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-gray-500" />
+                                    <Edit2 className="h-3.5 w-3.5" />
                                     Edit Flow
                                 </button>
                                 <button
                                     onClick={() => openRunsModal(flow)}
-                                    className="px-2.5 sm:px-3.5 py-1.5 sm:py-2 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm font-semibold text-gray-600 hover:bg-gray-50 flex items-center justify-center shadow-sm transition-colors"
+                                    className="fb-btn-outline px-3.5 py-2 text-xs sm:text-sm font-medium flex items-center justify-center cursor-pointer"
                                     title="Run logs"
                                 >
-                                    <Activity className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-gray-500" />
+                                    <Activity className="h-3.5 w-3.5 text-zinc-500" />
                                 </button>
                             </div>
                         </div>
@@ -643,13 +647,13 @@ export default function FlowBuilder() {
                 {/* Create your next flow Card */}
                 <button
                     onClick={() => setShowCreateModal(true)}
-                    className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 hover:border-gray-300 rounded-2xl bg-white hover:bg-gray-50/50 p-4 sm:p-6 text-center min-h-[180px] sm:min-h-[280px] transition-all group shadow-sm hover:shadow-md cursor-pointer"
+                    className="flow-card-anim flex flex-col items-center justify-center border-2 border-dashed border-zinc-200 hover:border-zinc-300 rounded-xl bg-zinc-50/20 hover:bg-zinc-50 p-6 text-center min-h-[240px] sm:min-h-[300px] transition-all group cursor-pointer hover:shadow-sm"
                 >
-                    <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-gray-50 group-hover:bg-gray-100 flex items-center justify-center border border-gray-200 text-gray-400 group-hover:text-gray-600 transition-colors shadow-sm">
-                        <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
+                    <div className="h-10 w-10 rounded-full bg-white group-hover:bg-zinc-50 flex items-center justify-center border border-zinc-200 group-hover:border-zinc-300 text-zinc-400 group-hover:text-zinc-650 transition-colors shadow-sm">
+                        <Plus className="h-5 w-5" />
                     </div>
-                    <h3 className="text-xs sm:text-sm font-bold text-gray-900 mt-3 sm:mt-4">Create your next flow</h3>
-                    <p className="text-[11px] sm:text-xs text-gray-500 mt-1 sm:mt-1.5 max-w-[200px]">
+                    <h3 className="text-sm sm:text-base font-semibold text-zinc-850 tracking-tight mt-4 fb-font-outfit group-hover:text-zinc-950">Create your next flow</h3>
+                    <p className="text-xs text-zinc-450 mt-1 max-w-[200px] leading-relaxed group-hover:text-zinc-500">
                         Start building another automation for your business.
                     </p>
                 </button>
@@ -1455,7 +1459,7 @@ function TriggersContainer({ triggers }) {
                 <div className="flex flex-wrap gap-1.5 pb-2">
                     {triggers && triggers.length > 0 ? (
                         triggers.map((trigger, i) => (
-                            <span key={i} className="px-1.5 py-0.5 bg-blue-50 text-blue-700 text-[10px] sm:text-xs font-semibold rounded border border-blue-100/50 hover:bg-blue-100/30 transition-colors">
+                            <span key={i} className="fb-tag fb-tag-zinc text-[10px]">
                                 {trigger}
                             </span>
                         ))
