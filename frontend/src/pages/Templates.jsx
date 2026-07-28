@@ -205,14 +205,14 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
         const cards = containerRef.current.querySelectorAll('.template-card-anim')
         if (cards.length > 0) {
             gsap.killTweensOf(cards)
-            gsap.fromTo(cards, 
+            gsap.fromTo(cards,
                 { opacity: 0, y: 15, scale: 0.98 },
-                { 
-                    opacity: 1, 
-                    y: 0, 
+                {
+                    opacity: 1,
+                    y: 0,
                     scale: 1,
-                    duration: 0.4, 
-                    stagger: 0.04, 
+                    duration: 0.4,
+                    stagger: 0.04,
                     ease: 'power2.out',
                     clearProps: 'all'
                 }
@@ -416,16 +416,15 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                                     )}
                                 </div>
                             </div>
-                            
+
                             <div className="col-span-1 sm:hidden">
                                 <button
                                     type="button"
                                     onClick={() => setShowMobileFilters(!showMobileFilters)}
-                                    className={`h-10 w-full flex items-center justify-center rounded-xl border transition-all ${
-                                        showMobileFilters 
-                                            ? 'bg-blue-50 border-blue-500 text-blue-600' 
+                                    className={`h-10 w-full flex items-center justify-center rounded-xl border transition-all ${showMobileFilters
+                                            ? 'bg-blue-50 border-blue-500 text-blue-600'
                                             : 'bg-white border-gray-300 text-gray-500'
-                                    }`}
+                                        }`}
                                     style={{ borderRadius: '10px' }}
                                     title="Toggle Filters"
                                 >
@@ -711,14 +710,14 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                             })}
                         </div>
 
-                    <button
-                        onClick={fetchData}
-                        disabled={isFetching}
-                        className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-[#ccd4de] bg-white px-3 text-[12px] font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-[#0b74c9] disabled:opacity-50 md:w-auto"
-                    >
-                        <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
-                        Sync Status
-                    </button>
+                        <button
+                            onClick={fetchData}
+                            disabled={isFetching}
+                            className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-[#ccd4de] bg-white px-3 text-[12px] font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-[#0b74c9] disabled:opacity-50 md:w-auto"
+                        >
+                            <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+                            Sync Status
+                        </button>
                     </div>
                 </div>
             </div>
@@ -832,12 +831,11 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                                         {/* Header row: icon + name + details */}
                                         <div className="mb-3.5 flex items-start justify-between gap-3">
                                             <div className="flex items-center gap-3 min-w-0">
-                                                <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${
-                                                    categoryName === 'MARKETING' ? 'bg-indigo-50 border-indigo-100 text-indigo-650' :
-                                                    categoryName === 'UTILITY' ? 'bg-emerald-50 border-emerald-100 text-emerald-650' :
-                                                    categoryName === 'AUTHENTICATION' ? 'bg-purple-50 border-purple-100 text-purple-650' :
-                                                    'bg-blue-50 border-blue-100 text-blue-655'
-                                                }`}>
+                                                <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${categoryName === 'MARKETING' ? 'bg-indigo-50 border-indigo-100 text-indigo-650' :
+                                                        categoryName === 'UTILITY' ? 'bg-emerald-50 border-emerald-100 text-emerald-650' :
+                                                            categoryName === 'AUTHENTICATION' ? 'bg-purple-50 border-purple-100 text-purple-650' :
+                                                                'bg-blue-50 border-blue-100 text-blue-655'
+                                                    }`}>
                                                     <MessageSquareText className="h-5 w-5" strokeWidth={1.8} />
                                                 </div>
                                                 <div className="min-w-0">
@@ -871,7 +869,7 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                                         )}
 
                                         {/* WhatsApp Mock Chat Bubble Preview */}
-                                        <div 
+                                        <div
                                             className="relative mb-0 flex min-h-[196px] flex-1 flex-col justify-center overflow-hidden rounded-xl border border-[#d2c9bd] p-3.5 shadow-inner"
                                             style={{
                                                 backgroundColor: '#efebe4',
@@ -928,31 +926,30 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                                         <span className="flex min-w-0 items-center gap-1.5 text-slate-500 font-medium">
                                             <CalendarDays className="h-3.5 w-3.5 shrink-0 text-slate-400" />
                                             <span className="truncate text-[10px]">
-                                            {template.status === 'APPROVED' 
-                                                ? `Approved ${formatDateToIST(template.approved_at || template.last_updated)}` 
-                                                : template.status === 'PENDING' 
-                                                ? `Sent ${formatDateToIST(template.submitted_at || template.last_updated)}`
-                                                : template.status === 'REJECTED'
-                                                ? `Rejected ${formatDateToIST(template.rejected_at || template.last_updated)}`
-                                                : `Updated ${formatDateToIST(template.last_updated)}`
-                                            }
+                                                {template.status === 'APPROVED'
+                                                    ? `Approved ${formatDateToIST(template.approved_at || template.last_updated)}`
+                                                    : template.status === 'PENDING'
+                                                        ? `Sent ${formatDateToIST(template.submitted_at || template.last_updated)}`
+                                                        : template.status === 'REJECTED'
+                                                            ? `Rejected ${formatDateToIST(template.rejected_at || template.last_updated)}`
+                                                            : `Updated ${formatDateToIST(template.last_updated)}`
+                                                }
                                             </span>
                                         </span>
                                         <div className="flex items-center gap-2">
                                             {/* Status Badge */}
-                                            <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-                                                template.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                                                template.status === 'PENDING' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                                                template.status === 'DRAFT' ? 'bg-gray-50 text-gray-650 border-gray-250' :
-                                                'bg-rose-50 text-rose-700 border-rose-100'
-                                            }`}>
+                                            <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${template.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                                    template.status === 'PENDING' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                                        template.status === 'DRAFT' ? 'bg-gray-50 text-gray-650 border-gray-250' :
+                                                            'bg-rose-50 text-rose-700 border-rose-100'
+                                                }`}>
                                                 {template.status === 'APPROVED' && <CheckCircle className="h-3 w-3 shrink-0 text-emerald-600" />}
                                                 {template.status === 'PENDING' && <Clock className="h-3 w-3 shrink-0 text-amber-600" />}
                                                 {template.status === 'DRAFT' && <FileText className="h-3 w-3 shrink-0 text-gray-505" />}
                                                 {template.status === 'REJECTED' && <XCircle className="h-3 w-3 shrink-0 text-rose-600" />}
                                                 <span>{template.status === 'PENDING' ? 'IN REVIEW' : template.status}</span>
                                             </span>
-                                            
+
                                             {/* Action group */}
                                             <div className="flex items-center gap-1">
                                                 <button
@@ -1230,7 +1227,7 @@ function CreateTemplateModal({ isOpen, onClose, onSuccess, apiCall, initialData 
         return button.type !== 'PHONE_NUMBER' || /^\+[1-9]\d{7,14}$/.test(button.phone_number)
     })
     const libraryInputsComplete = libraryButtonInputs.every(input => input.type !== 'URL' || /^https?:\/\/.+/i.test(input.url?.base_url || ''))
-    const canSubmit = normalizedName && /^[a-z0-9_]+$/.test(normalizedName) && (isOfficialLibrary ? libraryInputsComplete : (data.bodyText.trim() && !hasPlaceholderCopy && bodyLength <= 1024 && samplesComplete && buttonsComplete && !(data.headerType === 'TEXT' && !data.headerText.trim()) && !((data.headerType === 'IMAGE' || data.headerType === 'VIDEO') && !file)))
+    const canSubmit = normalizedName && /^[a-z0-9_]+$/.test(normalizedName) && (isOfficialLibrary ? libraryInputsComplete : (data.bodyText.trim() && !hasPlaceholderCopy && bodyLength <= 1024 && data.headerText.length <= 60 && data.footerText.length <= 60 && data.buttons.every(b => (b.text || '').length <= 25) && samplesComplete && buttonsComplete && !(data.headerType === 'TEXT' && !data.headerText.trim()) && !((data.headerType === 'IMAGE' || data.headerType === 'VIDEO') && !file)))
 
     useEffect(() => {
         if (initialData && isOpen) {
@@ -1572,14 +1569,19 @@ function CreateTemplateModal({ isOpen, onClose, onSuccess, apiCall, initialData 
 
                             {data.headerType === 'TEXT' ? (
                                 <>
-                                    <input
-                                        type="text"
-                                        disabled={isPreApproved}
-                                        className={`${fieldClass} mt-3 ${isPreApproved ? 'opacity-60 bg-gray-50' : ''}`}
-                                        placeholder="Short headline for the message"
-                                        value={data.headerText}
-                                        onChange={e => setData({ ...data, headerText: e.target.value })}
-                                    />
+                                    <div className="relative mt-3">
+                                        <input
+                                            type="text"
+                                            disabled={isPreApproved}
+                                            className={`${fieldClass} pr-14 ${isPreApproved ? 'opacity-60 bg-gray-50' : ''} ${data.headerText.length > 60 ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20' : ''}`}
+                                            placeholder="Short headline for the message"
+                                            value={data.headerText}
+                                            onChange={e => setData({ ...data, headerText: e.target.value })}
+                                        />
+                                        <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono select-none ${data.headerText.length > 60 ? 'text-red-600 font-semibold' : 'text-gray-400'}`}>
+                                            {data.headerText.length}/60
+                                        </span>
+                                    </div>
                                     {headerVariables.length > 0 && (
                                         <input className={`${fieldClass} mt-2`} placeholder="Real header sample, e.g. Order 10834" value={headerSample} onChange={e => setHeaderSample(e.target.value)} />
                                     )}
@@ -1627,7 +1629,7 @@ function CreateTemplateModal({ isOpen, onClose, onSuccess, apiCall, initialData 
                                 rows={5}
                                 placeholder="Hello {{1}}, your order is ready!"
                                 value={data.bodyText}
-                                maxLength={1100}
+                                maxLength={1024}
                                 onChange={e => setData({ ...data, bodyText: e.target.value })}
                             />
                             {hasPlaceholderCopy && (
@@ -1660,8 +1662,19 @@ function CreateTemplateModal({ isOpen, onClose, onSuccess, apiCall, initialData 
 
                         <section className="space-y-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
                             <div>
-                                <label className="mb-1.5 block text-sm font-semibold text-gray-800">Footer <span className="font-normal text-gray-400">Optional</span></label>
-                                <input disabled={isPreApproved} className={`${fieldClass} ${isPreApproved ? 'opacity-60 bg-gray-50' : ''}`} placeholder="Reply STOP to unsubscribe" value={data.footerText} onChange={e => setData({ ...data, footerText: e.target.value })} />
+                                <label className="mb-1.5 block text-sm font-semibold text-gray-800">Footer <span className="font-normal text-gray-400">· Optional</span></label>
+                                <div className="relative">
+                                    <input
+                                        disabled={isPreApproved}
+                                        className={`${fieldClass} pr-14 ${isPreApproved ? 'opacity-60 bg-gray-50' : ''} ${data.footerText.length > 60 ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20' : ''}`}
+                                        placeholder="Reply STOP to unsubscribe"
+                                        value={data.footerText}
+                                        onChange={e => setData({ ...data, footerText: e.target.value })}
+                                    />
+                                    <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono select-none ${data.footerText.length > 60 ? 'text-red-600 font-semibold' : 'text-gray-400'}`}>
+                                        {data.footerText.length}/60
+                                    </span>
+                                </div>
                             </div>
 
                             <div>
@@ -1687,7 +1700,18 @@ function CreateTemplateModal({ isOpen, onClose, onSuccess, apiCall, initialData 
                                                     className="py-2"
                                                     disabled={isPreApproved}
                                                 />
-                                                <input disabled={isPreApproved} className={`${fieldClass} py-2 ${isPreApproved ? 'opacity-60 bg-gray-50' : ''}`} placeholder="Button text" value={btn.text} onChange={e => updateButton(i, { text: e.target.value })} />
+                                                <div className="relative">
+                                                    <input
+                                                        disabled={isPreApproved}
+                                                        className={`${fieldClass} py-2 pr-12 ${isPreApproved ? 'opacity-60 bg-gray-50' : ''} ${(btn.text || '').length > 25 ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20' : ''}`}
+                                                        placeholder="Button text"
+                                                        value={btn.text}
+                                                        onChange={e => updateButton(i, { text: e.target.value })}
+                                                    />
+                                                    <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono select-none ${(btn.text || '').length > 25 ? 'text-red-600 font-semibold' : 'text-gray-400'}`}>
+                                                        {(btn.text || '').length}/25
+                                                    </span>
+                                                </div>
                                                 <button type="button" disabled={isPreApproved} onClick={() => setData(prev => ({ ...prev, buttons: prev.buttons.filter((_, idx) => idx !== i) }))} className="flex h-10 w-10 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 disabled:cursor-not-allowed">
                                                     <Trash2 className="h-4 w-4" />
                                                 </button>
@@ -1841,21 +1865,21 @@ function CreateTemplateModal({ isOpen, onClose, onSuccess, apiCall, initialData 
             <div className="sticky bottom-0 z-10 -mx-1 flex flex-col-reverse gap-3 bg-white/95 px-1 pt-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
                 <p className="hidden text-xs text-gray-500 sm:block">Meta usually reviews submitted templates within 24 hours.</p>
                 <div className="flex flex-col-reverse gap-2 sm:flex-row">
-                <button
-                    onClick={closeModal}
-                    disabled={isSubmitting}
-                    className="h-10 rounded-full border border-gray-300 bg-white px-5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                >
-                    Cancel
-                </button>
-                <button
-                    disabled={isSubmitting || !canSubmit}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#0070d1] px-5 text-sm font-semibold text-white shadow-sm hover:bg-[#0064b7] disabled:cursor-not-allowed disabled:opacity-50"
-                    onClick={handleSubmit}
-                >
-                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                    {isSubmitting ? 'Submitting...' : 'Submit for review'}
-                </button>
+                    <button
+                        onClick={closeModal}
+                        disabled={isSubmitting}
+                        className="h-10 rounded-full border border-gray-300 bg-white px-5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        disabled={isSubmitting || !canSubmit}
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#0070d1] px-5 text-sm font-semibold text-white shadow-sm hover:bg-[#0064b7] disabled:cursor-not-allowed disabled:opacity-50"
+                        onClick={handleSubmit}
+                    >
+                        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                        {isSubmitting ? 'Submitting...' : 'Submit for review'}
+                    </button>
                 </div>
             </div>
         </Modal>
