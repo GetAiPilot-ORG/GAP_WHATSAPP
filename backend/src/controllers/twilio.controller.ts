@@ -51,7 +51,7 @@ export async function buyNumber(req: any, res: Response) {
         // Buy the number
         const purchasedNumber = await twilioClient.incomingPhoneNumbers.create({
             phoneNumber,
-            friendlyName: `GAP FlowPilot - Org ${orgId}`
+            friendlyName: `GAP WhatsApp Pilot - Org ${orgId}`
         });
 
         // Save it to w_wa_accounts as a connected/setup number (or pending)

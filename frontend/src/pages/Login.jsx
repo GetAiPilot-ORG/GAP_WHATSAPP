@@ -42,7 +42,7 @@ export default function Login() {
                 <section className="relative hidden min-h-screen overflow-hidden bg-black lg:block">
                     <img
                         src="/login.jpg"
-                        alt="GAP FlowPilot workspace"
+                        alt="GAP WhatsApp Pilot workspace"
                         className="absolute inset-0 h-full w-full scale-105 object-cover"
                     />
                     <div className="absolute inset-0 bg-black/72" />
@@ -51,10 +51,10 @@ export default function Login() {
                     <div className="relative z-10 flex h-full flex-col justify-between p-10 xl:p-14">
                         <div className="flex items-center gap-3">
                             <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-white/10 ring-1 ring-white/15 backdrop-blur-md">
-                                <img src="/logo.png" alt="GAP FlowPilot" className="h-7 w-7 object-contain" />
+                                <img src="/logo.png" alt="GAP WhatsApp Pilot" className="h-7 w-7 object-contain" />
                             </span>
                             <div>
-                                <p className="text-sm font-semibold text-white">GAP FlowPilot</p>
+                                <p className="text-sm font-semibold text-white">GAP WhatsApp Pilot</p>
                                 <p className="text-xs text-white/60">WhatsApp automation workspace</p>
                             </div>
                         </div>
@@ -89,10 +89,10 @@ export default function Login() {
                     <div className="w-full max-w-[460px]">
                         <div className="mb-10 flex items-center gap-3 lg:hidden">
                             <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-white">
-                                <img src="/logo.png" alt="GAP FlowPilot" className="h-6 w-6 object-contain" />
+                                <img src="/logo.png" alt="GAP WhatsApp Pilot" className="h-6 w-6 object-contain" />
                             </span>
                             <div>
-                                <p className="text-sm font-semibold text-gray-950">GAP FlowPilot</p>
+                                <p className="text-sm font-semibold text-gray-950">GAP WhatsApp Pilot</p>
                                 <p className="text-xs text-gray-500">WhatsApp automation workspace</p>
                             </div>
                         </div>
@@ -101,10 +101,10 @@ export default function Login() {
                             <div>
                                 <div className="mb-7 hidden items-center gap-3 lg:flex">
                                     <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-white">
-                                        <img src="/logo.png" alt="GAP FlowPilot" className="h-6 w-6 object-contain" />
+                                        <img src="/logo.png" alt="GAP WhatsApp Pilot" className="h-6 w-6 object-contain" />
                                     </span>
                                     <div>
-                                        <p className="text-sm font-semibold text-gray-950">GAP FlowPilot</p>
+                                        <p className="text-sm font-semibold text-gray-950">GAP WhatsApp Pilot</p>
                                         <p className="text-xs text-gray-500">Owner workspace</p>
                                     </div>
                                 </div>

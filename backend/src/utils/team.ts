@@ -45,14 +45,14 @@ export async function sendTeamInviteEmail(params: {
 
     await sendEmail(
         params.email,
-        `Invitation to join GAP FlowPilot Team`,
+        `Invitation to join GAP WhatsApp Pilot Team`,
         `
         <!DOCTYPE html>
         <html>
         <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Invitation to join GAP FlowPilot Team</title>
+            <title>Invitation to join GAP WhatsApp Pilot Team</title>
             <style>
                 @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&display=swap');
                 @media screen and (max-width: 600px) {
@@ -72,10 +72,10 @@ export async function sendTeamInviteEmail(params: {
                     
                     <!-- Header Wordmark -->
                     <div class="content-padding" style="padding: 32px 48px 24px 48px; text-align: center; border-bottom: 1px solid #e2e8f0;">
-                        <img src="${logoUrl}" alt="GAP FlowPilot Logo" width="52" height="52" style="width: 52px; height: 52px; margin-bottom: 12px; display: inline-block; border: 0;" />
+                        <img src="${logoUrl}" alt="GAP WhatsApp Pilot Logo" width="52" height="52" style="width: 52px; height: 52px; margin-bottom: 12px; display: inline-block; border: 0;" />
                         <br />
                         <span style="font-family: 'Instrument Serif', Georgia, serif; font-size: 28px; line-height: 0.95; tracking-tight; color: #0f172a; font-style: italic; display: inline-block;">
-                            GAP FlowPilot
+                            GAP WhatsApp Pilot
                         </span>
                         <div style="font-size: 11px; tracking-widest; letter-spacing: 0.22em; font-weight: 700; color: #047857; margin-top: 4px; text-transform: uppercase;">
                             INVITATION
@@ -155,7 +155,7 @@ export async function sendTeamInviteEmail(params: {
                     <!-- Footer -->
                     <footer style="background-color: #f8fafc; padding: 32px 48px; text-align: center; border-top: 1px solid #e2e8f0;">
                         <a href="#" style="font-family: 'Instrument Serif', Georgia, serif; font-size: 24px; color: #0f172a; text-decoration: none; font-style: italic; display: inline-block; margin-bottom: 12px;">
-                            GAP FlowPilot
+                            GAP WhatsApp Pilot
                         </a>
                         <p style="margin: 0 auto 16px auto; max-width: 440px; color: #64748b; font-size: 11px; line-height: 1.6;">
                             This is an automated invitation sent from your organization workspace. Please do not reply directly to this email.
@@ -171,7 +171,7 @@ export async function sendTeamInviteEmail(params: {
                         </div>
 
                         <p style="margin: 0; color: #94a3b8; font-size: 11px;">
-                            ©2026 GAP FlowPilot, 660 4th Street #443, San Francisco, CA 94107 USA
+                            ©2026 GAP WhatsApp Pilot, 660 4th Street #443, San Francisco, CA 94107 USA
                         </p>
                     </footer>
 
