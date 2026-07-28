@@ -461,9 +461,10 @@ export async function sendInteractiveList(
 export async function sendTypingIndicator(params: {
   phone_number_id: string;
   message_id: string;
+  to?: string;
   token?: string;
 }): Promise<any> {
-  const { phone_number_id, message_id } = params;
+  const { phone_number_id, message_id, to } = params;
   if (!phone_number_id || !message_id) return null;
 
   try {
@@ -488,8 +489,9 @@ export async function sendTypingIndicator(params: {
       return null;
     }
 
-    const url = `https://graph.facebook.com/v21.0/${phone_number_id}/messages`;
-    const payload = {
+    const graphVersion = process.env.META_GRAPH_VERSION || 'v21.0';
+    const url = `https://graph.facebook.com/${graphVersion}/${phone_number_id}/messages`;
+    const payload: any = {
       messaging_product: "whatsapp",
       status: "read",
       message_id: message_id,
@@ -497,6 +499,10 @@ export async function sendTypingIndicator(params: {
         type: "text"
       }
     };
+    if (to) {
+      payload.recipient_type = "individual";
+      payload.to = to;
+    }
 
     const res = await fetchWithMetaBackoff(url, {
       method: "POST",
@@ -511,7 +517,7 @@ export async function sendTypingIndicator(params: {
     if (!res.ok) {
       console.warn(`[TypingIndicator] Meta returned status ${res.status} for message ${message_id}:`, JSON.stringify(json));
     } else {
-      console.log(`💬 [TypingIndicator] Sent typing indicator & marked message ${message_id} as read`);
+      console.log(`💬 [TypingIndicator] Sent typing indicator & marked message ${message_id} as read (to: ${to || 'unspecified'})`);
     }
     return json;
   } catch (err: any) {

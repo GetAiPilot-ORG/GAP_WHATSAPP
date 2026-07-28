@@ -594,7 +594,14 @@ export async function processFlowEngine(
     }
     const nodes = version?.nodes || flow.nodes || [];
     const startNode = nodes.find((n: any) => n?.type === 'startBotFlow');
-    const matchType = String(startNode?.data?.config?.matchType || flow?.match_type || 'string').toLowerCase().trim();
+    const matchType = String(
+      startNode?.data?.config?.matchType ||
+      startNode?.data?.matchType ||
+      startNode?.config?.matchType ||
+      version?.match_type ||
+      flow?.match_type ||
+      'string'
+    ).toLowerCase().trim();
     const triggers = getFlowTriggerKeywords(version || flow, nodes);
     hydratedFlows.push({ flow, version, nodes, startNode, matchType, triggers });
   }
