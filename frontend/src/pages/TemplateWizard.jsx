@@ -82,7 +82,7 @@ function WhatsAppPreview({ form, mediaUrl }) {
       <div className="mb-3 flex items-center justify-between px-1">
         <p className="text-sm font-semibold text-slate-900">Live preview</p>
         <span className="flex items-center gap-1.5 rounded-full bg-emerald-50 py-1 pl-1.5 pr-2.5 text-[10px] font-semibold text-emerald-700">
-          <svg className="h-3.5 w-3.5 fill-current" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.888-.788-1.489-1.761-1.663-2.06-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"/></svg>
+          <svg className="h-3.5 w-3.5 fill-current" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.888-.788-1.489-1.761-1.663-2.06-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z" /></svg>
           WhatsApp
         </span>
       </div>
@@ -98,16 +98,16 @@ function WhatsAppPreview({ form, mediaUrl }) {
         <div className="absolute -left-[10px] top-[80px] h-6 w-0.5 rounded-l-sm bg-slate-800"></div>
         <div className="absolute -left-[10px] top-[115px] h-11 w-0.5 rounded-l-sm bg-slate-800"></div>
         <div className="absolute -left-[10px] top-[165px] h-11 w-0.5 rounded-l-sm bg-slate-800"></div>
-        
+
         <div className="absolute -right-[10px] top-[135px] h-14 w-0.5 rounded-r-sm bg-slate-800"></div>
 
         <div className="relative flex h-full w-full flex-col overflow-hidden rounded-[32px] bg-[#efeae2]">
-          
+
           <div className="absolute left-0 right-0 top-0 z-40 flex h-10 items-center justify-between px-4 pt-1 text-[10px] font-semibold text-slate-900 bg-white/70 backdrop-blur-md">
             <span className="mt-1">9:41</span>
             <div className="mt-1 flex items-center gap-1.5">
-              <svg className="h-2 w-3" viewBox="0 0 16 11" fill="none"><path d="M1 10.5H3V5.5H1V10.5ZM5 10.5H7V3.5H5V10.5ZM9 10.5H11V1.5H9V10.5ZM13 10.5H15V0H13V10.5Z" fill="currentColor"/></svg>
-              <svg className="h-2.5 w-3.5" viewBox="0 0 16 12" fill="none"><path d="M8 0.5C4.85 0.5 2 1.7 0 3.65L8 11.5L16 3.65C14 1.7 11.15 0.5 8 0.5Z" fill="currentColor"/></svg>
+              <svg className="h-2 w-3" viewBox="0 0 16 11" fill="none"><path d="M1 10.5H3V5.5H1V10.5ZM5 10.5H7V3.5H5V10.5ZM9 10.5H11V1.5H9V10.5ZM13 10.5H15V0H13V10.5Z" fill="currentColor" /></svg>
+              <svg className="h-2.5 w-3.5" viewBox="0 0 16 12" fill="none"><path d="M8 0.5C4.85 0.5 2 1.7 0 3.65L8 11.5L16 3.65C14 1.7 11.15 0.5 8 0.5Z" fill="currentColor" /></svg>
               <div className="h-2 w-[18px] rounded-sm border border-current p-[1px]"><div className="h-full w-full rounded-[1px] bg-current"></div></div>
             </div>
           </div>
@@ -124,17 +124,17 @@ function WhatsAppPreview({ form, mediaUrl }) {
 
           <div className="flex-1 overflow-y-auto px-2.5 pb-5 pt-2.5 scrollbar-thin scrollbar-thumb-slate-300">
             <div className="mb-3 text-center"><span className="inline-block rounded-lg bg-white/80 px-2 py-1 text-[8.5px] font-medium text-slate-500 shadow-sm backdrop-blur-sm">TODAY</span></div>
-            
+
             <div className="mb-2 w-full overflow-hidden rounded-[14px] rounded-tl-sm bg-white shadow-sm" dir={language.rtl ? 'rtl' : 'ltr'}>
               {form.headerType === 'TEXT' && form.headerText && <p className="px-2.5 pt-2.5 text-[12px] font-semibold text-slate-900">{form.headerText}</p>}
               {form.headerType === 'IMAGE' && (mediaUrl ? <img src={mediaUrl} alt="Header preview" className="h-28 w-full object-cover" /> : <div className="flex h-28 items-center justify-center bg-slate-100 text-slate-400"><Image className="h-5 w-5" /></div>)}
               {form.headerType === 'VIDEO' && (mediaUrl ? <video src={mediaUrl} className="h-28 w-full bg-black object-cover" muted controls /> : <div className="flex h-28 items-center justify-center bg-slate-100 text-slate-400"><Video className="h-5 w-5" /></div>)}
               {form.headerType === 'DOCUMENT' && <div className="flex h-16 flex-col items-center justify-center gap-1.5 bg-slate-100 text-slate-500"><FileText className="h-4 w-4" /><span className="max-w-[180px] truncate text-[9px]">{mediaUrl ? 'Document selected' : 'Document preview'}</span></div>}
-              
+
               <p className="whitespace-pre-wrap break-words px-2.5 pt-2 text-[11.5px] leading-[1.4] text-slate-800">{body}</p>
               {form.footerText && <p className="px-2.5 pt-1 text-[9.5px] text-slate-500">{form.footerText}</p>}
               <p className="px-2.5 pb-1.5 text-right text-[8.5px] text-slate-400 mt-0.5">10:00 AM <span className="text-sky-500">✓✓</span></p>
-              
+
               {(isAuth || form.templateType === 'CATALOG' || form.templateType === 'FLOW' || form.templateType === 'CALL_PERMISSION_REQUEST' || form.buttons.length > 0) && (
                 <div className="border-t border-slate-100 text-center text-[11px] font-semibold text-sky-600">
                   {isAuth ? <div className="py-2 active:bg-slate-50 transition-colors">{form.otpType === 'COPY_CODE' ? 'Copy code' : 'Autofill'}</div>
@@ -215,7 +215,7 @@ export default function TemplateWizard() {
   });
   const headerHasVariable = /\{\{\s*1\s*\}\}/.test(form.headerText);
   const headerValid = form.headerType !== 'TEXT' || (Boolean(form.headerText.trim()) && (!headerHasVariable || Boolean(form.headerSample.trim())));
-  const stepTwoValid = commonValid && samplesValid && typeValid && buttonsValid && headerValid && !(['IMAGE', 'VIDEO', 'DOCUMENT'].includes(form.headerType) && !file);
+  const stepTwoValid = commonValid && samplesValid && typeValid && buttonsValid && headerValid && !(['IMAGE', 'VIDEO', 'DOCUMENT'].includes(form.headerType) && !file) && form.headerText.length <= 60 && form.footerText.length <= 60 && (form.templateType !== 'FLOW' || (form.flowButtonText || '').length <= 25) && form.buttons.every(b => (b.text || '').length <= 25);
 
   const selectCategory = category => update({ category, templateType: category === 'AUTHENTICATION' ? 'AUTHENTICATION' : 'DEFAULT' });
   const addVariable = () => {
@@ -355,7 +355,24 @@ export default function TemplateWizard() {
                   <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                     <h2 className="font-semibold text-slate-900">Header <span className="font-normal text-slate-400">Optional</span></h2>
                     <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">{[['NONE', 'None', null], ['TEXT', 'Text', Type], ['IMAGE', 'Image', Image], ['VIDEO', 'Video', Video], ['DOCUMENT', 'Document', FileText]].filter(([value]) => form.templateType !== 'CALL_PERMISSION_REQUEST' || ['NONE', 'TEXT'].includes(value)).map(([value, label, Icon]) => <button key={value} onClick={() => { update({ headerType: value, headerText: '' }); setFile(null); }} className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold ${form.headerType === value ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200'}`}>{Icon && <Icon className="h-4 w-4" />}{label}</button>)}</div>
-                    {form.headerType === 'TEXT' && <><input className={`${fieldClass} mt-3`} maxLength={60} value={form.headerText} onChange={event => update({ headerText: event.target.value })} placeholder="Order update" />{headerHasVariable && <input className={`${fieldClass} mt-2`} value={form.headerSample} onChange={event => update({ headerSample: event.target.value })} placeholder="Sample for {{1}}" />}</>}
+                    {form.headerType === 'TEXT' && (
+                      <>
+                        <div className="relative mt-3">
+                          <input
+                            className={`${fieldClass} pr-14 ${form.headerText.length > 60 ? 'border-red-300 focus:border-red-500' : ''}`}
+                            value={form.headerText}
+                            onChange={event => update({ headerText: event.target.value })}
+                            placeholder="Order update"
+                          />
+                          <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono select-none ${form.headerText.length > 60 ? 'text-red-600 font-semibold' : 'text-slate-400'}`}>
+                            {form.headerText.length}/60
+                          </span>
+                        </div>
+                        {headerHasVariable && (
+                          <input className={`${fieldClass} mt-2`} value={form.headerSample} onChange={event => update({ headerSample: event.target.value })} placeholder="Sample for {{1}}" />
+                        )}
+                      </>
+                    )}
                     {['IMAGE', 'VIDEO', 'DOCUMENT'].includes(form.headerType) && (
                       <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 transition hover:border-blue-400 hover:bg-blue-50/40">
                         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-blue-600 shadow-sm"><UploadCloud className="h-5 w-5" /></span>
@@ -374,12 +391,56 @@ export default function TemplateWizard() {
                     <button onClick={addVariable} className="mt-2 flex items-center gap-1 text-xs font-semibold text-emerald-700"><Plus className="h-3.5 w-3.5" /> Add variable</button>
                     {!!variables.length && <div className="mt-3 grid gap-3 rounded-xl bg-blue-50 p-3 sm:grid-cols-2">{variables.map(variable => <label key={variable} className="text-xs font-semibold">Sample for {`{{${variable}}}`}<input className={`${fieldClass} mt-1 bg-white`} value={form.bodySamples[variable] || ''} onChange={event => update({ bodySamples: { ...form.bodySamples, [variable]: event.target.value } })} /></label>)}</div>}
                   </section>
-                  <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><label className="text-sm font-semibold">Footer <span className="font-normal text-slate-400">Optional</span><input className={`${fieldClass} mt-2`} maxLength={60} value={form.footerText} onChange={event => update({ footerText: event.target.value })} /></label></section>
+                  <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <label className="text-sm font-semibold">
+                      Footer <span className="font-normal text-slate-400">· Optional</span>
+                      <div className="relative mt-2">
+                        <input
+                          className={`${fieldClass} pr-14 ${form.footerText.length > 60 ? 'border-red-300 focus:border-red-500' : ''}`}
+                          value={form.footerText}
+                          onChange={event => update({ footerText: event.target.value })}
+                          placeholder="Reply STOP to unsubscribe"
+                        />
+                        <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono select-none ${form.footerText.length > 60 ? 'text-red-600 font-semibold' : 'text-slate-400'}`}>
+                          {form.footerText.length}/60
+                        </span>
+                      </div>
+                    </label>
+                  </section>
                 </>
               )}
 
               {form.templateType === 'CATALOG' && <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><label className="text-sm font-semibold">Connected catalog<select className={`${fieldClass} mt-2`} value={form.catalogId} onChange={event => update({ catalogId: event.target.value })}><option value="">Select catalog</option>{context.catalogs.map(catalog => <option key={catalog.id} value={catalog.id}>{catalog.name}</option>)}</select></label><p className="mt-2 text-xs text-slate-500">Meta adds the fixed “View catalog” action automatically.</p></section>}
-              {form.templateType === 'FLOW' && <section className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:grid-cols-2"><label className="text-sm font-semibold">Published Meta Flow<select className={`${fieldClass} mt-2`} value={form.flowId} onChange={event => update({ flowId: event.target.value, flowScreen: '' })}><option value="">Select flow</option>{context.flows.map(flow => <option key={flow.id} value={flow.id}>{flow.name}</option>)}</select></label><label className="text-sm font-semibold">Destination screen<input className={`${fieldClass} mt-2`} value={form.flowScreen} onChange={event => update({ flowScreen: event.target.value })} placeholder={flowScreens[0]?.id || 'WELCOME_SCREEN'} list="flow-screens" /><datalist id="flow-screens">{flowScreens.map(screen => <option key={screen.id} value={screen.id} />)}</datalist></label><label className="text-sm font-semibold md:col-span-2">Button label<input className={`${fieldClass} mt-2`} maxLength={25} value={form.flowButtonText} onChange={event => update({ flowButtonText: event.target.value })} /></label></section>}
+              {form.templateType === 'FLOW' && (
+                <section className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:grid-cols-2">
+                  <label className="text-sm font-semibold">
+                    Published Meta Flow
+                    <select className={`${fieldClass} mt-2`} value={form.flowId} onChange={event => update({ flowId: event.target.value, flowScreen: '' })}>
+                      <option value="">Select flow</option>
+                      {context.flows.map(flow => <option key={flow.id} value={flow.id}>{flow.name}</option>)}
+                    </select>
+                  </label>
+                  <label className="text-sm font-semibold">
+                    Destination screen
+                    <input className={`${fieldClass} mt-2`} value={form.flowScreen} onChange={event => update({ flowScreen: event.target.value })} placeholder={flowScreens[0]?.id || 'WELCOME_SCREEN'} list="flow-screens" />
+                    <datalist id="flow-screens">{flowScreens.map(screen => <option key={screen.id} value={screen.id} />)}</datalist>
+                  </label>
+                  <label className="text-sm font-semibold md:col-span-2">
+                    Button label
+                    <div className="relative mt-2">
+                      <input
+                        className={`${fieldClass} pr-12 ${(form.flowButtonText || '').length > 25 ? 'border-red-300 focus:border-red-500' : ''}`}
+                        value={form.flowButtonText}
+                        onChange={event => update({ flowButtonText: event.target.value })}
+                        placeholder="Button label"
+                      />
+                      <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono select-none ${(form.flowButtonText || '').length > 25 ? 'text-red-600 font-semibold' : 'text-slate-400'}`}>
+                        {(form.flowButtonText || '').length}/25
+                      </span>
+                    </div>
+                  </label>
+                </section>
+              )}
               {form.templateType === 'CALL_PERMISSION_REQUEST' && <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><ShieldCheck className="mr-2 inline h-4 w-4" />WhatsApp renders the permission controls. Customers can allow, temporarily allow, or decline calls; this system component cannot be edited.</section>}
 
               {form.templateType === 'DEFAULT' && (
@@ -403,7 +464,19 @@ export default function TemplateWizard() {
                             <button key={value} type="button" onClick={() => update({ buttons: form.buttons.map((item, itemIndex) => itemIndex === index ? { type: value, text: '', url: '', urlType: 'STATIC', urlExample: '', phone_number: '' } : item) })} className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${button.type === value ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}>{label}</button>
                           ))}
                         </div>
-                        {button.type !== 'COPY_CODE' && <input className={`${fieldClass} mt-3`} maxLength={25} value={button.text || ''} onChange={event => update({ buttons: form.buttons.map((item, itemIndex) => itemIndex === index ? { ...item, text: event.target.value } : item) })} placeholder="Button label" />}
+                        {button.type !== 'COPY_CODE' && (
+                          <div className="relative mt-3">
+                            <input
+                              className={`${fieldClass} pr-12 ${(button.text || '').length > 25 ? 'border-red-300 focus:border-red-500' : ''}`}
+                              value={button.text || ''}
+                              onChange={event => update({ buttons: form.buttons.map((item, itemIndex) => itemIndex === index ? { ...item, text: event.target.value } : item) })}
+                              placeholder="Button label"
+                            />
+                            <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono select-none ${(button.text || '').length > 25 ? 'text-red-600 font-semibold' : 'text-slate-400'}`}>
+                              {(button.text || '').length}/25
+                            </span>
+                          </div>
+                        )}
                         {button.type === 'URL' && (
                           <div className="mt-3 space-y-3 rounded-lg border border-slate-200 bg-white p-3">
                             <div>
