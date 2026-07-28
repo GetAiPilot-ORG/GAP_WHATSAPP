@@ -60,7 +60,7 @@ export default function AcceptInvite() {
                 </div>
                 <div className="mt-5 flex items-center justify-center gap-2 text-sm font-bold uppercase tracking-wide text-gray-400">
                     <UserCheck className="h-4 w-4" />
-                    GAP FlowPilot invite
+                    GAP WhatsApp Pilot invite
                 </div>
                 <h1 className="mt-3 text-2xl font-bold text-gray-950">
                     {isError ? 'Invitation unavailable' : status === 'success' ? 'Invite accepted' : 'Accepting invitation'}
