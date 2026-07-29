@@ -925,5 +925,592 @@ export const META_TEMPLATES_LIBRARY = [
                 example: { body_text: [['John', 'our platform', 'August 1']] }
             }
         ]
-    }
+    },
+    
+  {
+    "id": "meta-hinglish-1",
+    "name": "lead_follow_up_reminder",
+    "displayName": "Lead Follow Up Reminder",
+    "category": "MARKETING",
+    "useCase": "LEAD_NURTURING",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}}, bas ek quick reminder 😊. Aapne {{2}} ke baare mein enquiry ki thi. Agar aap ready hain to hum aapki help karne ke liye available hain.",
+        "example": {
+          "body_text": [
+            ["Rahul", "AI Automation Service"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "QUICK_REPLY",
+            "text": "Yes, Interested"
+          },
+          {
+            "type": "QUICK_REPLY",
+            "text": "Need More Info"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-2",
+    "name": "limited_time_offer",
+    "displayName": "Limited Time Offer",
+    "category": "MARKETING",
+    "useCase": "LIMITED_TIME_OFFER",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}} 🎉 Sirf {{2}} tak aapke liye special offer available hai. Is opportunity ko miss mat kariye.",
+        "example": {
+          "body_text": [
+            ["Rahul", "31 July"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "URL",
+            "text": "Claim Offer",
+            "url": "https://example.com/offer"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-3",
+    "name": "callback_request",
+    "displayName": "Request a Callback",
+    "category": "MARKETING",
+    "useCase": "CALLBACK_REQUEST",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}}, agar aap busy hain to koi problem nahi 😊. Hum aapko aapke convenient time par call kar sakte hain.",
+        "example": {
+          "body_text": [
+            ["Rahul"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "QUICK_REPLY",
+            "text": "Call Me"
+          },
+          {
+            "type": "QUICK_REPLY",
+            "text": "Later"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-4",
+    "name": "booking_confirmation_hinglish",
+    "displayName": "Booking Confirmation",
+    "category": "UTILITY",
+    "useCase": "BOOKING_CONFIRMATION",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}}, aapki booking {{2}} ke liye successfully confirm ho gayi hai. Hum aapse {{3}} ko milenge.",
+        "example": {
+          "body_text": [
+            ["Rahul", "Demo Session", "30 July"]
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-5",
+    "name": "payment_reminder_hinglish",
+    "displayName": "Payment Reminder",
+    "category": "UTILITY",
+    "useCase": "PAYMENT_REMINDER",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}}, friendly reminder 😊. Aapka payment {{2}} abhi pending hai. Kripya due date se pehle complete kar dein.",
+        "example": {
+          "body_text": [
+            ["Rahul", "$250"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "URL",
+            "text": "Pay Now",
+            "url": "https://example.com/pay"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-6",
+    "name": "free_demo_invitation",
+    "displayName": "Free Demo Invitation",
+    "category": "MARKETING",
+    "useCase": "FREE_DEMO",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}}, sirf 15 minutes ka FREE demo book kijiye aur dekhiye kaise {{2}} aapke business ko grow kar sakta hai.",
+        "example": {
+          "body_text": [
+            ["Rahul", "AI Automation"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "URL",
+            "text": "Book Demo",
+            "url": "https://example.com/demo"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-7",
+    "name": "customer_feedback_hinglish",
+    "displayName": "Customer Feedback",
+    "category": "UTILITY",
+    "useCase": "CUSTOMER_FEEDBACK",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}}, humein umeed hai ki aapka experience accha raha hoga. Aapka feedback humare liye bahut valuable hai 😊.",
+        "example": {
+          "body_text": [
+            ["Rahul"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "QUICK_REPLY",
+            "text": "Excellent"
+          },
+          {
+            "type": "QUICK_REPLY",
+            "text": "Good"
+          },
+          {
+            "type": "QUICK_REPLY",
+            "text": "Needs Improvement"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-8",
+    "name": "cart_reminder_hinglish",
+    "displayName": "Cart Reminder",
+    "category": "MARKETING",
+    "useCase": "CART_RECOVERY",
+    "industry": "E-commerce",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}}, aapke selected products abhi bhi cart mein hain 🛒. Order complete karke unhe apna bana lijiye.",
+        "example": {
+          "body_text": [
+            ["Rahul"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "URL",
+            "text": "Complete Order",
+            "url": "https://example.com/cart"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-9",
+    "name": "membership_expiring",
+    "displayName": "Membership Expiring",
+    "category": "UTILITY",
+    "useCase": "MEMBERSHIP_EXPIRY",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}}, aapki membership {{2}} ko expire ho rahi hai. Benefits continue rakhne ke liye renew kar lijiye.",
+        "example": {
+          "body_text": [
+            ["Rahul", "31 July"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "URL",
+            "text": "Renew Now",
+            "url": "https://example.com/renew"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-10",
+    "name": "exclusive_vip_offer",
+    "displayName": "VIP Exclusive Offer",
+    "category": "MARKETING",
+    "useCase": "VIP_PROMOTION",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}} 🌟 Aap humare special customers mein se ek hain. Isliye aapke liye exclusive {{2}} offer reserve kiya gaya hai.",
+        "example": {
+          "body_text": [
+            ["Rahul", "25% OFF"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "URL",
+            "text": "Unlock Offer",
+            "url": "https://example.com/vip"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-11",
+    "name": "new_launch_invitation",
+    "displayName": "New Launch Invitation",
+    "category": "MARKETING",
+    "useCase": "PRODUCT_LAUNCH",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}} 🎉 Humne abhi-abhi {{2}} launch kiya hai. Sabse pehle explore kijiye aur special launch benefits ka fayda uthaiye.",
+        "example": {
+          "body_text": [
+            ["Rahul", "AI Voice Agent"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "URL",
+            "text": "Explore Now",
+            "url": "https://example.com/launch"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-12",
+    "name": "price_drop_notification",
+    "displayName": "Price Drop Notification",
+    "category": "MARKETING",
+    "useCase": "PRICE_DROP",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}} 😊 Good news! {{2}} ki price ab sirf {{3}} hai. Yeh offer limited time ke liye available hai.",
+        "example": {
+          "body_text": [
+            ["Rahul", "Premium Plan", "$49"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "URL",
+            "text": "Buy Now",
+            "url": "https://example.com/pricing"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-13",
+    "name": "document_request",
+    "displayName": "Document Request",
+    "category": "UTILITY",
+    "useCase": "DOCUMENT_COLLECTION",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}}, process complete karne ke liye humein {{2}} ki zarurat hai. Kripya jaldi upload kar dein.",
+        "example": {
+          "body_text": [
+            ["Rahul", "ID Proof"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "URL",
+            "text": "Upload Document",
+            "url": "https://example.com/upload"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-14",
+    "name": "service_completed",
+    "displayName": "Service Completed",
+    "category": "UTILITY",
+    "useCase": "SERVICE_UPDATE",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}}, aapki {{2}} service successfully complete ho gayi hai. Humein serve karne ka mauka dene ke liye dhanyavaad.",
+        "example": {
+          "body_text": [
+            ["Rahul", "Website Development"]
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-15",
+    "name": "referral_invitation",
+    "displayName": "Refer & Earn",
+    "category": "MARKETING",
+    "useCase": "REFERRAL_PROGRAM",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}} 🎁 Apne doston ko refer kijiye aur har successful referral par {{2}} reward paiye.",
+        "example": {
+          "body_text": [
+            ["Rahul", "$20"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "URL",
+            "text": "Refer Friends",
+            "url": "https://example.com/refer"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-16",
+    "name": "follow_up_after_demo",
+    "displayName": "Demo Follow Up",
+    "category": "MARKETING",
+    "useCase": "POST_DEMO_FOLLOWUP",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}}, demo attend karne ke liye thank you 😊. Agar aapke koi questions hain ya next step discuss karna chahte hain to hum available hain.",
+        "example": {
+          "body_text": [
+            ["Rahul"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "QUICK_REPLY",
+            "text": "I'm Interested"
+          },
+          {
+            "type": "QUICK_REPLY",
+            "text": "Need More Info"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-17",
+    "name": "renewal_success",
+    "displayName": "Renewal Successful",
+    "category": "UTILITY",
+    "useCase": "SUBSCRIPTION_RENEWED",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}} 🎉 Aapki {{2}} membership successfully renew ho gayi hai. Thank you for staying with us.",
+        "example": {
+          "body_text": [
+            ["Rahul", "Premium"]
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-18",
+    "name": "festival_special_offer",
+    "displayName": "Festival Special Offer",
+    "category": "MARKETING",
+    "useCase": "SEASONAL_PROMOTION",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}} ✨ {{2}} ke mauke par hum lekar aaye hain special {{3}} discount. Offer sirf limited period ke liye valid hai.",
+        "example": {
+          "body_text": [
+            ["Rahul", "Diwali", "30%"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "URL",
+            "text": "Claim Offer",
+            "url": "https://example.com/festival"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-19",
+    "name": "profile_completion_reminder",
+    "displayName": "Complete Your Profile",
+    "category": "UTILITY",
+    "useCase": "PROFILE_COMPLETION",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}}, aapka profile abhi complete nahi hua hai. Bas kuch simple steps complete karke saare features unlock kijiye.",
+        "example": {
+          "body_text": [
+            ["Rahul"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "URL",
+            "text": "Complete Profile",
+            "url": "https://example.com/profile"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-20",
+    "name": "exclusive_last_chance_offer",
+    "displayName": "Last Chance Offer",
+    "category": "MARKETING",
+    "useCase": "LAST_CHANCE_PROMOTION",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}} ⏳ Yeh aapke special offer ka last reminder hai. Offer {{2}} ko expire ho jayega. Agar lena chahte hain to aaj hi claim kar lijiye.",
+        "example": {
+          "body_text": [
+            ["Rahul", "31 July"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "URL",
+            "text": "Claim Now",
+            "url": "https://example.com/last-offer"
+          }
+        ]
+      }
+    ]
+  }
 ];
