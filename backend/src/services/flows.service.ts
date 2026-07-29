@@ -611,22 +611,22 @@ export async function processFlowEngine(
   let matchedVersion: any = null;
 
   for (const item of hydratedFlows) {
-    fs.appendFileSync('debug.log', `\n[Phase 1] Checking ${item.flow.name}, matchType: ${item.matchType}`);
+    // fs.appendFileSync('debug.log', `\n[Phase 1] Checking ${item.flow.name}, matchType: ${item.matchType}`);
     if (item.matchType === 'exact') {
       const isMatch = item.triggers.some((t: string) => {
         const keyword = t.toLowerCase().trim();
         const matches = keyword && normalized === keyword;
-        fs.appendFileSync('debug.log', `\n  -> trigger: ${keyword}, exact match? ${matches}`);
+        // fs.appendFileSync('debug.log', `\n  -> trigger: ${keyword}, exact match? ${matches}`);
         return matches;
       });
       if (isMatch) {
-        fs.appendFileSync('debug.log', `\n[Phase 1] MATCHED ${item.flow.name}!`);
+        // fs.appendFileSync('debug.log', `\n[Phase 1] MATCHED ${item.flow.name}!`);
         matchedFlow = item.flow;
         matchedVersion = item.version;
         break;
       }
     } else {
-       fs.appendFileSync('debug.log', `\n[Phase 1] Skipped ${item.flow.name} (not exact)`);
+       // fs.appendFileSync('debug.log', `\n[Phase 1] Skipped ${item.flow.name} (not exact)`);
     }
   }
 
@@ -691,7 +691,7 @@ export async function processFlowEngine(
             .eq("id", session.active_run_id);
         }
       } else {
-        fs.appendFileSync('debug.log', `\n[Resuming] Resuming session ${session.id} for flow ${session.flow_id}`);
+        // fs.appendFileSync('debug.log', `\n[Resuming] Resuming session ${session.id} for flow ${session.flow_id}`);
         currentFlowId = session.flow_id;
         currentFlowVersionId = session.flow_version_id || null;
         currentNodeId = session.current_node_id;
@@ -705,22 +705,22 @@ export async function processFlowEngine(
   if (!isResuming && !matchedFlow) {
     // Phase 2: Check String Match flows if no exact match flow triggered and no active session
     for (const item of hydratedFlows) {
-      fs.appendFileSync('debug.log', `\n[Phase 2] Checking ${item.flow.name}, matchType: ${item.matchType}`);
+      // fs.appendFileSync('debug.log', `\n[Phase 2] Checking ${item.flow.name}, matchType: ${item.matchType}`);
       if (item.matchType !== 'exact') {
         const isMatch = item.triggers.some((t: string) => {
           const keyword = t.toLowerCase().trim();
           const matches = keyword && normalized.includes(keyword);
-          fs.appendFileSync('debug.log', `\n  -> trigger: ${keyword}, includes? ${matches}`);
+          // fs.appendFileSync('debug.log', `\n  -> trigger: ${keyword}, includes? ${matches}`);
           return matches;
         });
         if (isMatch) {
-          fs.appendFileSync('debug.log', `\n[Phase 2] MATCHED ${item.flow.name}!`);
+          // fs.appendFileSync('debug.log', `\n[Phase 2] MATCHED ${item.flow.name}!`);
           matchedFlow = item.flow;
           matchedVersion = item.version;
           break;
         }
       } else {
-         fs.appendFileSync('debug.log', `\n[Phase 2] Skipped ${item.flow.name} (is exact)`);
+         // fs.appendFileSync('debug.log', `\n[Phase 2] Skipped ${item.flow.name} (is exact)`);
       }
     }
   }
