@@ -205,9 +205,6 @@ export default function ScheduledMeetings() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 pb-5">
                 <div>
                     <div className="flex items-center gap-2.5">
-                        <div className="p-2 bg-blue-50 text-blue-600 rounded-xl border border-blue-100">
-                            <Calendar className="w-5 h-5" />
-                        </div>
                         <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">
                             Scheduled Meetings
                         </h1>
@@ -383,8 +380,8 @@ export default function ScheduledMeetings() {
                     </div>
                 ) : appointments.length === 0 ? (
                     <div className="p-12 text-center space-y-3">
-                        <div className="inline-flex p-4 bg-blue-50 text-blue-600 rounded-full">
-                            <Calendar className="w-8 h-8" />
+                        <div className="flex justify-center">
+                            <video src="/images/scheduled meetings.webm" autoPlay loop muted playsInline className="h-[140px] object-contain drop-shadow-sm" />
                         </div>
                         <h3 className="text-base font-bold text-gray-900">
                             {debouncedSearch ? 'No matching meetings found' : 'No scheduled meetings yet'}

@@ -611,23 +611,29 @@ export async function processFlowEngine(
   let matchedVersion: any = null;
 
   for (const item of hydratedFlows) {
+    fs.appendFileSync('debug.log', `\n[Phase 1] Checking ${item.flow.name}, matchType: ${item.matchType}`);
     if (item.matchType === 'exact') {
       const isMatch = item.triggers.some((t: string) => {
         const keyword = t.toLowerCase().trim();
-        return keyword && normalized === keyword;
+        const matches = keyword && normalized === keyword;
+        fs.appendFileSync('debug.log', `\n  -> trigger: ${keyword}, exact match? ${matches}`);
+        return matches;
       });
       if (isMatch) {
+        fs.appendFileSync('debug.log', `\n[Phase 1] MATCHED ${item.flow.name}!`);
         matchedFlow = item.flow;
         matchedVersion = item.version;
         break;
       }
+    } else {
+       fs.appendFileSync('debug.log', `\n[Phase 1] Skipped ${item.flow.name} (not exact)`);
     }
   }
 
   // 1. Check for active session by contact_id
   const { data: session } = await supabase
     .from("w_flow_sessions")
-    .select("*, w_flows(status)")
+    .select("*, w_flows(name, status)")
     .eq("organization_id", organization_id)
     .eq("contact_id", contact_id)
     .in("status", ["active", "waiting"])
@@ -685,6 +691,7 @@ export async function processFlowEngine(
             .eq("id", session.active_run_id);
         }
       } else {
+        fs.appendFileSync('debug.log', `\n[Resuming] Resuming session ${session.id} for flow ${session.flow_id}`);
         currentFlowId = session.flow_id;
         currentFlowVersionId = session.flow_version_id || null;
         currentNodeId = session.current_node_id;
@@ -698,16 +705,22 @@ export async function processFlowEngine(
   if (!isResuming && !matchedFlow) {
     // Phase 2: Check String Match flows if no exact match flow triggered and no active session
     for (const item of hydratedFlows) {
+      fs.appendFileSync('debug.log', `\n[Phase 2] Checking ${item.flow.name}, matchType: ${item.matchType}`);
       if (item.matchType !== 'exact') {
         const isMatch = item.triggers.some((t: string) => {
           const keyword = t.toLowerCase().trim();
-          return keyword && normalized.includes(keyword);
+          const matches = keyword && normalized.includes(keyword);
+          fs.appendFileSync('debug.log', `\n  -> trigger: ${keyword}, includes? ${matches}`);
+          return matches;
         });
         if (isMatch) {
+          fs.appendFileSync('debug.log', `\n[Phase 2] MATCHED ${item.flow.name}!`);
           matchedFlow = item.flow;
           matchedVersion = item.version;
           break;
         }
+      } else {
+         fs.appendFileSync('debug.log', `\n[Phase 2] Skipped ${item.flow.name} (is exact)`);
       }
     }
   }
@@ -854,8 +867,13 @@ export async function processFlowEngine(
     .eq("id", session_id)
     .maybeSingle();
   let flowState = latestSessionState?.state_data || session?.state_data || {};
+  
+  const flowObj = session ? (session as any).w_flows : null;
+  const sessionFlowName = flowObj ? (Array.isArray(flowObj) ? flowObj[0]?.name : flowObj?.name) : null;
+  
   const flowMeta = {
     flow_id: currentFlowId,
+    flow_name: matchedFlow?.name || sessionFlowName || "Flow",
     flow_version_id: currentFlowVersionId,
     flow_session_id: session_id,
     flow_run_id: run_id,
