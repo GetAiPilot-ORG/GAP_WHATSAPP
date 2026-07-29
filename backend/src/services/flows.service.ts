@@ -745,6 +745,7 @@ export async function processFlowEngine(
     return { consumed: false, output: null };
   }
 
+  if (!isResuming) {
     console.log("[Flow] Matched active flow", {
       organization_id,
       conversation_id,
@@ -833,6 +834,7 @@ export async function processFlowEngine(
     console.log(
       `🆕 New flow session created: ${session_id}, starting at node: ${currentNodeId}`,
     );
+  }
 
   if (!currentFlowId || !currentNodeId || !session_id) {
     return { consumed: false, output: null };
