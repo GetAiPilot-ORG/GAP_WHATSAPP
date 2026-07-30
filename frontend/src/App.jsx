@@ -32,6 +32,7 @@ import WhatsAppLinkGenerator from './pages/WhatsAppLinkGenerator'
 import WhatsAppRedirect from './pages/WhatsAppRedirect'
 import CookieConsent from './components/CookieConsent'
 import PwaUpdater from './components/PwaUpdater'
+import { PushProvider } from './context/PushContext'
 import HomePage from './pages/HomePage'
 import TermsOfService from './pages/TermsOfService'
 import { loadFacebookSDK } from './services/facebookSdkLoader'
@@ -62,48 +63,50 @@ export default function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <DialogProvider>
-        <AuthProvider>
-          <WhatsAppAccountProvider>
-            <PwaInstallProvider>
-              <BrowserRouter>
-              <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/terms" element={<TermsOfService />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-              <Route path="/agent-login" element={<AgentLogin />} />
-              <Route path="/accept-invite" element={<AcceptInvite />} />
-              <Route path="/signup" element={<Signup />} />
-              <Route path="/sso" element={<SSOLogin />} />
-              <Route path="/payment-success" element={<PaymentSuccessPage />} />
-              <Route path="/wa/:data" element={<WhatsAppRedirect />} />
-              <Route element={<Layout />}>
-                <Route path="dashboard" element={<Dashboard />} />
-                <Route path="whatsapp-connect" element={<WhatsAppConnect />} />
-                <Route path="whatsapp-number" element={<WhatsAppNumberPage />} />
-                <Route path="contacts" element={<Contacts />} />
-                <Route path="flow-builder" element={<FlowBuilder />} />
-                <Route path="templates" element={<Templates />} />
-                <Route path="templates/new" element={<TemplateWizard />} />
-                <Route path="templates/industries" element={<Templates defaultView="INDUSTRIES" />} />
-                <Route path="broadcast" element={<Broadcast />} />
-                <Route path="live-chat" element={<LiveChat />} />
-                <Route path="bot-agents" element={<BotAgents />} />
-                <Route path="billing" element={<BillingPage />} />
-                <Route path="settings" element={<Settings />} />
-                <Route path="team-members" element={<TeamMembers />} />
-                <Route path="scheduled-meetings" element={<Suspense fallback={<div className="p-8 text-center text-xs font-semibold text-gray-500">Loading Scheduled Meetings...</div>}><ScheduledMeetings /></Suspense>} />
-                <Route path="help" element={<HelpCenter />} />
-                <Route path="wa-link-generator" element={<WhatsAppLinkGenerator />} />
-              </Route>
-            </Routes>
-            {import.meta.env.VITE_ENABLE_COOKIE_CONSENT === 'true' && <CookieConsent />}
-              </BrowserRouter>
-            </PwaInstallProvider>
-          </WhatsAppAccountProvider>
-        </AuthProvider>
-      </DialogProvider>
+      <PushProvider>
+        <DialogProvider>
+          <AuthProvider>
+            <WhatsAppAccountProvider>
+              <PwaInstallProvider>
+                <BrowserRouter>
+                  <Routes>
+                    <Route path="/" element={<HomePage />} />
+                    <Route path="/terms" element={<TermsOfService />} />
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                    <Route path="/agent-login" element={<AgentLogin />} />
+                    <Route path="/accept-invite" element={<AcceptInvite />} />
+                    <Route path="/signup" element={<Signup />} />
+                    <Route path="/sso" element={<SSOLogin />} />
+                    <Route path="/payment-success" element={<PaymentSuccessPage />} />
+                    <Route path="/wa/:data" element={<WhatsAppRedirect />} />
+                    <Route element={<Layout />}>
+                      <Route path="dashboard" element={<Dashboard />} />
+                      <Route path="whatsapp-connect" element={<WhatsAppConnect />} />
+                      <Route path="whatsapp-number" element={<WhatsAppNumberPage />} />
+                      <Route path="contacts" element={<Contacts />} />
+                      <Route path="flow-builder" element={<FlowBuilder />} />
+                      <Route path="templates" element={<Templates />} />
+                      <Route path="templates/new" element={<TemplateWizard />} />
+                      <Route path="templates/industries" element={<Templates defaultView="INDUSTRIES" />} />
+                      <Route path="broadcast" element={<Broadcast />} />
+                      <Route path="live-chat" element={<LiveChat />} />
+                      <Route path="bot-agents" element={<BotAgents />} />
+                      <Route path="billing" element={<BillingPage />} />
+                      <Route path="settings" element={<Settings />} />
+                      <Route path="team-members" element={<TeamMembers />} />
+                      <Route path="scheduled-meetings" element={<Suspense fallback={<div className="p-8 text-center text-xs font-semibold text-gray-500">Loading Scheduled Meetings...</div>}><ScheduledMeetings /></Suspense>} />
+                      <Route path="help" element={<HelpCenter />} />
+                      <Route path="wa-link-generator" element={<WhatsAppLinkGenerator />} />
+                    </Route>
+                  </Routes>
+                  {import.meta.env.VITE_ENABLE_COOKIE_CONSENT === 'true' && <CookieConsent />}
+                </BrowserRouter>
+              </PwaInstallProvider>
+            </WhatsAppAccountProvider>
+          </AuthProvider>
+        </DialogProvider>
+      </PushProvider>
       <PwaUpdater />
       <Toaster
         position="bottom-right"
