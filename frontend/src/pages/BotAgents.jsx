@@ -435,7 +435,7 @@ export default function BotAgents() {
                     <StatCard icon={Database} label="Trained text" value={stats.trainedChars.toLocaleString()} helper="Knowledge used" />
                 </div>
 
-                <div className="grid gap-4 2xl:grid-cols-[1fr_360px]">
+                <div className="grid gap-4 xl:grid-cols-[1fr_320px] 2xl:grid-cols-[1fr_360px]">
                     <section data-tour="agents-list" className="rounded-lg border border-gray-200 bg-white">
                         <div className="flex flex-col gap-3 border-b border-gray-200 p-4 md:flex-row md:items-center md:justify-between">
                             <div className="relative flex-1">
@@ -447,7 +447,7 @@ export default function BotAgents() {
                                 {knowledgeDocs.length} synced knowledge docs
                             </div>
                         </div>
-                        <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-3">
+                        <div className="grid gap-3 p-4 grid-cols-1 md:grid-cols-2 2xl:grid-cols-2 min-[1700px]:grid-cols-3">
                             {filteredAgents.length === 0 ? (
                                 <EmptyAgentsState hasAgents={hasAgents} query={query} onCreate={openCreate} isLimitReached={isLimitReached} />
                             ) : filteredAgents.map(agent => (
@@ -558,45 +558,54 @@ function AgentCard({ agent, onEdit, onToggle, onDelete }) {
             : 'Keyword only'
 
     return (
-        <div className="group rounded-lg border border-gray-200 bg-white p-4 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50/20">
-            <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-4 min-w-0">
-                    <img src="/images/agent Bot.png" alt="Bot Icon" className="h-[72px] w-[72px] shrink-0 object-contain drop-shadow-md transition-transform hover:scale-105" />
+        <div className="group flex flex-col h-full rounded-lg border border-gray-200 bg-white p-3.5 sm:p-4 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50/20">
+            <div className="flex items-start justify-between gap-2 lg:gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                    <img src="/images/agent Bot.png" alt="Bot Icon" className="h-[52px] w-[52px] shrink-0 object-contain drop-shadow-md transition-transform hover:scale-105" />
                     <div className="min-w-0 flex flex-col justify-center">
-                        <h3 className="truncate text-[17px] font-bold text-gray-950">{agent.name}</h3>
-                        <p className="mt-0.5 text-xs font-medium text-gray-500">{agent.model} &bull; Temp {agent.temperature}</p>
+                        <h3 className="truncate text-[15px] font-bold text-gray-950">{agent.name}</h3>
+                        <p className="mt-0.5 truncate text-[11px] font-medium text-gray-500" title={`${agent.model} • Temp ${agent.temperature}`}>
+                            {agent.model} &bull; Temp {agent.temperature}
+                        </p>
                     </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
-                    <button onClick={() => onToggle(agent)} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold transition ${agent.isActive ? 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100' : 'border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100'}`} title={agent.isActive ? 'Pause agent' : 'Activate agent'}>
-                        <span className={`h-2 w-2 rounded-full ${agent.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
-                        {agent.isActive ? 'Active' : 'Paused'}
+                <div className="flex shrink-0 items-center gap-1.5">
+                    <button onClick={() => onToggle(agent)} className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] font-bold transition ${agent.isActive ? 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100' : 'border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100'}`} title={agent.isActive ? 'Pause agent' : 'Activate agent'}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${agent.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
+                        <span className="hidden sm:inline">{agent.isActive ? 'Active' : 'Paused'}</span>
                     </button>
-                    <button onClick={() => onDelete(agent)} className="rounded-lg p-2 text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors shrink-0" title="Delete">
-                        <Trash size={18} weight="duotone" />
+                    <button onClick={() => onDelete(agent)} className="rounded-lg p-1.5 text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors shrink-0" title="Delete">
+                        <Trash size={16} weight="duotone" />
                     </button>
                 </div>
             </div>
-            <div className="mt-4 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
-                <div className="flex items-center gap-2 text-xs font-semibold text-gray-700">
-                    <ChatCircleText size={16} weight="duotone" className="text-[#0064b7]" />
+            <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-1.5">
+                <div className="flex items-center gap-2 text-[11px] font-semibold text-gray-700">
+                    <ChatCircleText size={14} weight="duotone" className="text-[#0064b7]" />
                     {automationLabel}
                 </div>
             </div>
-            <p className="mt-4 line-clamp-3 min-h-[60px] text-sm leading-5 text-gray-600">{agent.description || 'No description yet.'}</p>
-            <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-                <MiniMetric label="Docs" value={agent.documentCount || 0} />
-                <MiniMetric label="Chars" value={Number(agent.characterCount || 0).toLocaleString()} />
+            <p className="mt-3 line-clamp-2 text-[13px] leading-5 text-gray-600">{agent.description || 'No description yet.'}</p>
+            
+            <div className="mt-auto pt-3 flex flex-col gap-3">
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                    <MiniMetric label="Docs" value={agent.documentCount || 0} />
+                    <MiniMetric label="Chars" value={Number(agent.characterCount || 0).toLocaleString()} />
+                </div>
+                
+                {((agent.triggerKeywords && agent.triggerKeywords.length > 0) || agent.automation.auto_reply_unknown || agent.automation.default_for_new_chats) && (
+                    <div className="flex flex-wrap gap-1.5">
+                        {(agent.triggerKeywords || []).slice(0, 4).map(keyword => <span key={keyword} className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">{keyword}</span>)}
+                        {agent.automation.auto_reply_unknown ? <span className="rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-semibold text-green-700">unknown auto</span> : null}
+                        {agent.automation.default_for_new_chats ? <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[11px] font-semibold text-purple-700">default</span> : null}
+                    </div>
+                )}
+                
+                <button onClick={() => onEdit(agent)} className="group/btn flex w-fit items-center justify-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-2 py-2 text-[13px] font-bold text-gray-700 shadow-sm transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-[#0064b7] active:scale-[0.98]">
+                    <img src="/images/upgrade-2.png" alt="Configure" className="h-5 w-5 object-contain drop-shadow-sm transition-transform duration-300 group-hover/btn:scale-110 group-hover/btn:rotate-6" />
+                    Configure agent
+                </button>
             </div>
-            <div className="mt-4 flex flex-wrap gap-1.5">
-                {(agent.triggerKeywords || []).slice(0, 4).map(keyword => <span key={keyword} className="rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">{keyword}</span>)}
-                {agent.automation.auto_reply_unknown ? <span className="rounded-full bg-green-50 px-2 py-1 text-xs font-semibold text-green-700">unknown auto</span> : null}
-                {agent.automation.default_for_new_chats ? <span className="rounded-full bg-purple-50 px-2 py-1 text-xs font-semibold text-purple-700">default</span> : null}
-            </div>
-            <button onClick={() => onEdit(agent)} className="group/btn mt-4 flex w-full items-center justify-center gap-2.5 rounded-xl px-2 py-2 text-sm font-bold text-gray-800 transition-all hover:bg-blue-50/60 hover:text-[#0064b7] active:scale-[0.98]">
-                <img src="/images/upgrade-2.png" alt="Configure" className="h-8 w-8 object-contain drop-shadow-sm transition-transform duration-300 group-hover/btn:scale-110 group-hover/btn:rotate-6" />
-                Configure agent
-            </button>
         </div>
     )
 }
