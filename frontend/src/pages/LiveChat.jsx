@@ -2415,7 +2415,7 @@ export default function LiveChat() {
         let colorClass = 'text-[#6676ff]'; // Default color for You
 
         if (source === 'flow' || msg.metadata?.flow_id) {
-            label = 'Flow';
+            label = msg.metadata?.flow_name || 'Flow';
             colorClass = 'text-[#0284c7]';
         } else if (source === 'ai_agent' || msg.isBotReply || msg.botAgentId) {
             label = msg.botAgentName || getBotName(msg.botAgentId) || 'AI Agent';

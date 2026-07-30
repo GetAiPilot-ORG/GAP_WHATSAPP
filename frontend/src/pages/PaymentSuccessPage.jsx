@@ -32,25 +32,31 @@ export default function PaymentSuccessPage() {
 
         const verify = async () => {
             try {
-                if (paymentLinkId) {
-                    const functionName = kind === 'wallet'
-                        ? 'verify-whatsapp-wallet-recharge'
-                        : 'verify-whatsapp-subscription'
-                    const { data, error: fnError } = await supabase.functions.invoke(functionName, {
-                        body: { razorpayPaymentLinkId: paymentLinkId },
-                    })
-                    if (fnError) throw new Error(await getFunctionErrorMessage(fnError, 'Payment verification failed'))
-                    if (data?.plan) setPlan(data.plan)
-                    if (data?.scheduled_downgrade) setScheduledDowngrade(data)
-                    if (kind === 'wallet') setWalletRecharge(data)
-                    
-                    try {
-                        localStorage.removeItem(`gap_billing_overview_${user?.id || 'default'}`)
-                    } catch (e) {
-                        console.warn('Failed to clear cached billing:', e)
+                const minWait = new Promise(resolve => setTimeout(resolve, 4000))
+                
+                const apiTask = async () => {
+                    if (paymentLinkId) {
+                        const functionName = kind === 'wallet'
+                            ? 'verify-whatsapp-wallet-recharge'
+                            : 'verify-whatsapp-subscription'
+                        const { data, error: fnError } = await supabase.functions.invoke(functionName, {
+                            body: { razorpayPaymentLinkId: paymentLinkId },
+                        })
+                        if (fnError) throw new Error(await getFunctionErrorMessage(fnError, 'Payment verification failed'))
+                        if (data?.plan) setPlan(data.plan)
+                        if (data?.scheduled_downgrade) setScheduledDowngrade(data)
+                        if (kind === 'wallet') setWalletRecharge(data)
+                        
+                        try {
+                            localStorage.removeItem(`gap_billing_overview_${user?.id || 'default'}`)
+                        } catch (e) {
+                            console.warn('Failed to clear cached billing:', e)
+                        }
                     }
+                    await refreshProfile()
                 }
-                await refreshProfile()
+
+                await Promise.all([apiTask(), minWait])
             } catch (err) {
                 console.error('Verification error:', err)
                 setError(err.message || 'Payment verification failed')
@@ -64,13 +70,15 @@ export default function PaymentSuccessPage() {
 
     return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
-            <div className="bg-white border border-gray-200 rounded-2xl p-10 max-w-md w-full text-center shadow-sm">
+            <div className="bg-white border border-gray-200 rounded-[2rem] p-12 max-w-xl w-full text-center shadow-lg shadow-gray-200/50">
                 {verifying ? (
-                    <>
-                        <Loader2 className="w-12 h-12 text-green-500 animate-spin mx-auto mb-4" />
-                        <h2 className="text-xl font-semibold text-gray-900 mb-2">Verifying payment...</h2>
-                        <p className="text-sm text-gray-500">Please wait while we confirm your subscription.</p>
-                    </>
+                    <div className="py-8 flex flex-col items-center animate-in fade-in duration-500">
+                        <div className="relative mb-12">
+                            <video src="/images/payment-success.webm" autoPlay loop muted playsInline className="relative h-[280px] object-contain drop-shadow-xl" />
+                        </div>
+                        <h2 className="text-4xl font-extrabold text-gray-900 mb-5 tracking-tight">Verifying payment...</h2>
+                        <p className="text-lg font-medium text-gray-500 max-w-md mx-auto leading-relaxed">Please wait while we confirm your subscription securely.</p>
+                    </div>
                 ) : error ? (
                     <>
                         <Loader2 className="w-12 h-12 text-red-500 mx-auto mb-4" />

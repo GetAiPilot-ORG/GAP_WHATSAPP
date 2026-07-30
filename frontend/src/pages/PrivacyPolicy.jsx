@@ -9,7 +9,7 @@ import { Link } from 'react-router-dom';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const COMPANY_NAME = 'GetAiPilot';
-const PRODUCT_NAME = 'GAP FlowPilot';
+const PRODUCT_NAME = 'GAP WhatsApp Pilot';
 const DOMAIN = 'getaipilot.in';
 const SUPPORT_EMAIL = 'getaipilott@gmail.com';
 const PRIVACY_EMAIL = 'privacy@getaipilot.in';
@@ -949,7 +949,7 @@ export default function PrivacyPolicy() {
     };
 
     setMetaTag('og:title', 'GetAiPilot Privacy Policy');
-    setMetaTag('og:description', 'Privacy Policy for GetAiPilot (GAP FlowPilot) WhatsApp Automation Workspace.');
+    setMetaTag('og:description', 'Privacy Policy for GetAiPilot (GAP WhatsApp Pilot) WhatsApp Automation Workspace.');
     setMetaTag('og:image', 'https://wb.getaipilot.in/logo.png');
     setMetaTag('og:url', 'https://wb.getaipilot.in/privacy-policy');
     setMetaTag('og:type', 'website');

@@ -6,7 +6,7 @@ import { io } from '../socket.js';
 import { performAutoAssignment } from '../services/assignment.service.js';
 
 import { storeMessage, upsertConversation, refundWhatsappMessage } from '../services/messages.service.js';
-import { sendTextMessage, applyReactionUpdate, downloadMetaMedia, sendInteractiveButtons, sendFlowMediaMessageMeta, sendInteractiveList } from '../services/messages.sender.js';
+import { sendTextMessage, applyReactionUpdate, downloadMetaMedia, sendInteractiveButtons, sendFlowMediaMessageMeta, sendInteractiveList, sendTypingIndicator } from '../services/messages.sender.js';
 import { processFlowEngine } from '../services/flows.service.js';
 import { upsertContact } from '../services/contacts.service.js';
 import { getBotAgentReply } from '../services/ai.service.js';
@@ -836,6 +836,28 @@ export async function handleWebhook(req: any, res: Response) {
 
       // E. Bot Auto-Reply
       try {
+        // Send Meta WhatsApp typing indicator immediately & non-blockingly if bot is enabled for automated response
+        const isBotEnabled = conv?.bot_enabled !== false;
+        if (isBotEnabled && phone_number_id && wa_message_id) {
+          webhookLog("typing_indicator.async.dispatch", {
+            requestId,
+            phone_number_id,
+            wa_message_id,
+            conversation_id: conv.id,
+          });
+          sendTypingIndicator({
+            phone_number_id,
+            message_id: wa_message_id,
+            to: from,
+          }).catch((err: any) => {
+            webhookError("typing_indicator.async.failed", err, {
+              requestId,
+              wa_message_id,
+              phone_number_id,
+            });
+          });
+        }
+
         // Intercept human handoff request via button selection or keyword
         const incomingText = text?.toLowerCase().trim();
         const interactiveId = msg.interactive?.button_reply?.id || null;
@@ -1255,6 +1277,9 @@ export async function handleWebhook(req: any, res: Response) {
               const previousPromise = botLockMap.get(conv.id) || Promise.resolve();
               const currentPromise = previousPromise.then(async () => {
                   try {
+                      if (phone_number_id && wa_message_id) {
+                        sendTypingIndicator({ phone_number_id, message_id: wa_message_id, to: from }).catch(() => {});
+                      }
                       const botResult = await getBotAgentReply({
                         organization_id,
                         conversation_id: conv.id,
@@ -1267,7 +1292,7 @@ export async function handleWebhook(req: any, res: Response) {
                         agentId: botResult?.agent?.id || null,
                         agentName: botResult?.agent?.name || null,
                       });
-                      
+
                       if (botResult?.reply) {
                         let botWaMessageId: string | null = null;
                         let storedBotReply: any = null;
@@ -1337,75 +1362,56 @@ export async function handleWebhook(req: any, res: Response) {
                             is_bot_reply: true,
                           });
                         } else {
-                          let isJsonButtons = false;
-                          let parsedInteractive: any = null;
-                          botDebugLog(`Raw reply from agent: ${botResult.reply}`);
-                          try {
-                            const trimmedReply = botResult.reply.trim();
-                            const firstBrace = trimmedReply.indexOf("{");
-                            const lastBrace = trimmedReply.lastIndexOf("}");
-                            botDebugLog(`Brace indices: ${firstBrace}, ${lastBrace}`);
-                            if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-                              const jsonCandidate = trimmedReply.substring(firstBrace, lastBrace + 1);
-                              botDebugLog(`JSON Candidate: ${jsonCandidate}`);
-                              const parsed = JSON.parse(jsonCandidate);
-                              if (parsed && typeof parsed === "object" && typeof parsed.text === "string" && Array.isArray(parsed.buttons)) {
-                                parsedInteractive = parsed;
-                                isJsonButtons = true;
-                                botDebugLog(`Successfully parsed JSON buttons payload`);
-                              }
-                            }
-                          } catch (err: any) {
-                            botDebugLog(`JSON parsing failed: ${err.message || err}`);
-                          }
+                          console.log(`🤖 Bot "${botResult.agent?.name}" replying`);
+                          const sendResult = await sendTextMessage(
+                            from,
+                            botResult.reply,
+                            phone_number_id,
+                          );
+                          botWaMessageId = sendResult?.messages?.[0]?.id || null;
 
-                          let isValid = true;
-                          let validatedButtons: any[] = [];
-                          let buttonType: string | null = null;
-                          let interactiveType: "button" | "cta_url" = "button";
+                          storedBotReply = await storeMessage({
+                            organization_id,
+                            contact_id: contact.id,
+                            conversation_id: conv.id,
+                            wa_message_id: botWaMessageId,
+                            direction: "outbound",
+                            type: "text",
+                            content: {
+                              text: botResult.reply,
+                              bot_agent_id: botResult.agent?.id,
+                              bot_agent_name: botResult.agent?.name,
+                            },
+                            status: "sent",
+                            is_bot_reply: true,
+                            bot_agent_id: botResult.agent?.id || null,
+                            sender_type: "ai_agent",
+                            automation_source: "ai_agent",
+                          } as any);
 
-                          if (isJsonButtons && parsedInteractive) {
-                            const buttons = parsedInteractive.buttons;
-                            if (buttons.length < 1) {
-                              isValid = false;
-                            } else {
-                              // Truncate to keep only the first 3 buttons maximum
-                              const rawButtonsSlice = buttons.slice(0, 3);
-                              for (const btn of rawButtonsSlice) {
-                                if (!btn || typeof btn !== "object" || !btn.text || typeof btn.text !== "string") {
-                                  isValid = false;
-                                  break;
-                                }
+                          io.emit("new_message", {
+                            from: metadata?.display_phone_number || phone_number_id,
+                            phone: from,
+                            text: botResult.reply,
+                            sender: "agent",
+                            conversation_id: conv.id,
+                            contact_id: contact.id,
+                            message_id: storedBotReply?.id || null,
+                            wa_message_id: botWaMessageId,
+                            created_at:
+                              storedBotReply?.created_at || new Date().toISOString(),
+                            connectedAccount: metadata?.display_phone_number,
+                            type: "text",
+                            is_bot_reply: true,
+                          });
+                        }
 
-                                const rawType = String(btn.type || "reply").toLowerCase();
-                                const currentBtnType = rawType === "url" || rawType === "form" ? "url" : rawType === "phone" ? "phone" : "reply";
-
-                                if (buttonType === null) {
-                                  buttonType = currentBtnType;
-                                } else if (buttonType !== currentBtnType) {
-                                  // Mixed types! Reject to prevent Meta API validation errors
-                                  isValid = false;
-                                  break;
-                                }
-
-                                const sanitizedText = btn.text.trim().substring(0, 20);
-                                if (!sanitizedText) {
-                                  isValid = false;
-                                  break;
-                                }
-
-                                const rawId = btn.id || btn.text;
-                                const sanitizedId = String(rawId).trim().substring(0, 256);
-
-                                validatedButtons.push({
-                                  id: sanitizedId,
-                                  text: sanitizedText,
-                                  type: currentBtnType,
-                                  url: btn.url || undefined,
-                                  phone: btn.phone || undefined
-                                });
-                              }
-                            }
+                        webhookLog("bot_agent.reply.sent", {
+                          requestId,
+                          botWaMessageId: botWaMessageId,
+                          storedMessageId: storedBotReply?.id || null,
+                          agentId: botResult.agent?.id || null,
+                        });
 
                             if (isValid && buttonType === "url") {
                               if (validatedButtons.length > 1) {

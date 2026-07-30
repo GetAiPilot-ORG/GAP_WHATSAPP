@@ -58,10 +58,10 @@ export default function Signup() {
                     <div className="w-full max-w-md rounded-[24px]">
                         <div className="mb-9 flex items-center gap-3 rounded-[24px]">
                             <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-gray-200 bg-white">
-                                <img src="/logo.png" alt="GAP FlowPilot" className="h-7 w-7 object-contain" />
+                                <img src="/logo.png" alt="GAP WhatsApp Pilot" className="h-7 w-7 object-contain" />
                             </span>
                             <div>
-                                <p className="text-sm font-bold text-gray-950">GAP FlowPilot</p>
+                                <p className="text-sm font-bold text-gray-950">GAP WhatsApp Pilot</p>
                                 <p className="text-xs text-gray-500">Create workspace access</p>
                             </div>
                         </div>
@@ -140,7 +140,7 @@ export default function Signup() {
                 <section className="relative m-3 hidden overflow-hidden rounded-[24px] bg-gray-950 lg:block">
                     <img
                         src="/login.jpg"
-                        alt="GAP FlowPilot onboarding"
+                        alt="GAP WhatsApp Pilot onboarding"
                         className="absolute inset-0 h-full w-full rounded-[24px] object-cover object-center"
                     />
                     <div className="absolute inset-0 rounded-[24px] bg-gradient-to-br from-emerald-950/75 via-gray-950/45 to-gray-950/80" />

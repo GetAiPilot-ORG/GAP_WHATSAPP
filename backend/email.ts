@@ -36,7 +36,7 @@ export async function sendEmail(to: string, subject: string, html: string) {
 
     try {
         const info = await getTransporter().sendMail({
-            from: `"${process.env.SMTP_FROM_NAME || 'GAP FlowPilot'}" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
+            from: `"${process.env.SMTP_FROM_NAME || 'GAP WhatsApp Pilot'}" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
             to,
             subject,
             html,

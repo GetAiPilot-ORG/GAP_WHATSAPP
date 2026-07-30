@@ -27,10 +27,10 @@ export default function Layout() {
     const handleStatusToggle = async () => {
         if (!memberProfile) return
         const nextStatus = !memberProfile.is_online
-        
+
         // Optimistic UI Update
         setMemberProfile(prev => prev ? { ...prev, is_online: nextStatus } : prev)
-        
+
         try {
             await updateMyOnlineStatus(nextStatus)
         } catch (e) {
@@ -795,17 +795,15 @@ export default function Layout() {
                                 <button
                                     type="button"
                                     onClick={handleStatusToggle}
-                                    className={`relative inline-flex h-9 w-[98px] shrink-0 items-center rounded-full border p-1 transition-all duration-300 ease-out active:scale-[0.97] cursor-pointer shadow-inner ${
-                                        memberProfile.is_online
+                                    className={`relative inline-flex h-9 w-[98px] shrink-0 items-center rounded-full border p-1 transition-all duration-300 ease-out active:scale-[0.97] cursor-pointer shadow-inner ${memberProfile.is_online
                                             ? 'border-emerald-250 bg-emerald-100/50 hover:bg-emerald-100/80 text-emerald-800'
                                             : 'border-gray-200 bg-gray-100/65 hover:bg-gray-100/85 text-gray-500'
-                                    }`}
+                                        }`}
                                     title={memberProfile.is_online ? "You are online (Click to go offline)" : "You are offline (Click to go online)"}
                                 >
                                     <span
-                                        className={`absolute left-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-white border border-gray-200/80 shadow-[0_2px_5px_rgba(0,0,0,0.1)] transition-transform duration-300 ease-out ${
-                                            memberProfile.is_online ? 'translate-x-[62px]' : 'translate-x-0'
-                                        }`}
+                                        className={`absolute left-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-white border border-gray-200/80 shadow-[0_2px_5px_rgba(0,0,0,0.1)] transition-transform duration-300 ease-out ${memberProfile.is_online ? 'translate-x-[62px]' : 'translate-x-0'
+                                            }`}
                                     >
                                         <span className="relative flex h-2 w-2 shrink-0">
                                             {memberProfile.is_online && (
@@ -814,7 +812,7 @@ export default function Layout() {
                                             <span className={`relative inline-flex rounded-full h-2 w-2 ${memberProfile.is_online ? 'bg-emerald-500' : 'bg-gray-400'}`}></span>
                                         </span>
                                     </span>
-                                    
+
                                     {memberProfile.is_online ? (
                                         <span className="pl-2.5 pr-1.5 mr-auto text-[10px] font-black uppercase tracking-wider text-emerald-700 select-none">
                                             Online
@@ -974,8 +972,7 @@ export default function Layout() {
                                                             <span className="absolute left-1.5 top-4.5 h-1.5 w-1.5 rounded-full bg-[#0070d1] animate-pulse" />
                                                         )}
                                                         {/* Status Icon Indicator */}
-                                                        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border text-xs shadow-[0_1px_2px_rgba(0,0,0,0.01)] ${
-                                                            item.type === 'campaign'
+                                                        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border text-xs shadow-[0_1px_2px_rgba(0,0,0,0.01)] ${item.type === 'campaign'
                                                                 ? item.metadata?.status === 'completed'
                                                                     ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
                                                                     : item.metadata?.status === 'failed'
@@ -1017,13 +1014,12 @@ export default function Layout() {
                                                                     <div className="text-[11px] font-medium text-neutral-500 space-y-1 bg-neutral-50 p-2.5 rounded-lg border border-neutral-100/50">
                                                                         <div className="flex justify-between items-center pb-1 border-b border-neutral-100/60">
                                                                             <span className="font-bold text-neutral-805 truncate max-w-[180px]">{item.metadata?.campaignName}</span>
-                                                                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
-                                                                                item.metadata?.status === 'completed'
+                                                                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${item.metadata?.status === 'completed'
                                                                                     ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
                                                                                     : item.metadata?.status === 'failed'
                                                                                         ? 'bg-rose-50 text-rose-700 border border-rose-100'
                                                                                         : 'bg-indigo-50 text-indigo-700 border border-indigo-100'
-                                                                            }`}>
+                                                                                }`}>
                                                                                 {item.metadata?.status}
                                                                             </span>
                                                                         </div>
@@ -1418,23 +1414,21 @@ export default function Layout() {
                         {toasts.map(toast => (
                             <div
                                 key={toast.id}
-                                className={`pointer-events-auto flex items-start gap-3 rounded-2xl border p-4 shadow-[0_10px_30px_rgba(0,0,0,0.08)] transition-all duration-300 animate-slide-in backdrop-blur-md ${
-                                    toast.type === 'refund'
+                                className={`pointer-events-auto flex items-start gap-3 rounded-2xl border p-4 shadow-[0_10px_30px_rgba(0,0,0,0.08)] transition-all duration-300 animate-slide-in backdrop-blur-md ${toast.type === 'refund'
                                         ? 'bg-amber-50/95 border-amber-200/60'
                                         : toast.type === 'completed'
                                             ? 'bg-emerald-50/95 border-emerald-200/60'
                                             : 'bg-white/95 border-neutral-200'
-                                }`}
+                                    }`}
                             >
-                                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-xs ${
-                                    toast.type === 'refund'
+                                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-xs ${toast.type === 'refund'
                                         ? 'bg-amber-100 border-amber-200 text-amber-700'
                                         : toast.type === 'completed'
                                             ? 'bg-emerald-100 border-emerald-200 text-emerald-700'
                                             : toast.type === 'debit'
                                                 ? 'bg-neutral-50 border-neutral-100 text-neutral-600'
                                                 : 'bg-blue-50 border-blue-100 text-blue-600'
-                                }`}>
+                                    }`}>
                                     {toast.type === 'refund' ? (
                                         <AlertTriangle className="h-4 w-4" />
                                     ) : toast.type === 'completed' ? (
@@ -1446,30 +1440,26 @@ export default function Layout() {
                                     )}
                                 </div>
                                 <div className="flex-1 min-w-0 font-sans">
-                                    <p className={`text-xs font-bold leading-tight ${
-                                        toast.type === 'refund' ? 'text-amber-900' : toast.type === 'completed' ? 'text-emerald-900' : 'text-neutral-900'
-                                    }`}>
+                                    <p className={`text-xs font-bold leading-tight ${toast.type === 'refund' ? 'text-amber-900' : toast.type === 'completed' ? 'text-emerald-900' : 'text-neutral-900'
+                                        }`}>
                                         {toast.title}
                                     </p>
                                     {toast.campaignName && (
-                                        <p className={`text-[11px] font-semibold mt-0.5 ${
-                                            toast.type === 'refund' ? 'text-amber-700' : toast.type === 'completed' ? 'text-emerald-700' : 'text-neutral-700'
-                                        }`}>
+                                        <p className={`text-[11px] font-semibold mt-0.5 ${toast.type === 'refund' ? 'text-amber-700' : toast.type === 'completed' ? 'text-emerald-700' : 'text-neutral-700'
+                                            }`}>
                                             {toast.campaignName}
                                         </p>
                                     )}
-                                    <p className={`mt-1 text-[11px] font-medium leading-normal whitespace-pre-line ${
-                                        toast.type === 'refund' ? 'text-amber-600' : toast.type === 'completed' ? 'text-emerald-600' : 'text-neutral-500'
-                                    }`}>
+                                    <p className={`mt-1 text-[11px] font-medium leading-normal whitespace-pre-line ${toast.type === 'refund' ? 'text-amber-600' : toast.type === 'completed' ? 'text-emerald-600' : 'text-neutral-500'
+                                        }`}>
                                         {toast.description}
                                     </p>
                                 </div>
                                 <button
                                     type="button"
                                     onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
-                                    className={`p-0.5 shrink-0 ${
-                                        toast.type === 'refund' ? 'text-amber-400 hover:text-amber-700' : toast.type === 'completed' ? 'text-emerald-400 hover:text-emerald-700' : 'text-neutral-400 hover:text-neutral-700'
-                                    }`}
+                                    className={`p-0.5 shrink-0 ${toast.type === 'refund' ? 'text-amber-400 hover:text-amber-700' : toast.type === 'completed' ? 'text-emerald-400 hover:text-emerald-700' : 'text-neutral-400 hover:text-neutral-700'
+                                        }`}
                                 >
                                     <X className="h-3.5 w-3.5" />
                                 </button>

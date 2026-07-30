@@ -623,4 +623,276 @@
     scrollbar-width: thin;
     scrollbar-color: rgba(156, 163, 175, 0.25) transparent;
   }
+
+  /* --- FlowBuilder Premium UI Calibrations --- */
+  .fb-font-cabinet {
+    font-family: 'Cabinet Grotesk', 'Outfit', sans-serif !important;
+  }
+  
+  .fb-font-outfit {
+    font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif !important;
+  }
+
+  .fb-premium-card {
+    background-color: #ffffff !important;
+    border: 1px solid #e4e4e7 !important;
+    border-radius: 14px !important;
+    box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.01) !important;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.25s ease, box-shadow 0.25s ease !important;
+  }
+
+  .fb-premium-card:hover {
+    border-color: #cbd5e1 !important;
+    box-shadow: 0 8px 24px -6px rgba(0, 0, 0, 0.06), 0 2px 4px rgba(0, 0, 0, 0.02) !important;
+    transform: scale(1.015) translateY(-2px) !important;
+  }
+
+  .fb-premium-card:active {
+    transform: scale(0.985) translateY(0.5px) !important;
+  }
+
+  /* Buttons that bypass base overrides */
+  .fb-btn-dark {
+    background-color: #18181b !important;
+    color: #ffffff !important;
+    border: 1px solid #27272a !important;
+    border-radius: 8px !important;
+    font-family: 'Outfit', sans-serif !important;
+    font-weight: 500 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  }
+  .fb-btn-dark:hover {
+    background-color: #27272a !important;
+    transform: scale(1.03) !important;
+  }
+  .fb-btn-dark:active {
+    transform: scale(0.97) !important;
+  }
+
+  .fb-btn-outline {
+    background-color: #ffffff !important;
+    color: #27272a !important;
+    border: 1px solid #e4e4e7 !important;
+    border-radius: 8px !important;
+    font-family: 'Outfit', sans-serif !important;
+    font-weight: 500 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02) !important;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  }
+  .fb-btn-outline:hover {
+    background-color: #f4f4f5 !important;
+    border-color: #d4d4d8 !important;
+    transform: scale(1.03) !important;
+  }
+  .fb-btn-outline:active {
+    transform: scale(0.97) !important;
+  }
+
+  .fb-btn-action {
+    background-color: #ffffff !important;
+    border: 1px solid #e4e4e7 !important;
+    border-radius: 6px !important;
+    color: #71717a !important;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  }
+  .fb-btn-action:hover {
+    background-color: #f4f4f5 !important;
+    color: #18181b !important;
+    border-color: #cbd5e1 !important;
+    transform: scale(1.08) !important;
+  }
+  .fb-btn-action:active {
+    transform: scale(0.92) !important;
+  }
+  .fb-btn-action-delete:hover {
+    background-color: #fef2f2 !important;
+    color: #dc2626 !important;
+    border-color: #fca5a5 !important;
+  }
+
+  /* Tag accents that survive base cleanups */
+  .fb-tag {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 4px !important;
+    padding: 1.5px 6px !important;
+    font-size: 10px !important;
+    font-weight: 500 !important;
+    font-family: 'Outfit', sans-serif !important;
+  }
+  .fb-tag-emerald {
+    background-color: #f0fdf4 !important;
+    color: #15803d !important;
+    border: 1px solid #bcf0da !important;
+  }
+  .fb-tag-zinc {
+    background-color: #f4f4f5 !important;
+    color: #52525b !important;
+    border: 1px solid #e4e4e7 !important;
+  }
+  .fb-tag-blue {
+    background-color: #eff6ff !important;
+    color: #1d4ed8 !important;
+    border: 1px solid #dbeafe !important;
+  }
+  .fb-tag-purple {
+    background-color: #faf5ff !important;
+    color: #6d28d9 !important;
+    border: 1px solid #e9d5ff !important;
+  }
+
+  /* Traveling dash lines & active node radar pings */
+  @keyframes flowDash {
+    to {
+      stroke-dashoffset: -16;
+    }
+  }
+  .animate-flow-dash {
+    animation: flowDash 1.2s linear infinite !important;
+  }
+
+  @keyframes flowDashSlow {
+    to {
+      stroke-dashoffset: -20;
+    }
+  }
+  .animate-flow-dash-slow {
+    animation: flowDashSlow 2.4s linear infinite !important;
+  }
+
+  @keyframes radarPing {
+    0% {
+      transform: scale(0.6);
+      opacity: 0.85;
+    }
+    100% {
+      transform: scale(2.2);
+      opacity: 0;
+    }
+  }
+  .animate-radar-ping {
+    animation: radarPing 2.2s cubic-bezier(0.16, 1, 0.3, 1) infinite !important;
+  }
+}
+
+/* React Datepicker Customizations */
+.react-datepicker-wrapper {
+  width: 100%;
+}
+.react-datepicker {
+  font-family: inherit !important;
+  background-color: var(--fp-card) !important;
+  color: var(--fp-ink) !important;
+  border: 1px solid var(--fp-border) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
+  display: inline-flex !important;
+}
+.react-datepicker__month-container {
+  background-color: var(--fp-card) !important;
+}
+.react-datepicker__header {
+  background-color: var(--fp-card) !important;
+  border-bottom: 1px solid var(--fp-border) !important;
+  padding: 12px 10px 8px !important;
+}
+.react-datepicker__day-names {
+  margin-top: 4px;
+}
+.react-datepicker__day-name {
+  color: var(--fp-muted) !important;
+  font-weight: 600;
+  font-size: 0.75rem;
+  width: 2rem !important;
+}
+.react-datepicker__day {
+  color: var(--fp-ink) !important;
+  width: 2rem !important;
+  line-height: 2rem !important;
+  border-radius: 6px !important;
+  margin: 0.15rem !important;
+  font-size: 0.875rem !important;
+  transition: all 0.2s !important;
+}
+.react-datepicker__day:hover:not(.react-datepicker__day--selected) {
+  background-color: var(--fp-border) !important;
+}
+.react-datepicker__day--selected, 
+.react-datepicker__day--keyboard-selected {
+  background-color: #0070d1 !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+.react-datepicker__day--selected:hover {
+  background-color: #0064b7 !important;
+}
+.react-datepicker__day--outside-month {
+  color: var(--fp-border) !important;
+  opacity: 0.5;
+}
+.react-datepicker__time-container {
+  border-left: 1px solid var(--fp-border) !important;
+  background-color: var(--fp-card) !important;
+  width: 95px !important;
+}
+.react-datepicker__header--time {
+  background-color: var(--fp-card) !important;
+  border-bottom: 1px solid var(--fp-border) !important;
+  padding: 12px 0 8px !important;
+}
+.react-datepicker-time__header {
+  color: var(--fp-ink) !important;
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+}
+.react-datepicker__time-list-item {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 36px !important;
+  padding: 0 !important;
+  color: var(--fp-ink) !important;
+  font-size: 0.8125rem !important;
+  transition: background-color 0.2s !important;
+}
+.react-datepicker__time-list-item:hover:not(.react-datepicker__time-list-item--selected) {
+  background-color: var(--fp-border) !important;
+}
+.react-datepicker__time-list-item--selected {
+  background-color: #0070d1 !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+.react-datepicker__time-list-item--selected:hover {
+  background-color: #0064b7 !important;
+}
+.react-datepicker__triangle {
+  display: none !important;
+}
+.custom-datepicker-wrapper input {
+  background-color: var(--fp-card);
+  color: var(--fp-ink);
+  border-color: var(--fp-border);
+}
+.custom-datepicker-wrapper input:focus {
+  border-color: #0070d1;
+}
+
+.react-datepicker__time-list {
+  height: 245px !important;
+  overflow-y: auto !important;
+  scrollbar-width: thin;
+  scrollbar-color: var(--fp-border) transparent;
+}
+.react-datepicker__time-list::-webkit-scrollbar {
+  width: 5px;
+}
+.react-datepicker__time-list::-webkit-scrollbar-thumb {
+  background-color: var(--fp-border);
+  border-radius: 999px;
+}
+.react-datepicker__time-list::-webkit-scrollbar-track {
+  background: transparent;
 }

@@ -545,6 +545,7 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                             automation_source: 'flow',
                                             metadata: {
                                                 flow_id: flowResult.flow_id,
+                                                flow_name: flowResult.flow_name,
                                                 flow_version_id: flowResult.flow_version_id,
                                                 flow_session_id: flowResult.flow_session_id,
                                                 flow_run_id: flowResult.flow_run_id,
@@ -558,6 +559,7 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                             sender: 'agent', conversation_id: conv.id, contact_id: contact.id, message_id: storedBotReply?.id || null,
                                             wa_message_id: botWaMessageId, created_at: storedBotReply?.created_at || new Date().toISOString(),
                                             connectedAccount: myPhone, type: 'text', is_bot_reply: true,
+                                            metadata: storedBotReply?.metadata || { flow_name: flowResult.flow_name, flow_id: flowResult.flow_id },
                                         });
 
                                         await supabase.from('w_conversations').update({ last_message_at: new Date().toISOString(), last_message_preview: flowResult.output.substring(0, 100) }).eq('id', conv.id);
@@ -600,6 +602,7 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                                     automation_source: 'flow',
                                                     metadata: {
                                                         flow_id: flowResult.flow_id,
+                                                        flow_name: flowResult.flow_name,
                                                         flow_version_id: flowResult.flow_version_id,
                                                         flow_session_id: flowResult.flow_session_id,
                                                         flow_run_id: flowResult.flow_run_id,
@@ -624,6 +627,7 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                                     mime_type: media.mimeType || null,
                                                     file_name: media.fileName || null,
                                                     is_bot_reply: true,
+                                                    metadata: storedBotMedia?.metadata || { flow_name: flowResult.flow_name, flow_id: flowResult.flow_id },
                                                 });
 
                                                 await supabase.from('w_conversations').update({

@@ -8,7 +8,6 @@ import {
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabaseClient'
-import TourButton from '../onboarding/TourButton'
 import {
     BILLING_INTERVALS,
     FALLBACK_PLANS,
@@ -483,7 +482,6 @@ export default function BillingPage() {
                         </p>
                     </div>
                     <div className="hidden md:block">
-                        <TourButton />
                     </div>
                 </header>
 

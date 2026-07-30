@@ -27,7 +27,7 @@ import {
 import { useAuth } from '../context/AuthContext'
 import { useDialog } from '../context/DialogContext'
 import { FALLBACK_PLANS } from '../config/whatsappPricing'
-import TourButton from '../onboarding/TourButton'
+
 
 const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
 const API_BASE = `${BACKEND_BASE}/api`
@@ -367,8 +367,8 @@ export default function BotAgents() {
     return (
         <div className="min-h-full bg-[#f5f7fa]  sm:px-4 lg:px-7">
             <div className="space-y-5">
-                <div className="rounded-lg border border-gray-200 bg-white p-4 sm:p-5">
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="relative rounded-lg border border-gray-200 bg-white p-4 sm:p-5">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <div className="max-w-2xl">
                             <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-[#0064b7]">
                                 <Sparkle size={14} weight="fill" />
@@ -378,7 +378,7 @@ export default function BotAgents() {
                             <p className="mt-2 text-sm leading-6 text-gray-600">Aapke WhatsApp ke liye trained assistant. Pehle docs add karo, phir ek agent create karo, aur auto replies on kar do.</p>
                         </div>
                         <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:flex-wrap sm:items-center sm:w-auto">
-                            <span className="hidden sm:inline-block"><TourButton /></span>
+
                             <button onClick={refreshAll} className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-all active:scale-[0.98]">
                                 <Database size={18} weight="duotone" />
                                 Sync
@@ -403,9 +403,9 @@ export default function BotAgents() {
                         </div>
                     </div>
 
-                    <div className="mt-5 grid gap-3 md:grid-cols-3">
+                    <div className="mt-2 flex flex-col sm:flex-row flex-wrap gap-3 lg:pr-[140px]">
                         {setupSteps.map((step, index) => (
-                            <div key={step.title} className={`flex items-start gap-3 rounded-lg border p-3 ${step.done ? 'border-green-200 bg-green-50' : 'border-blue-100 bg-blue-50/60'}`}>
+                            <div key={step.title} className={`flex items-start gap-3 rounded-lg border p-3 pr-8 ${step.done ? 'border-green-200 bg-green-50' : 'border-blue-100 bg-blue-50/60'}`}>
                                 <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${step.done ? 'bg-green-600 text-white' : 'bg-white text-[#0064b7] ring-1 ring-blue-100'}`}>
                                     {step.done ? <Check size={15} weight="bold" /> : index + 1}
                                 </span>
@@ -415,6 +415,9 @@ export default function BotAgents() {
                                 </span>
                             </div>
                         ))}
+                    </div>
+                    <div className="hidden lg:flex absolute right-4 bottom-0 pointer-events-none">
+                        <video src="/images/3d-stickle-happy-retro-robot.webm" autoPlay loop muted playsInline className="h-[140px] w-auto object-contain drop-shadow-lg" />
                     </div>
                 </div>
 
@@ -557,22 +560,20 @@ function AgentCard({ agent, onEdit, onToggle, onDelete }) {
     return (
         <div className="group rounded-lg border border-gray-200 bg-white p-4 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50/20">
             <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3">
-                    <div className={`flex h-11 w-11 items-center justify-center rounded-lg ring-1 ${agent.isActive ? 'bg-green-50 text-green-700 ring-green-200' : 'bg-gray-50 text-gray-400 ring-gray-200'}`}>
-                        <Robot size={24} weight="duotone" />
-                    </div>
-                    <div className="min-w-0">
-                        <h3 className="truncate font-bold text-gray-950">{agent.name}</h3>
-                        <p className="text-xs text-gray-500">{agent.model} - Temp {agent.temperature}</p>
+                <div className="flex items-center gap-4 min-w-0">
+                    <img src="/images/agent Bot.png" alt="Bot Icon" className="h-[72px] w-[72px] shrink-0 object-contain drop-shadow-md transition-transform hover:scale-105" />
+                    <div className="min-w-0 flex flex-col justify-center">
+                        <h3 className="truncate text-[17px] font-bold text-gray-950">{agent.name}</h3>
+                        <p className="mt-0.5 text-xs font-medium text-gray-500">{agent.model} &bull; Temp {agent.temperature}</p>
                     </div>
                 </div>
-                <div className="flex items-center gap-1.5">
+                <div className="flex shrink-0 items-center gap-2">
                     <button onClick={() => onToggle(agent)} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold transition ${agent.isActive ? 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100' : 'border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100'}`} title={agent.isActive ? 'Pause agent' : 'Activate agent'}>
                         <span className={`h-2 w-2 rounded-full ${agent.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
                         {agent.isActive ? 'Active' : 'Paused'}
                     </button>
-                    <button onClick={() => onDelete(agent)} className="rounded-lg p-2 text-red-500 hover:bg-red-50" title="Delete">
-                        <Trash size={17} weight="duotone" />
+                    <button onClick={() => onDelete(agent)} className="rounded-lg p-2 text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors shrink-0" title="Delete">
+                        <Trash size={18} weight="duotone" />
                     </button>
                 </div>
             </div>
@@ -581,7 +582,6 @@ function AgentCard({ agent, onEdit, onToggle, onDelete }) {
                     <ChatCircleText size={16} weight="duotone" className="text-[#0064b7]" />
                     {automationLabel}
                 </div>
-                <p className="mt-1 text-xs leading-5 text-gray-500">Customer message aane par ye bot selected rules ke hisaab se reply karega.</p>
             </div>
             <p className="mt-4 line-clamp-3 min-h-[60px] text-sm leading-5 text-gray-600">{agent.description || 'No description yet.'}</p>
             <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
@@ -593,8 +593,8 @@ function AgentCard({ agent, onEdit, onToggle, onDelete }) {
                 {agent.automation.auto_reply_unknown ? <span className="rounded-full bg-green-50 px-2 py-1 text-xs font-semibold text-green-700">unknown auto</span> : null}
                 {agent.automation.default_for_new_chats ? <span className="rounded-full bg-purple-50 px-2 py-1 text-xs font-semibold text-purple-700">default</span> : null}
             </div>
-            <button onClick={() => onEdit(agent)} className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:border-blue-200 hover:bg-blue-50 hover:text-[#0064b7]">
-                <GearSix size={18} weight="duotone" />
+            <button onClick={() => onEdit(agent)} className="group/btn mt-4 flex w-full items-center justify-center gap-2.5 rounded-xl px-2 py-2 text-sm font-bold text-gray-800 transition-all hover:bg-blue-50/60 hover:text-[#0064b7] active:scale-[0.98]">
+                <img src="/images/upgrade-2.png" alt="Configure" className="h-8 w-8 object-contain drop-shadow-sm transition-transform duration-300 group-hover/btn:scale-110 group-hover/btn:rotate-6" />
                 Configure agent
             </button>
         </div>

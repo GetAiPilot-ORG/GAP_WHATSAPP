@@ -503,5 +503,1014 @@ export const META_TEMPLATES_LIBRARY = [
                 ]
             }
         ]
-    }
+    },
+ {
+        id: 'meta-loyalty-1',
+        name: 'loyalty_reward_available',
+        displayName: 'Loyalty Reward Available',
+        category: 'MARKETING',
+        useCase: 'LOYALTY_PROGRAM',
+        industry: 'General',
+        language: 'en_US',
+        components: [
+            {
+                type: 'BODY',
+                text: 'Hi {{1}}, thanks for being a valued customer! 🎉 You have unlocked a reward worth {{2}}. Claim it before {{3}}.',
+                example: { body_text: [['John', '$20', 'July 30']] }
+            },
+            {
+                type: 'BUTTONS',
+                buttons: [
+                    { type: 'URL', text: 'Claim Reward', url: 'https://example.com/reward' }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'meta-reengage-1',
+        name: 'we_miss_you_offer',
+        displayName: 'We Miss You',
+        category: 'MARKETING',
+        useCase: 'RE_ENGAGEMENT',
+        industry: 'General',
+        language: 'en_US',
+        components: [
+            {
+                type: 'BODY',
+                text: 'Hi {{1}}, its been a while! Wed love to welcome you back with an exclusive {{2}} discount available until {{3}}.',
+                example: { body_text: [['John', '20%', 'Friday']] }
+            },
+            {
+                type: 'BUTTONS',
+                buttons: [
+                    { type: 'URL', text: 'Come Back', url: 'https://example.com' }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'meta-stock-1',
+        name: 'back_in_stock',
+        displayName: 'Back In Stock',
+        category: 'MARKETING',
+        useCase: 'PRODUCT_UPDATES',
+        industry: 'Retail',
+        language: 'en_US',
+        components: [
+            {
+                type: 'BODY',
+                text: 'Good news {{1}}! 🎉 {{2}} is back in stock. Limited quantities available.',
+                example: { body_text: [['John', 'Wireless Headphones']] }
+            },
+            {
+                type: 'BUTTONS',
+                buttons: [
+                    { type: 'URL', text: 'Buy Now', url: 'https://example.com' }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'meta-price-1',
+        name: 'price_drop_alert',
+        displayName: 'Price Drop Alert',
+        category: 'MARKETING',
+        useCase: 'PRODUCT_UPDATES',
+        industry: 'General',
+        language: 'en_US',
+        components: [
+            {
+                type: 'BODY',
+                text: 'Hi {{1}}, great news! The price of {{2}} has dropped to {{3}}. Grab yours before the offer ends.',
+                example: { body_text: [['John', 'Smart Watch', '$99']] }
+            },
+            {
+                type: 'BUTTONS',
+                buttons: [
+                    { type: 'URL', text: 'Shop Now', url: 'https://example.com' }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'meta-lead-1',
+        name: 'free_consultation_invite',
+        displayName: 'Free Consultation',
+        category: 'MARKETING',
+        useCase: 'LEAD_NURTURING',
+        industry: 'General',
+        language: 'en_US',
+        components: [
+            {
+                type: 'BODY',
+                text: 'Hello {{1}}, lets discuss how we can help you achieve your goals. Book your free {{2}} consultation today.',
+                example: { body_text: [['John', '30-minute']] }
+            },
+            {
+                type: 'BUTTONS',
+                buttons: [
+                    { type: 'URL', text: 'Book Consultation', url: 'https://example.com/book' }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'meta-demo-1',
+        name: 'product_demo_invitation',
+        displayName: 'Product Demo Invitation',
+        category: 'MARKETING',
+        useCase: 'LEAD_NURTURING',
+        industry: 'SaaS',
+        language: 'en_US',
+        components: [
+            {
+                type: 'BODY',
+                text: 'Hi {{1}}, discover how {{2}} can simplify your work. Schedule a personalized live demo today.',
+                example: { body_text: [['John', 'FlowPilot']] }
+            },
+            {
+                type: 'BUTTONS',
+                buttons: [
+                    { type: 'URL', text: 'Schedule Demo', url: 'https://example.com/demo' }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'meta-event-1',
+        name: 'exclusive_event_invitation',
+        displayName: 'Exclusive Event Invitation',
+        category: 'MARKETING',
+        useCase: 'EVENT_PROMOTION',
+        industry: 'General',
+        language: 'en_US',
+        components: [
+            {
+                type: 'BODY',
+                text: 'Hi {{1}}, youre invited to our exclusive {{2}} event on {{3}}. Reserve your seat before registrations close.',
+                example: { body_text: [['John', 'Business Growth Summit', 'August 10']] }
+            },
+            {
+                type: 'BUTTONS',
+                buttons: [
+                    { type: 'URL', text: 'Reserve Seat', url: 'https://example.com/event' }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'meta-review-1',
+        name: 'review_request',
+        displayName: 'Review Request',
+        category: 'UTILITY',
+        useCase: 'CUSTOMER_FEEDBACK',
+        industry: 'General',
+        language: 'en_US',
+        components: [
+            {
+                type: 'BODY',
+                text: 'Hi {{1}}, we hope youre enjoying {{2}}. We truly appreciate your honest feedback.',
+                example: { body_text: [['John', 'our service']] }
+            },
+            {
+                type: 'BUTTONS',
+                buttons: [
+                    { type: 'URL', text: 'Leave Review', url: 'https://example.com/review' }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'meta-payment-1',
+        name: 'payment_received',
+        displayName: 'Payment Received',
+        category: 'UTILITY',
+        useCase: 'PAYMENT_UPDATES',
+        industry: 'General',
+        language: 'en_US',
+        components: [
+            {
+                type: 'BODY',
+                text: 'Hi {{1}}, we have successfully received your payment of {{2}}. Thank you for your business.',
+                example: { body_text: [['John', '$120']] }
+            }
+        ]
+    },
+    {
+        id: 'meta-payment-2',
+        name: 'payment_failed',
+        displayName: 'Payment Failed',
+        category: 'UTILITY',
+        useCase: 'PAYMENT_UPDATES',
+        industry: 'General',
+        language: 'en_US',
+        components: [
+            {
+                type: 'BODY',
+                text: 'Hi {{1}}, we could not process your recent payment of {{2}}. Please update your payment method to continue uninterrupted.',
+                example: { body_text: [['John', '$50']] }
+            },
+            {
+                type: 'BUTTONS',
+                buttons: [
+                    { type: 'URL', text: 'Update Payment', url: 'https://example.com/payment' }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'meta-renewal-1',
+        name: 'subscription_renewal_due',
+        displayName: 'Subscription Renewal',
+        category: 'UTILITY',
+        useCase: 'SUBSCRIPTION_MANAGEMENT',
+        industry: 'General',
+        language: 'en_US',
+        components: [
+            {
+                type: 'BODY',
+                text: 'Hello {{1}}, your subscription for {{2}} renews on {{3}}. Renew now to continue enjoying uninterrupted access.',
+                example: { body_text: [['John', 'Premium Plan', 'August 1']] }
+            },
+            {
+                type: 'BUTTONS',
+                buttons: [
+                    { type: 'URL', text: 'Renew Now', url: 'https://example.com/renew' }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'meta-trial-1',
+        name: 'trial_expiring',
+        displayName: 'Trial Expiring',
+        category: 'MARKETING',
+        useCase: 'TRIAL_CONVERSION',
+        industry: 'SaaS',
+        language: 'en_US',
+        components: [
+            {
+                type: 'BODY',
+                text: 'Hi {{1}}, your free trial expires in {{2}}. Upgrade today to keep your progress and premium features.',
+                example: { body_text: [['John', '2 days']] }
+            },
+            {
+                type: 'BUTTONS',
+                buttons: [
+                    { type: 'URL', text: 'Upgrade Now', url: 'https://example.com/upgrade' }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'meta-quote-1',
+        name: 'quotation_ready',
+        displayName: 'Quotation Ready',
+        category: 'UTILITY',
+        useCase: 'SALES_PROCESS',
+        industry: 'General',
+        language: 'en_US',
+        components: [
+            {
+                type: 'BODY',
+                text: 'Hi {{1}}, your requested quotation for {{2}} is now ready. Review it anytime using the link below.',
+                example: { body_text: [['John', 'Office Renovation']] }
+            },
+            {
+                type: 'BUTTONS',
+                buttons: [
+                    { type: 'URL', text: 'View Quote', url: 'https://example.com/quote' }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'meta-booking-1',
+        name: 'booking_waitlist_available',
+        displayName: 'Booking Available',
+        category: 'UTILITY',
+        useCase: 'BOOKING_UPDATES',
+        industry: 'General',
+        language: 'en_US',
+        components: [
+            {
+                type: 'BODY',
+                text: 'Good news {{1}}! A slot has become available for {{2}}. Confirm your booking before someone else claims it.',
+                example: { body_text: [['John', 'your appointment']] }
+            },
+            {
+                type: 'BUTTONS',
+                buttons: [
+                    { type: 'URL', text: 'Confirm Booking', url: 'https://example.com/booking' }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'meta-referral-1',
+        name: 'refer_friend_rewards',
+        displayName: 'Referral Rewards',
+        category: 'MARKETING',
+        useCase: 'REFERRAL_PROGRAM',
+        industry: 'General',
+        language: 'en_US',
+        components: [
+            {
+                type: 'BODY',
+                text: 'Hi {{1}}, invite your friends and you will both receive {{2}} after their first successful purchase.',
+                example: { body_text: [['John', '$15 Credit']] }
+            },
+            {
+                type: 'BUTTONS',
+                buttons: [
+                    { type: 'URL', text: 'Invite Friends', url: 'https://example.com/refer' }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'meta-progress-1',
+        name: 'application_status_update',
+        displayName: 'Application Status Update',
+        category: 'UTILITY',
+        useCase: 'APPLICATION_UPDATES',
+        industry: 'General',
+        language: 'en_US',
+        components: [
+            {
+                type: 'BODY',
+                text: 'Hi {{1}}, your application for {{2}} is now {{3}}. We will notify you once the next step is available.',
+                example: { body_text: [['John', 'Business Loan', 'Under Review']] }
+            }
+        ]
+    },
+    {
+        id: 'meta-security-1',
+        name: 'new_device_login',
+        displayName: 'New Device Login',
+        category: 'UTILITY',
+        useCase: 'SECURITY_ALERTS',
+        industry: 'General',
+        language: 'en_US',
+        components: [
+            {
+                type: 'BODY',
+                text: 'Hi {{1}}, we noticed a sign-in from a new device in {{2}}. If this was not you, please secure your account immediately.',
+                example: { body_text: [['John', 'New York']] }
+            },
+            {
+                type: 'BUTTONS',
+                buttons: [
+                    { type: 'URL', text: 'Secure Account', url: 'https://example.com/security' }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'meta-upgrade-1',
+        name: 'plan_upgrade_offer',
+        displayName: 'Plan Upgrade Offer',
+        category: 'MARKETING',
+        useCase: 'UPSELL',
+        industry: 'General',
+        language: 'en_US',
+        components: [
+            {
+                type: 'BODY',
+                text: 'Hi {{1}}, unlock even more value by upgrading to {{2}} and enjoy {{3}}.',
+                example: { body_text: [['John', 'Premium', 'exclusive features']] }
+            },
+            {
+                type: 'BUTTONS',
+                buttons: [
+                    { type: 'URL', text: 'Upgrade Plan', url: 'https://example.com/upgrade' }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'meta-birthday-1',
+        name: 'birthday_special_offer',
+        displayName: 'Birthday Special Offer',
+        category: 'MARKETING',
+        useCase: 'CUSTOMER_ENGAGEMENT',
+        industry: 'General',
+        language: 'en_US',
+        components: [
+            {
+                type: 'BODY',
+                text: 'Happy Birthday, {{1}}! 🎂 Celebrate with {{2}} on your next purchase. Your gift is valid until {{3}}.',
+                example: { body_text: [['John', '25% OFF', 'August 5']] }
+            },
+            {
+                type: 'BUTTONS',
+                buttons: [
+                    { type: 'URL', text: 'Redeem Gift', url: 'https://example.com/birthday' }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'meta-announcement-1',
+        name: 'important_service_update',
+        displayName: 'Important Service Update',
+        category: 'UTILITY',
+        useCase: 'SERVICE_NOTIFICATIONS',
+        industry: 'General',
+        language: 'en_US',
+        components: [
+            {
+                type: 'BODY',
+                text: 'Hello {{1}}, we are introducing improvements to {{2}} starting {{3}}. These updates are designed to provide you with a better experience.',
+                example: { body_text: [['John', 'our platform', 'August 1']] }
+            }
+        ]
+    },
+    
+  {
+    "id": "meta-hinglish-1",
+    "name": "lead_follow_up_reminder",
+    "displayName": "Lead Follow Up Reminder",
+    "category": "MARKETING",
+    "useCase": "LEAD_NURTURING",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}}, bas ek quick reminder 😊. Aapne {{2}} ke baare mein enquiry ki thi. Agar aap ready hain to hum aapki help karne ke liye available hain.",
+        "example": {
+          "body_text": [
+            ["Rahul", "AI Automation Service"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "QUICK_REPLY",
+            "text": "Yes, Interested"
+          },
+          {
+            "type": "QUICK_REPLY",
+            "text": "Need More Info"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-2",
+    "name": "limited_time_offer",
+    "displayName": "Limited Time Offer",
+    "category": "MARKETING",
+    "useCase": "LIMITED_TIME_OFFER",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}} 🎉 Sirf {{2}} tak aapke liye special offer available hai. Is opportunity ko miss mat kariye.",
+        "example": {
+          "body_text": [
+            ["Rahul", "31 July"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "URL",
+            "text": "Claim Offer",
+            "url": "https://example.com/offer"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-3",
+    "name": "callback_request",
+    "displayName": "Request a Callback",
+    "category": "MARKETING",
+    "useCase": "CALLBACK_REQUEST",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}}, agar aap busy hain to koi problem nahi 😊. Hum aapko aapke convenient time par call kar sakte hain.",
+        "example": {
+          "body_text": [
+            ["Rahul"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "QUICK_REPLY",
+            "text": "Call Me"
+          },
+          {
+            "type": "QUICK_REPLY",
+            "text": "Later"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-4",
+    "name": "booking_confirmation_hinglish",
+    "displayName": "Booking Confirmation",
+    "category": "UTILITY",
+    "useCase": "BOOKING_CONFIRMATION",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}}, aapki booking {{2}} ke liye successfully confirm ho gayi hai. Hum aapse {{3}} ko milenge.",
+        "example": {
+          "body_text": [
+            ["Rahul", "Demo Session", "30 July"]
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-5",
+    "name": "payment_reminder_hinglish",
+    "displayName": "Payment Reminder",
+    "category": "UTILITY",
+    "useCase": "PAYMENT_REMINDER",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}}, friendly reminder 😊. Aapka payment {{2}} abhi pending hai. Kripya due date se pehle complete kar dein.",
+        "example": {
+          "body_text": [
+            ["Rahul", "$250"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "URL",
+            "text": "Pay Now",
+            "url": "https://example.com/pay"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-6",
+    "name": "free_demo_invitation",
+    "displayName": "Free Demo Invitation",
+    "category": "MARKETING",
+    "useCase": "FREE_DEMO",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}}, sirf 15 minutes ka FREE demo book kijiye aur dekhiye kaise {{2}} aapke business ko grow kar sakta hai.",
+        "example": {
+          "body_text": [
+            ["Rahul", "AI Automation"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "URL",
+            "text": "Book Demo",
+            "url": "https://example.com/demo"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-7",
+    "name": "customer_feedback_hinglish",
+    "displayName": "Customer Feedback",
+    "category": "UTILITY",
+    "useCase": "CUSTOMER_FEEDBACK",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}}, humein umeed hai ki aapka experience accha raha hoga. Aapka feedback humare liye bahut valuable hai 😊.",
+        "example": {
+          "body_text": [
+            ["Rahul"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "QUICK_REPLY",
+            "text": "Excellent"
+          },
+          {
+            "type": "QUICK_REPLY",
+            "text": "Good"
+          },
+          {
+            "type": "QUICK_REPLY",
+            "text": "Needs Improvement"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-8",
+    "name": "cart_reminder_hinglish",
+    "displayName": "Cart Reminder",
+    "category": "MARKETING",
+    "useCase": "CART_RECOVERY",
+    "industry": "E-commerce",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}}, aapke selected products abhi bhi cart mein hain 🛒. Order complete karke unhe apna bana lijiye.",
+        "example": {
+          "body_text": [
+            ["Rahul"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "URL",
+            "text": "Complete Order",
+            "url": "https://example.com/cart"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-9",
+    "name": "membership_expiring",
+    "displayName": "Membership Expiring",
+    "category": "UTILITY",
+    "useCase": "MEMBERSHIP_EXPIRY",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}}, aapki membership {{2}} ko expire ho rahi hai. Benefits continue rakhne ke liye renew kar lijiye.",
+        "example": {
+          "body_text": [
+            ["Rahul", "31 July"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "URL",
+            "text": "Renew Now",
+            "url": "https://example.com/renew"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-10",
+    "name": "exclusive_vip_offer",
+    "displayName": "VIP Exclusive Offer",
+    "category": "MARKETING",
+    "useCase": "VIP_PROMOTION",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}} 🌟 Aap humare special customers mein se ek hain. Isliye aapke liye exclusive {{2}} offer reserve kiya gaya hai.",
+        "example": {
+          "body_text": [
+            ["Rahul", "25% OFF"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "URL",
+            "text": "Unlock Offer",
+            "url": "https://example.com/vip"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-11",
+    "name": "new_launch_invitation",
+    "displayName": "New Launch Invitation",
+    "category": "MARKETING",
+    "useCase": "PRODUCT_LAUNCH",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}} 🎉 Humne abhi-abhi {{2}} launch kiya hai. Sabse pehle explore kijiye aur special launch benefits ka fayda uthaiye.",
+        "example": {
+          "body_text": [
+            ["Rahul", "AI Voice Agent"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "URL",
+            "text": "Explore Now",
+            "url": "https://example.com/launch"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-12",
+    "name": "price_drop_notification",
+    "displayName": "Price Drop Notification",
+    "category": "MARKETING",
+    "useCase": "PRICE_DROP",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}} 😊 Good news! {{2}} ki price ab sirf {{3}} hai. Yeh offer limited time ke liye available hai.",
+        "example": {
+          "body_text": [
+            ["Rahul", "Premium Plan", "$49"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "URL",
+            "text": "Buy Now",
+            "url": "https://example.com/pricing"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-13",
+    "name": "document_request",
+    "displayName": "Document Request",
+    "category": "UTILITY",
+    "useCase": "DOCUMENT_COLLECTION",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}}, process complete karne ke liye humein {{2}} ki zarurat hai. Kripya jaldi upload kar dein.",
+        "example": {
+          "body_text": [
+            ["Rahul", "ID Proof"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "URL",
+            "text": "Upload Document",
+            "url": "https://example.com/upload"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-14",
+    "name": "service_completed",
+    "displayName": "Service Completed",
+    "category": "UTILITY",
+    "useCase": "SERVICE_UPDATE",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}}, aapki {{2}} service successfully complete ho gayi hai. Humein serve karne ka mauka dene ke liye dhanyavaad.",
+        "example": {
+          "body_text": [
+            ["Rahul", "Website Development"]
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-15",
+    "name": "referral_invitation",
+    "displayName": "Refer & Earn",
+    "category": "MARKETING",
+    "useCase": "REFERRAL_PROGRAM",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}} 🎁 Apne doston ko refer kijiye aur har successful referral par {{2}} reward paiye.",
+        "example": {
+          "body_text": [
+            ["Rahul", "$20"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "URL",
+            "text": "Refer Friends",
+            "url": "https://example.com/refer"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-16",
+    "name": "follow_up_after_demo",
+    "displayName": "Demo Follow Up",
+    "category": "MARKETING",
+    "useCase": "POST_DEMO_FOLLOWUP",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}}, demo attend karne ke liye thank you 😊. Agar aapke koi questions hain ya next step discuss karna chahte hain to hum available hain.",
+        "example": {
+          "body_text": [
+            ["Rahul"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "QUICK_REPLY",
+            "text": "I'm Interested"
+          },
+          {
+            "type": "QUICK_REPLY",
+            "text": "Need More Info"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-17",
+    "name": "renewal_success",
+    "displayName": "Renewal Successful",
+    "category": "UTILITY",
+    "useCase": "SUBSCRIPTION_RENEWED",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}} 🎉 Aapki {{2}} membership successfully renew ho gayi hai. Thank you for staying with us.",
+        "example": {
+          "body_text": [
+            ["Rahul", "Premium"]
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-18",
+    "name": "festival_special_offer",
+    "displayName": "Festival Special Offer",
+    "category": "MARKETING",
+    "useCase": "SEASONAL_PROMOTION",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}} ✨ {{2}} ke mauke par hum lekar aaye hain special {{3}} discount. Offer sirf limited period ke liye valid hai.",
+        "example": {
+          "body_text": [
+            ["Rahul", "Diwali", "30%"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "URL",
+            "text": "Claim Offer",
+            "url": "https://example.com/festival"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-19",
+    "name": "profile_completion_reminder",
+    "displayName": "Complete Your Profile",
+    "category": "UTILITY",
+    "useCase": "PROFILE_COMPLETION",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}}, aapka profile abhi complete nahi hua hai. Bas kuch simple steps complete karke saare features unlock kijiye.",
+        "example": {
+          "body_text": [
+            ["Rahul"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "URL",
+            "text": "Complete Profile",
+            "url": "https://example.com/profile"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "meta-hinglish-20",
+    "name": "exclusive_last_chance_offer",
+    "displayName": "Last Chance Offer",
+    "category": "MARKETING",
+    "useCase": "LAST_CHANCE_PROMOTION",
+    "industry": "General",
+    "language": "en",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}} ⏳ Yeh aapke special offer ka last reminder hai. Offer {{2}} ko expire ho jayega. Agar lena chahte hain to aaj hi claim kar lijiye.",
+        "example": {
+          "body_text": [
+            ["Rahul", "31 July"]
+          ]
+        }
+      },
+      {
+        "type": "BUTTONS",
+        "buttons": [
+          {
+            "type": "URL",
+            "text": "Claim Now",
+            "url": "https://example.com/last-offer"
+          }
+        ]
+      }
+    ]
+  }
 ];
