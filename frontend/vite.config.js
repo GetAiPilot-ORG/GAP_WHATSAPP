@@ -157,6 +157,7 @@ export default defineConfig({
         ]
       },
       workbox: {
+        maximumFileSizeToCacheInBytes: 15 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
           {
@@ -186,4 +187,34 @@ export default defineConfig({
       }
     }
   },
+  build: {
+    chunkSizeWarningLimit: 1600,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
+              return 'vendor-react'
+            }
+            if (id.includes('@dicebear')) {
+              return 'vendor-dicebear'
+            }
+            if (id.includes('exceljs') || id.includes('xlsx')) {
+              return 'vendor-sheets'
+            }
+            if (id.includes('recharts') || id.includes('reactflow')) {
+              return 'vendor-charts-flow'
+            }
+            if (id.includes('framer-motion') || id.includes('gsap') || id.includes('motion') || id.includes('@headlessui')) {
+              return 'vendor-animation-ui'
+            }
+            if (id.includes('lucide-react') || id.includes('@phosphor-icons')) {
+              return 'vendor-icons'
+            }
+          }
+        }
+      }
+    }
+  }
 })
+
