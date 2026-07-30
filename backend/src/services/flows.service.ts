@@ -1451,7 +1451,24 @@ export async function processFlowEngine(
         config.label ||
         activeNode.data?.label ||
         "";
-      if (botResult?.reply) outputText.push(botResult.reply);
+      if (botResult?.reply) {
+        let replyText = botResult.reply;
+        try {
+          const trimmed = replyText.trim();
+          const firstBrace = trimmed.indexOf("{");
+          const lastBrace = trimmed.lastIndexOf("}");
+          if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            const jsonCandidate = trimmed.substring(firstBrace, lastBrace + 1);
+            const parsed = JSON.parse(jsonCandidate);
+            if (parsed && typeof parsed === "object" && typeof parsed.text === "string") {
+              replyText = parsed.text;
+            }
+          }
+        } catch (e) {
+          // Keep original
+        }
+        outputText.push(replyText);
+      }
       else if (config.fallbackMessage)
         outputText.push(renderFlowTemplate(config.fallbackMessage, flowState));
       else if (prompt) outputText.push(renderFlowTemplate(prompt, flowState));
