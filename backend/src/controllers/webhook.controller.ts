@@ -495,10 +495,10 @@ export async function handleWebhook(req: any, res: Response) {
       } else if (type === "interactive") {
         interactivePayload = msg.interactive;
         text =
-          msg.interactive?.button_reply?.title ||
-          msg.interactive?.list_reply?.title ||
           msg.interactive?.button_reply?.id ||
           msg.interactive?.list_reply?.id ||
+          msg.interactive?.button_reply?.title ||
+          msg.interactive?.list_reply?.title ||
           `[interactive:${msg.interactive.type}]`;
       } else if (type === "button") {
         text = msg.button?.text || "";
