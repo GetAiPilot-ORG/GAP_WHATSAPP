@@ -171,9 +171,14 @@ export async function recordWhatsappMessageUsage(params: {
         console.error('recordWhatsappMessageUsage error:', err);
     }
 }
+const conversationLocks = new Map<string, Promise<any>>();
 
 export async function upsertConversation(organization_id: string, wa_account_id: string, contact_id: string, lastMessageOpts: any) {
-    const { data: existing } = await supabase
+    const lockKey = `${organization_id}:${contact_id}`;
+    let previousPromise = conversationLocks.get(lockKey) || Promise.resolve();
+    
+    const currentPromise = previousPromise.then(async () => {
+        const { data: existing } = await supabase
         .from('w_conversations')
         .select('*')
         .eq('organization_id', organization_id)
@@ -237,6 +242,18 @@ export async function upsertConversation(organization_id: string, wa_account_id:
 
         return data;
     }
+    });
+
+    conversationLocks.set(lockKey, currentPromise.catch(() => {}));
+    
+    // Clean up lock if it's the last one
+    currentPromise.finally(() => {
+        if (conversationLocks.get(lockKey) === currentPromise) {
+            conversationLocks.delete(lockKey);
+        }
+    });
+
+    return currentPromise;
 }
 
 export async function storeMessage(params: {

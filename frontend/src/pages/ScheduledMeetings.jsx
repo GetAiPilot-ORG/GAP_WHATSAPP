@@ -282,8 +282,8 @@ export default function ScheduledMeetings() {
             </div>
 
             {/* Controls Bar: Search & Filter */}
-            <div className="p-4 bg-white rounded-xl border border-gray-200 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
-                <div className="relative flex-1 max-w-md">
+            <div className="p-4 bg-white rounded-xl border border-gray-200 shadow-2xs flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-4">
+                <div className="relative flex-1 max-w-md w-full">
                     <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                         type="text"
@@ -302,10 +302,10 @@ export default function ScheduledMeetings() {
                     )}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 w-full xl:w-auto">
                     {/* Date Filter */}
-                    <div className="flex items-center gap-2">
-                        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Date:</label>
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider w-16 sm:w-auto shrink-0">Date:</label>
                         <input
                             type="date"
                             value={dateFilter}
@@ -313,7 +313,7 @@ export default function ScheduledMeetings() {
                                 setDateFilter(e.target.value)
                                 setPage(1)
                             }}
-                            className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white font-medium text-gray-700 cursor-pointer shadow-2xs"
+                            className="flex-1 sm:flex-none px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white font-medium text-gray-700 cursor-pointer shadow-2xs min-w-0"
                         />
                         {dateFilter && (
                             <button
@@ -321,24 +321,24 @@ export default function ScheduledMeetings() {
                                     setDateFilter('')
                                     setPage(1)
                                 }}
-                                className="px-2.5 py-1.5 text-xs text-red-600 bg-red-50 hover:bg-red-100 rounded-md font-semibold border border-red-200 transition-colors"
+                                className="px-2.5 py-1.5 text-xs text-red-600 bg-red-50 hover:bg-red-100 rounded-md font-semibold border border-red-200 transition-colors shrink-0"
                                 title="Clear date filter"
                             >
-                                Clear Date
+                                Clear
                             </button>
                         )}
                     </div>
 
                     {/* Status Filter */}
-                    <div className="flex items-center gap-2">
-                        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Status:</label>
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider w-16 sm:w-auto shrink-0">Status:</label>
                         <select
                             value={statusFilter}
                             onChange={(e) => {
                                 setStatusFilter(e.target.value)
                                 setPage(1)
                             }}
-                            className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white font-medium text-gray-700 cursor-pointer shadow-2xs"
+                            className="flex-1 sm:flex-none px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white font-medium text-gray-700 cursor-pointer shadow-2xs min-w-0"
                         >
                             <option value="all">All Statuses</option>
                             <option value="confirmed">Confirmed</option>
@@ -401,8 +401,8 @@ export default function ScheduledMeetings() {
                         )}
                     </div>
                 ) : (
-                    <div>
-                        <table className="w-full text-left border-collapse">
+                    <div className="overflow-x-auto w-full">
+                        <table className="w-full text-left border-collapse min-w-[650px]">
                             <thead>
                                 <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-bold uppercase tracking-wider text-gray-500">
                                     <th className="py-3 px-6">Contact</th>

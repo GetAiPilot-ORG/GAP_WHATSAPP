@@ -9,6 +9,7 @@ import {
     findFlowTriggerConflicts,
     insertFlowVersionWithSchemaFallback
 } from '../services/flows.service.js';
+import { invalidateFlowsCache } from '../services/ai.service.js';
 
 export async function getFlows(req: any, res: Response) {
     const orgId = req.organization_id;
@@ -74,6 +75,7 @@ export async function createFlow(req: any, res: Response) {
         });
         const { data, error } = await supabase.from('w_flows').insert(payload).select().single();
         if (error) throw error;
+        invalidateFlowsCache(orgId);
         res.status(201).json(data);
     } catch (e: any) { res.status(e.statusCode || 500).json({ error: e.message, limit: e.limit }); }
 }
@@ -116,6 +118,7 @@ export async function updateFlow(req: any, res: Response) {
             .maybeSingle();
         if (error) throw error;
         if (!data) return res.status(404).json({ error: 'Flow not found' });
+        invalidateFlowsCache(orgId);
         res.json(data);
     } catch (e: any) { res.status(500).json({ error: e.message }); }
 }
@@ -202,7 +205,7 @@ export async function publishFlow(req: any, res: Response) {
             .select()
             .single();
         if (updateErr) throw updateErr;
-
+        invalidateFlowsCache(orgId);
         res.json({ success: true, flow: updated, version });
     } catch (e: any) { res.status(500).json({ error: e.message }); }
 }
@@ -252,6 +255,7 @@ export async function deleteFlow(req: any, res: Response) {
             .eq('id', req.params.id)
             .eq('organization_id', req.organization_id);
         if (error) throw error;
+        invalidateFlowsCache(req.organization_id);
         res.json({ success: true });
     } catch (e: any) { res.status(500).json({ error: e.message }); }
 }

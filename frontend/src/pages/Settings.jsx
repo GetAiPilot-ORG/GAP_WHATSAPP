@@ -1404,21 +1404,36 @@ export default function Settings() {
                 )}
                 {activeTab === 'knowledge_base' && (
                     <div data-tour="settings-knowledge" className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between border-b border-gray-200 px-4 sm:px-8 py-6">
-                            <div>
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-gray-200 px-4 sm:px-8 py-6 relative overflow-hidden">
+                            <div className="relative z-10">
                                 <h2 className="text-lg font-semibold text-gray-900">Knowledge Base</h2>
                                 <p className="mt-1 max-w-2xl text-sm text-gray-500">
                                     Upload company documents once and active AI agents will use them while replying in WhatsApp chats.
                                 </p>
                             </div>
-                            <button
-                                onClick={fetchKnowledgeBase}
-                                disabled={isLoadingKnowledge || isUploadingKnowledge}
-                                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-60 shrink-0 w-full sm:w-auto justify-center"
-                            >
-                                {isLoadingKnowledge ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                                Refresh
-                            </button>
+                            
+                            {/* Decorative Animation Graphic */}
+                            <div className="hidden sm:block absolute right-36 top-1/2 -translate-y-1/2 w-48 opacity-90 mix-blend-multiply pointer-events-none">
+                                <video 
+                                    src="/images/Knowledge Base.webm" 
+                                    autoPlay 
+                                    loop 
+                                    muted 
+                                    playsInline 
+                                    className="w-full h-auto object-contain"
+                                />
+                            </div>
+
+                            <div className="relative z-10 shrink-0">
+                                <button
+                                    onClick={fetchKnowledgeBase}
+                                    disabled={isLoadingKnowledge || isUploadingKnowledge}
+                                    className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-60 shrink-0 w-full sm:w-auto justify-center"
+                                >
+                                    {isLoadingKnowledge ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                                    Refresh
+                                </button>
+                            </div>
                         </div>
 
                         <div className="space-y-6 p-4 sm:p-8">
@@ -1563,13 +1578,19 @@ export default function Settings() {
                             </div>
                         </div>
 
-                        <div className="absolute inset-0 flex items-center justify-center bg-white/35 backdrop-blur-[1px]">
-                            <div className="mx-6 max-w-sm rounded-xl border border-gray-200 bg-white/95 px-8 py-7 text-center shadow-xl">
-                                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-50 text-green-600">
-                                    <ShoppingBag className="h-5 w-5" />
+                        <div className="absolute inset-0 flex items-center justify-center bg-white/35 backdrop-blur-[1px] p-4">
+                            <div className="w-[95%] sm:w-full max-w-md rounded-2xl border border-gray-100 bg-white/95 p-6 sm:p-8 text-center shadow-[0_8px_30px_rgb(0,0,0,0.12)] backdrop-blur-sm transition-all hover:scale-[1.02]">
+                                <div className="mx-auto mb-6 flex justify-center">
+                                    <video 
+                                        src="/images/coming-soon.webm" 
+                                        autoPlay 
+                                        loop 
+                                        muted 
+                                        playsInline 
+                                        className="h-32 w-auto object-contain drop-shadow-sm rounded-lg"
+                                    />
                                 </div>
-                                <h3 className="text-lg font-semibold text-gray-900">Coming soon</h3>
-                                <p className="mt-2 text-sm leading-6 text-gray-500">
+                                <p className="mt-2 text-sm leading-relaxed text-gray-500">
                                     Store integrations and automation triggers are being prepared and will be available in a future update.
                                 </p>
                             </div>
@@ -1634,13 +1655,19 @@ export default function Settings() {
                             </div>
                         </div>
 
-                        <div className="absolute inset-0 flex items-center justify-center bg-white/35 backdrop-blur-[1px]">
-                            <div className="mx-6 max-w-sm rounded-xl border border-gray-200 bg-white/95 px-8 py-7 text-center shadow-xl">
-                                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
-                                    <Key className="h-5 w-5" />
+                        <div className="absolute inset-0 flex items-center justify-center bg-white/35 backdrop-blur-[1px] p-4">
+                            <div className="w-[95%] sm:w-full max-w-md rounded-2xl border border-gray-100 bg-white/95 p-6 sm:p-8 text-center shadow-[0_8px_30px_rgb(0,0,0,0.12)] backdrop-blur-sm transition-all hover:scale-[1.02]">
+                                <div className="mx-auto mb-6 flex justify-center">
+                                    <video 
+                                        src="/images/coming-soon.webm" 
+                                        autoPlay 
+                                        loop 
+                                        muted 
+                                        playsInline 
+                                        className="h-32 w-auto object-contain drop-shadow-sm rounded-lg"
+                                    />
                                 </div>
-                                <h3 className="text-lg font-semibold text-gray-900">Coming soon</h3>
-                                <p className="mt-2 text-sm leading-6 text-gray-500">
+                                <p className="mt-2 text-sm leading-relaxed text-gray-500">
                                     Developer API keys and webhook controls are being prepared and will be available in a future update.
                                 </p>
                             </div>
