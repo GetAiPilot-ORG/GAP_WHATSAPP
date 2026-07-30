@@ -110,6 +110,7 @@ export type FlowEngineResult = {
   };
   handoff?: boolean;
   flow_id?: string | null;
+  flow_name?: string | null;
   flow_version_id?: string | null;
   flow_session_id?: string | null;
   flow_run_id?: string | null;
