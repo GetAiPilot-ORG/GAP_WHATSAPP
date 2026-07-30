@@ -671,9 +671,24 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
 
                                                 if (botResult?.reply) {
                                                     console.log(`🤖 Bot "${botResult.agent?.name}" replying via Baileys to: "${captionText.substring(0, 50)}..."`);
+                                                    let replyText = botResult.reply;
+                                                    try {
+                                                        const trimmed = replyText.trim();
+                                                        const firstBrace = trimmed.indexOf("{");
+                                                        const lastBrace = trimmed.lastIndexOf("}");
+                                                        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+                                                            const jsonCandidate = trimmed.substring(firstBrace, lastBrace + 1);
+                                                            const parsed = JSON.parse(jsonCandidate);
+                                                            if (parsed && typeof parsed === "object" && typeof parsed.text === "string") {
+                                                                replyText = parsed.text;
+                                                            }
+                                                        }
+                                                    } catch (e) {
+                                                        // Keep original if parsing fails
+                                                    }
 
                                                     // Send the reply via Baileys
-                                                    const botMsg = await sock.sendMessage(remoteJid, { text: botResult.reply });
+                                                    const botMsg = await sock.sendMessage(remoteJid, { text: replyText });
                                                     const botWaMessageId = botMsg?.key?.id || null;
 
                                                     // Store the bot's reply message
@@ -684,7 +699,7 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                                         wa_message_id: botWaMessageId,
                                                         direction: "outbound",
                                                         type: "text",
-                                                        content: { text: botResult.reply, bot_agent_id: botResult.agent?.id, bot_agent_name: botResult.agent?.name },
+                                                        content: { text: replyText, bot_agent_id: botResult.agent?.id, bot_agent_name: botResult.agent?.name },
                                                         status: "sent",
                                                         is_bot_reply: true,
                                                         bot_agent_id: botResult.agent?.id || null,
@@ -696,7 +711,7 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                                     io.emit("new_message", {
                                                         from: myPhone,
                                                         phone: contactWaId,
-                                                        text: botResult.reply,
+                                                        text: replyText,
                                                         sender: 'agent',
                                                         conversation_id: conv.id,
                                                         contact_id: contact.id,
@@ -714,7 +729,7 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                                         .from('w_conversations')
                                                         .update({
                                                             last_message_at: new Date().toISOString(),
-                                                            last_message_preview: botResult.reply.substring(0, 100)
+                                                            last_message_preview: replyText.substring(0, 100)
                                                         })
                                                         .eq('id', conv.id);
                                                 }

@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import crypto from "crypto";
+import * as fs from "fs";
 import { supabase } from '../config/supabase.js';
 import { io } from '../socket.js';
 import { performAutoAssignment } from '../services/assignment.service.js';
@@ -20,6 +21,16 @@ const WEBHOOK_DEBUG = String(process.env.WEBHOOK_DEBUG || "true").toLowerCase() 
 
 const botDebounceMap = new Map<string, NodeJS.Timeout>();
 const botLockMap = new Map<string, Promise<void>>();
+
+function botDebugLog(text: string) {
+  try {
+    const logMsg = `[${new Date().toISOString()}] ${text}\n`;
+    fs.appendFileSync('c:/Users/HP/OneDrive/Documents/GitHub/GAP_WHATSAPP/backend/bot_debug.log', logMsg);
+  } catch (e: any) {
+    console.error(`[Bot Debug Error] Failed to write to log file:`, e.message || e);
+  }
+  console.log(`[Bot Debug] ${text}`);
+}
 
 function webhookLog(step: string, details: Record<string, any> = {}) {
   if (!WEBHOOK_DEBUG) return;
@@ -1402,14 +1413,144 @@ export async function handleWebhook(req: any, res: Response) {
                           agentId: botResult.agent?.id || null,
                         });
 
-                        // Update conversation preview
-                        await supabase
-                          .from("w_conversations")
-                          .update({
-                            last_message_at: new Date().toISOString(),
-                            last_message_preview: botResult.reply.substring(0, 100),
-                          })
-                          .eq("id", conv.id);
+                            if (isValid && buttonType === "url") {
+                              if (validatedButtons.length > 1) {
+                                // Meta CTA URL only allows 1 URL button, keep first one
+                                validatedButtons = [validatedButtons[0]];
+                              }
+                              interactiveType = "cta_url";
+                            }
+                           } else {
+                            isValid = false;
+                            botDebugLog(`Validation skipped (isJsonButtons was false or parsedInteractive was null)`);
+                          }
+
+                          botDebugLog(`Decision details - isJsonButtons: ${isJsonButtons}, isValid: ${isValid}, validatedButtons length: ${validatedButtons.length}`);
+
+                          let previewText = botResult.reply;
+
+                          if (isJsonButtons && isValid && validatedButtons.length > 0) {
+                            botDebugLog(`Sending dynamic AI-generated buttons for bot "${botResult.agent?.name}"`);
+                            const buttonBody = parsedInteractive.text;
+                            const footer = parsedInteractive.footer || "";
+                            previewText = buttonBody;
+
+                            const sendResult = await sendInteractiveButtons(
+                              from,
+                              buttonBody,
+                              validatedButtons,
+                              footer,
+                              phone_number_id
+                            );
+                            botWaMessageId = sendResult?.messages?.[0]?.id || null;
+
+                            storedBotReply = await storeMessage({
+                              organization_id,
+                              contact_id: contact.id,
+                              conversation_id: conv.id,
+                              wa_message_id: botWaMessageId,
+                              direction: "outbound",
+                              type: "interactive",
+                              content: {
+                                text: buttonBody,
+                                interactive: {
+                                  type: interactiveType,
+                                  body: buttonBody,
+                                  footer: footer,
+                                  buttons: validatedButtons,
+                                },
+                                is_bot_reply: true,
+                                bot_agent_id: botResult.agent?.id,
+                                bot_agent_name: botResult.agent?.name,
+                              },
+                              status: "sent",
+                              is_bot_reply: true,
+                              bot_agent_id: botResult.agent?.id || null,
+                              sender_type: "ai_agent",
+                              automation_source: "ai_agent",
+                            } as any);
+
+                            io.emit("new_message", {
+                              from: metadata?.display_phone_number || phone_number_id,
+                              phone: from,
+                              text: buttonBody,
+                              sender: "agent",
+                              conversation_id: conv.id,
+                              contact_id: contact.id,
+                              message_id: storedBotReply?.id || null,
+                              wa_message_id: botWaMessageId,
+                              created_at: storedBotReply?.created_at || new Date().toISOString(),
+                              connectedAccount: metadata?.display_phone_number,
+                              type: "interactive",
+                              content: {
+                                text: buttonBody,
+                                interactive: {
+                                  type: interactiveType,
+                                  body: buttonBody,
+                                  footer: footer,
+                                  buttons: validatedButtons,
+                                }
+                              },
+                              is_bot_reply: true,
+                            });
+                          } else {
+                            botDebugLog(`Replying with plain text for bot "${botResult.agent?.name}"`);
+                            let plainTextReply = botResult.reply;
+                            if (isJsonButtons && parsedInteractive && parsedInteractive.text) {
+                              plainTextReply = parsedInteractive.text;
+                            }
+                            previewText = plainTextReply;
+
+                            const sendResult = await sendTextMessage(
+                              from,
+                              plainTextReply,
+                              phone_number_id,
+                            );
+                            botWaMessageId = sendResult?.messages?.[0]?.id || null;
+                            storedBotReply = await storeMessage({
+                              organization_id,
+                              contact_id: contact.id,
+                              conversation_id: conv.id,
+                              wa_message_id: botWaMessageId,
+                              direction: "outbound",
+                              type: "text",
+                              content: {
+                                text: plainTextReply,
+                                bot_agent_id: botResult.agent?.id,
+                                bot_agent_name: botResult.agent?.name,
+                              },
+                              status: "sent",
+                              is_bot_reply: true,
+                              bot_agent_id: botResult.agent?.id || null,
+                              sender_type: "ai_agent",
+                              automation_source: "ai_agent",
+                            } as any);
+                            io.emit("new_message", {
+                              from: metadata?.display_phone_number || phone_number_id,
+                              phone: from,
+                              text: plainTextReply,
+                              sender: "agent",
+                              conversation_id: conv.id,
+                              contact_id: contact.id,
+                              message_id: storedBotReply?.id || null,
+                              wa_message_id: botWaMessageId,
+                              created_at:
+                                storedBotReply?.created_at || new Date().toISOString(),
+                              connectedAccount: metadata?.display_phone_number,
+                              type: "text",
+                              is_bot_reply: true,
+                            });
+                          }
+
+                          // Update conversation preview using cleaned previewText
+                          await supabase
+                            .from("w_conversations")
+                            .update({
+                              last_message_at: new Date().toISOString(),
+                              last_message_preview: previewText.substring(0, 100),
+                            })
+                            .eq("id", conv.id);
+                        }
                         webhookLog("bot_agent.conversation_preview.updated", {
                           requestId,
                           conversation_id: conv.id,
