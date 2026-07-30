@@ -2353,14 +2353,14 @@ export default function LiveChat() {
                     </div>
                     {numButtons > 0 && (
                         <div className={`flex bg-white rounded-b-[7.5px] overflow-hidden ${numButtons <= 2 ? 'flex-row' : 'flex-col'}`}>
-                            {interactive.buttons?.map((btn, idx) => (
+                            {(interactive.buttons || []).filter(Boolean).map((btn, idx) => (
                                 <div
-                                    key={btn.id}
+                                    key={btn?.id || idx}
                                     className={`flex-1 px-2 py-[11px] text-[15px] tracking-wide text-[#00a884] flex items-center justify-center cursor-default text-center border-t border-[#e9edef] ${
                                         numButtons <= 2 && idx > 0 ? 'border-l' : ''
                                     }`}
                                 >
-                                    {btn.text}
+                                    {btn?.text}
                                 </div>
                             ))}
                         </div>
@@ -2415,7 +2415,7 @@ export default function LiveChat() {
         let colorClass = 'text-[#6676ff]'; // Default color for You
 
         if (source === 'flow' || msg.metadata?.flow_id) {
-            label = 'Flow';
+            label = msg.metadata?.flow_name || 'Flow';
             colorClass = 'text-[#0284c7]';
         } else if (source === 'ai_agent' || msg.isBotReply || msg.botAgentId) {
             label = msg.botAgentName || getBotName(msg.botAgentId) || 'AI Agent';

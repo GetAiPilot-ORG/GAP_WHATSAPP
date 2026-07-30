@@ -7,6 +7,7 @@ import { useDialog } from '../context/DialogContext'
 import { useWhatsAppAccounts } from '../context/WhatsAppAccountContext'
 import { formatINRFromPaise } from '../config/whatsappPricing'
 import { MESSAGING_TIERS, getMessagingTierLabel } from '../utils/messagingLimits'
+import DateTimePicker from '../components/DateTimePicker'
 
 const STEPS = [
     { id: 1, name: 'Setup', icon: LayoutGrid },
@@ -992,14 +993,45 @@ const renderLivePreview = () => {
 
     return (
         <div className="mx-auto w-full max-w-[1600px] space-y-6 md:space-y-8 px-4 sm:px-6 lg:px-8 pb-16">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-wrap gap-4 md:items-center justify-between">
                 <div>
                     <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Broadcasts</h1>
                     <p className="text-xs md:text-sm text-gray-500 mt-1 md:mt-2 max-w-lg leading-relaxed">Design, schedule, and track bulk message campaigns for your audience.</p>
                 </div>
-                <div data-tour="broadcast-tabs" className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end">
-                    <div className="hidden md:block">
+
+                
+                {activeTab === 'new' && !sendResult && (
+                    <div className="hidden lg:flex items-center justify-center shrink-0 mx-2 xl:mx-4">
+                        <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-gray-200/60 shadow-sm">
+                            {STEPS.map((step, index) => {
+                                const isActive = step.id === currentStep
+                                const isCompleted = step.id < currentStep
+                                return (
+                                    <React.Fragment key={step.id}>
+                                        <button
+                                            type="button"
+                                            className={`flex items-center shrink-0 gap-1.5 ${isCompleted ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} transition-opacity`}
+                                            onClick={() => { if (isCompleted) setCurrentStep(step.id) }}
+                                            disabled={!isCompleted && !isActive}
+                                        >
+                                            <div className={`flex shrink-0 h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${isActive ? 'bg-[#0070d1] text-white shadow-sm' : isCompleted ? 'bg-emerald-500 text-white shadow-sm' : 'bg-gray-100 text-gray-400 border border-gray-200'}`}>
+                                                {isCompleted ? <Check className="h-3 w-3 shrink-0" /> : step.id}
+                                            </div>
+                                            <span className={`text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${isActive ? 'text-[#0070d1]' : isCompleted ? 'text-emerald-600' : 'text-gray-400'}`}>
+                                                {step.name}
+                                            </span>
+                                        </button>
+                                        {index < STEPS.length - 1 && (
+                                            <div className={`h-[2px] w-3 lg:w-5 shrink-0 rounded-full transition-colors ${step.id < currentStep ? 'bg-emerald-500' : 'bg-gray-100'}`} />
+                                        )}
+                                    </React.Fragment>
+                                )
+                            })}
+                        </div>
                     </div>
+                )}
+
+                <div data-tour="broadcast-tabs" className="flex items-center shrink-0 gap-2 w-full md:w-auto justify-between md:justify-end">
                     <div className="flex bg-gray-100/80 p-1.5 rounded-xl border border-gray-200/60 shadow-sm backdrop-blur-sm w-full md:w-auto">
                         <button
                             onClick={() => setActiveTab('new')}
@@ -1361,43 +1393,7 @@ const renderLivePreview = () => {
                 </div>
             ) : (
                 <div className="space-y-5">
-                    {/* Progress Steps */}
-                    <div data-tour="broadcast-stepper" className="rounded-2xl border border-gray-200 bg-white p-3 md:p-5 shadow-sm">
-                        <div className="relative">
-                            <div className="absolute left-[12.5%] right-[12.5%] top-4 md:top-5 h-0.5 bg-gray-200"></div>
-                            <div className="absolute left-[12.5%] top-4 md:top-5 h-0.5 bg-[#0070d1] transition-all duration-500 ease-in-out" style={{ width: `calc(${((currentStep - 1) / (STEPS.length - 1)) * 100}%)` }}></div>
-                            <div className="relative z-10 grid grid-cols-4 gap-1 md:gap-2">
-                            {STEPS.map((step) => {
-                                const isActive = step.id === currentStep
-                                const isCompleted = step.id < currentStep
-                                return (
-                                    <button
-                                        type="button"
-                                        key={step.id} 
-                                        className={`flex flex-col items-center rounded-xl px-1 py-1 text-center transition-colors ${isCompleted ? 'cursor-pointer hover:bg-gray-50' : ''}`}
-                                        onClick={() => {
-                                            if (isCompleted) {
-                                                setCurrentStep(step.id)
-                                            }
-                                        }}
-                                        disabled={!isCompleted && !isActive}
-                                    >
-                                        <div className={`flex h-8 w-8 md:h-10 md:w-10 items-center justify-center rounded-full border text-sm font-bold transition-all ${
-                                                isActive ? 'border-[#0070d1] bg-[#0070d1] text-white shadow-sm' :
-                                                isCompleted ? 'border-emerald-500 bg-emerald-500 text-white' :
-                                                'border-gray-200 bg-white text-gray-400'
-                                            }`}>
-                                            {isCompleted ? <Check className="h-4 w-4" /> : step.id}
-                                        </div>
-                                        <span className={`mt-1.5 text-[8px] sm:text-[10px] md:text-xs font-bold uppercase tracking-wide transition-colors ${isActive ? 'text-[#0064b7]' : isCompleted ? 'text-emerald-600' : 'text-gray-400'} block text-center truncate w-full`}>
-                                            {step.name}
-                                        </span>
-                                    </button>
-                                )
-                            })}
-                            </div>
-                        </div>
-                    </div>
+
 
                     {/* Step Content */}
                     <div className="rounded-2xl border border-gray-200 bg-white shadow-sm flex flex-col overflow-visible">
@@ -1469,87 +1465,98 @@ const renderLivePreview = () => {
                                         )}
                                     </div>
 
-                                    {selectedWaAccount && (
-                                        <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                                            <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
-                                                <div>
-                                                    <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-950">
-                                                        Messaging limits
-                                                        <span title="Live data fetched from the connected Meta account"><Info className="h-3.5 w-3.5 text-gray-400" /></span>
-                                                    </div>
-                                                    <p className="mt-0.5 text-[10px] text-gray-500">
-                                                        {messagingLimits?.fetched_at ? `Updated ${format(new Date(messagingLimits.fetched_at), 'MMM d, h:mm a')}` : 'Loading live Meta account data'}
-                                                    </p>
+                                    <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                                        <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
+                                            <div>
+                                                <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-950">
+                                                    Messaging limits
+                                                    <span title="Live data fetched from the connected Meta account"><Info className="h-3.5 w-3.5 text-gray-400" /></span>
                                                 </div>
-                                                {messagingLimits?.quality_rating && (
-                                                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[9px] font-semibold ${messagingLimits.quality_rating === 'GREEN' ? 'bg-emerald-50 text-emerald-700' : messagingLimits.quality_rating === 'YELLOW' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'}`}>
-                                                        <ShieldCheck className="h-3 w-3" /> {messagingLimits.quality_rating} quality
-                                                    </span>
-                                                )}
+                                                <p className="mt-0.5 text-[10px] text-gray-500">
+                                                    {!selectedWaAccount ? 'Select an account to view limits' : messagingLimits?.fetched_at ? `Updated ${format(new Date(messagingLimits.fetched_at), 'MMM d, h:mm a')}` : 'Loading live Meta account data'}
+                                                </p>
                                             </div>
-
-                                            {messagingLimitsState === 'loading' && (
-                                                <div className="flex h-28 items-center justify-center gap-2 text-xs text-gray-500">
-                                                    <Loader2 className="h-4 w-4 animate-spin" /> Fetching from Meta...
-                                                </div>
+                                            {selectedWaAccount && messagingLimits?.quality_rating && (
+                                                <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[9px] font-semibold ${messagingLimits.quality_rating === 'GREEN' ? 'bg-emerald-50 text-emerald-700' : messagingLimits.quality_rating === 'YELLOW' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'}`}>
+                                                    <ShieldCheck className="h-3 w-3" /> {messagingLimits.quality_rating} quality
+                                                </span>
                                             )}
-                                            {messagingLimitsState === 'error' && (
-                                                <div className="m-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-800">
+                                        </div>
+
+                                        {!selectedWaAccount ? (
+                                            <div className="flex h-[176px] flex-col items-center justify-center gap-2 text-xs text-gray-400 bg-gray-50/30">
+                                                <Info className="h-6 w-6 opacity-30 mb-1" />
+                                                <p>Select a WhatsApp account to view its Meta messaging limits.</p>
+                                            </div>
+                                        ) : messagingLimitsState === 'loading' || !messagingLimits ? (
+                                            <div className="flex h-[176px] items-center justify-center gap-2 text-xs text-gray-500 bg-gray-50/30">
+                                                <Loader2 className="h-5 w-5 animate-spin" /> Fetching from Meta...
+                                            </div>
+                                        ) : messagingLimitsState === 'error' ? (
+                                            <div className="flex h-[176px] items-center justify-center p-4 bg-gray-50/30">
+                                                <div className="w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-800 text-center">
                                                     Live messaging limit is unavailable. Reconnect or check this account’s Meta permissions.
                                                 </div>
-                                            )}
-                                            {messagingLimitsState === 'success' && (
-                                                <div className="p-4">
-                                                    <div className="grid grid-cols-5 overflow-hidden rounded-lg border border-gray-200">
-                                                        {MESSAGING_TIERS.map((tier) => {
-                                                            const isCurrent = tier.value === messagingLimits.messaging_limit_tier
-                                                            return (
-                                                                <div key={tier.value} className={`flex min-h-16 flex-col items-center justify-center border-r border-gray-200 px-1 text-center last:border-r-0 ${isCurrent ? 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-300' : 'bg-gray-50 text-gray-400'}`}>
-                                                                    {isCurrent && <span className="mb-1 rounded-full bg-blue-600 px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-white">Current</span>}
-                                                                    <span className={`text-[9px] sm:text-[10px] ${isCurrent ? 'font-bold' : 'font-medium'}`}>{tier.label}</span>
-                                                                </div>
-                                                            )
-                                                        })}
-                                                    </div>
-                                                    <div className="mt-3 flex items-start gap-2 rounded-lg bg-gray-50 px-3 py-2.5">
-                                                        <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+                                            </div>
+                                        ) : (
+                                            <div className="p-4 min-h-[176px] flex flex-col justify-center">
+                                                <div className="grid grid-cols-5 overflow-hidden rounded-lg border border-gray-200">
+                                                    {MESSAGING_TIERS.map((tier) => {
+                                                        const isCurrent = tier.value === messagingLimits.messaging_limit_tier
+                                                        return (
+                                                            <div key={tier.value} className={`flex min-h-16 flex-col items-center justify-center border-r border-gray-200 px-1 text-center last:border-r-0 ${isCurrent ? 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-300' : 'bg-gray-50 text-gray-400'}`}>
+                                                                {isCurrent && <span className="mb-1 rounded-full bg-blue-600 px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-white">Current</span>}
+                                                                <span className={`text-[9px] sm:text-[10px] ${isCurrent ? 'font-bold' : 'font-medium'}`}>{tier.label}</span>
+                                                            </div>
+                                                        )
+                                                    })}
+                                                </div>
+                                                <div className="mt-3 flex items-start gap-2 rounded-lg bg-gray-50 px-3 py-2.5">
+                                                    <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+                                                    <div className="flex flex-col gap-1">
                                                         <p className="text-[10px] leading-4 text-gray-600">
                                                             Current limit: <strong className="text-gray-900">{getMessagingTierLabel(messagingLimits.messaging_limit_tier)}</strong> business-initiated conversations in a rolling 24-hour period.
                                                         </p>
+                                                        <p className="text-[10px] leading-4 text-gray-500">
+                                                            <strong className="font-medium text-gray-700">To increase limit:</strong> Maintain a Green quality rating and message more unique customers with high-quality content over 7 days.
+                                                        </p>
                                                     </div>
                                                 </div>
-                                            )}
-                                        </section>
-                                    )}
+                                            </div>
+                                        )}
+                                    </section>
 
                                     <div>
                                         <label className="mb-2 block text-xs md:text-sm font-semibold text-gray-800">Send timing</label>
                                         <div className="grid grid-cols-2 gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => setCampaign({ ...campaign, scheduled_at: '' })}
-                                                className={`rounded-lg border px-3 py-2.5 text-left text-sm font-semibold ${!campaign.scheduled_at ? 'border-[#0070d1] bg-[#eef7ff] text-[#0064b7] ring-1 ring-[#0070d1]' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
-                                            >
-                                                Send now
-                                                <span className="mt-0.5 block text-xs font-normal text-gray-500">Start after review</span>
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setCampaign({ ...campaign, scheduled_at: campaign.scheduled_at || new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16) })}
-                                                className={`rounded-lg border px-3 py-2.5 text-left text-sm font-semibold ${campaign.scheduled_at ? 'border-[#0070d1] bg-[#eef7ff] text-[#0064b7] ring-1 ring-[#0070d1]' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
-                                            >
-                                                Schedule
-                                                <span className="mt-0.5 block text-xs font-normal text-gray-500">Choose date and time</span>
-                                            </button>
+                                            <div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setCampaign({ ...campaign, scheduled_at: '' })}
+                                                    className={`w-full rounded-lg border px-3 py-2.5 text-left text-sm font-semibold ${!campaign.scheduled_at ? 'border-[#0070d1] bg-[#eef7ff] text-[#0064b7] ring-1 ring-[#0070d1]' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
+                                                >
+                                                    Send now
+                                                    <span className="mt-0.5 block text-xs font-normal text-gray-500">Start after review</span>
+                                                </button>
+                                            </div>
+                                            <div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setCampaign({ ...campaign, scheduled_at: campaign.scheduled_at || new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16) })}
+                                                    className={`w-full rounded-lg border px-3 py-2.5 text-left text-sm font-semibold ${campaign.scheduled_at ? 'border-[#0070d1] bg-[#eef7ff] text-[#0064b7] ring-1 ring-[#0070d1]' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
+                                                >
+                                                    Schedule
+                                                    <span className="mt-0.5 block text-xs font-normal text-gray-500">Choose date and time</span>
+                                                </button>
+                                                {campaign.scheduled_at && <div className="relative mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                                    <DateTimePicker
+                                                        value={campaign.scheduled_at}
+                                                        onChange={val => setCampaign({ ...campaign, scheduled_at: val })}
+                                                        placeholder="Choose date and time"
+                                                    />
+                                                </div>}
+                                            </div>
                                         </div>
-                                        {campaign.scheduled_at && <div className="relative mt-3">
-                                            <input
-                                                type="datetime-local"
-                                                className="h-10 md:h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-xs md:text-sm text-gray-950 outline-none transition focus:border-[#0070d1] focus:ring-2 focus:ring-[#0070d1]/10"
-                                                value={campaign.scheduled_at}
-                                                onChange={e => setCampaign({ ...campaign, scheduled_at: e.target.value })}
-                                            />
-                                        </div>}
                                     </div>
                                 </div>
 
