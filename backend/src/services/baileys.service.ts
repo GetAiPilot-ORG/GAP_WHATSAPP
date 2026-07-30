@@ -18,7 +18,7 @@ import makeWASocket, {
 import { upsertContact, sanitizeContactDisplayName, normalizeContactWaIdForStorage, pickBestBaileysContactName } from './contacts.service.js';
 import { getBotAgentReply } from './ai.service.js';
 import { performAutoAssignment } from './assignment.service.js';
-
+import { sendPushNotificationToOrg } from './push.service.js';
 
 const botDebounceMap = new Map<string, NodeJS.Timeout>();
 const botLockMap = new Map<string, Promise<void>>();
@@ -520,6 +520,16 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                             sender: isOutbound ? 'agent' : 'user',
                             status: isOutbound ? 'sent' : 'delivered'
                         });
+
+                        // Trigger Push Notification for inbound messages
+                        if (!isOutbound) {
+                            sendPushNotificationToOrg(orgId, {
+                                title: `New message from ${threadName || senderName}`,
+                                body: captionText || 'New media message received',
+                                url: `/live-chat`,
+                                icon: '/pwa-192x192.png'
+                            });
+                        }
 
                         // Bot Auto-Reply for Baileys (only for inbound text messages)
                         if (!isOutbound && normalizedType === 'text' && captionText) {
