@@ -1,3 +1,4 @@
+import fs from 'fs';
 import { Response } from 'express';
 import { supabase } from '../config/supabase.js';
 import { storeMessage, upsertConversation } from '../services/messages.service.js';

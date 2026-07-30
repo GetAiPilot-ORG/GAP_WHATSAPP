@@ -6,6 +6,7 @@ import Layout from './components/Layout'
 import { AuthProvider } from './context/AuthContext'
 import { DialogProvider } from './context/DialogContext'
 import { WhatsAppAccountProvider } from './context/WhatsAppAccountContext'
+import { PwaInstallProvider } from './context/PwaInstallContext'
 import Contacts from './pages/Contacts'
 import WhatsAppConnect from './pages/WhatsAppConnect'
 import FlowBuilder from './pages/FlowBuilder'
@@ -30,6 +31,7 @@ import WhatsAppNumberPage from './pages/WhatsAppNumberPage'
 import WhatsAppLinkGenerator from './pages/WhatsAppLinkGenerator'
 import WhatsAppRedirect from './pages/WhatsAppRedirect'
 import CookieConsent from './components/CookieConsent'
+import PwaUpdater from './components/PwaUpdater'
 import HomePage from './pages/HomePage'
 import TermsOfService from './pages/TermsOfService'
 import { loadFacebookSDK } from './services/facebookSdkLoader'
@@ -63,7 +65,8 @@ export default function App() {
       <DialogProvider>
         <AuthProvider>
           <WhatsAppAccountProvider>
-            <BrowserRouter>
+            <PwaInstallProvider>
+              <BrowserRouter>
               <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/terms" element={<TermsOfService />} />
@@ -96,10 +99,12 @@ export default function App() {
               </Route>
             </Routes>
             {import.meta.env.VITE_ENABLE_COOKIE_CONSENT === 'true' && <CookieConsent />}
-          </BrowserRouter>
-        </WhatsAppAccountProvider>
-      </AuthProvider>
+              </BrowserRouter>
+            </PwaInstallProvider>
+          </WhatsAppAccountProvider>
+        </AuthProvider>
       </DialogProvider>
+      <PwaUpdater />
       <Toaster
         position="bottom-right"
         expand={false}

@@ -1,3 +1,4 @@
+import fs from 'fs';
 import { supabase } from '../config/supabase.js';
 import { isUuid } from '../utils/format.js';
 import { getBotAgentReply } from './ai.service.js';
