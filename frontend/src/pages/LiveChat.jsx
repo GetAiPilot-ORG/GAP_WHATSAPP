@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
+import { get, set } from 'idb-keyval'
 import { Search, MoreVertical, Paperclip, Send, Smile, Phone, Tag, Check, CheckCheck, Clock, AlertCircle, Info, ChevronLeft, ChevronDown, ArrowDown, FileText, Mic, Pencil, Bot, User, ExternalLink, Reply, Forward, X, Copy, Trash2, Archive, Pin, PinOff, MailOpen, Star, StarOff, Eraser, Inbox, BellOff } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { format, isToday, isYesterday } from 'date-fns'
@@ -1793,6 +1794,18 @@ export default function LiveChat() {
         };
     }, [memberProfile?.organization_id, playNotification, refetchAccounts]);
 
+    // Update App Badge based on total unread count
+    useEffect(() => {
+        if ('setAppBadge' in navigator && 'clearAppBadge' in navigator) {
+            const totalUnread = chats.reduce((sum, chat) => sum + Number(chat.unread || 0), 0);
+            if (totalUnread > 0) {
+                navigator.setAppBadge(totalUnread).catch(console.error);
+            } else {
+                navigator.clearAppBadge().catch(console.error);
+            }
+        }
+    }, [chats]);
+
     useEffect(() => {
         if (!session?.access_token) return
 
@@ -2112,6 +2125,31 @@ export default function LiveChat() {
 
         try {
             const sessionId = localStorage.getItem('whatsapp_session_id') || 'dashboard_session'
+
+            if (!navigator.onLine) {
+                const offlineDraft = {
+                    url: `${API_BASE}/conversations/${selectedChat.id}/send`,
+                    method: 'POST',
+                    headers: {
+                        ...authHeaders,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text: textToSend, session_id: sessionId, reply_to_message_id: replyToSend?.wa_message_id || null, client_message_id: clientMessageId }),
+                    timestamp: Date.now(),
+                    clientMessageId,
+                    conversationId: selectedChat.id,
+                };
+                const queue = await get('offline_message_queue') || [];
+                queue.push(offlineDraft);
+                await set('offline_message_queue', queue);
+
+                if ('serviceWorker' in navigator && 'SyncManager' in window) {
+                    const registration = await navigator.serviceWorker.ready;
+                    await registration.sync.register('sync-messages').catch(console.error);
+                }
+                return; // Leave optimistic UI as 'sending'
+            }
+
             const res = await fetch(`${API_BASE}/conversations/${selectedChat.id}/send`, {
                 method: 'POST',
                 headers: {

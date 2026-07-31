@@ -22,12 +22,14 @@ import {
     UserCircle,
     Users,
     X,
+    BellRing,
 } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
 import { useAuth } from '../context/AuthContext'
 import { useWhatsAppAccounts } from '../context/WhatsAppAccountContext'
 import { usePwaInstall } from '../context/PwaInstallContext'
+import { usePush } from '../context/PushContext'
 
 const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: Grid2X2 },
@@ -67,6 +69,7 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
     const { accounts: waAccounts } = useWhatsAppAccounts()
     const [selectedWaAccount, setSelectedWaAccount] = useState(() => localStorage.getItem(SELECTED_WA_ACCOUNT_KEY) || 'All')
     const { isInstallable, promptInstall } = usePwaInstall()
+    const { permissionStatus, isSubscribed, subscribeToPush } = usePush()
 
     const isOwner = userRole === 'owner'
     const usesCompactSidebar = location.pathname.startsWith('/live-chat')
@@ -264,6 +267,21 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
                                 <Download className="h-4 w-4 shrink-0 stroke-[1.9]" />
                                 <span className={labelTransition(isExpanded, 'flex min-w-0 flex-1 items-center')}>
                                     <span className="min-w-0 flex-1 truncate text-left">Install App</span>
+                                </span>
+                            </button>
+                        )}
+                        {(!isSubscribed && permissionStatus !== 'denied') && (
+                            <button
+                                onClick={() => subscribeToPush(organization.id)}
+                                className={clsx(
+                                    'mb-2 flex h-9 w-full items-center rounded-lg bg-blue-50 text-[14px] font-medium text-blue-700 transition-colors hover:bg-blue-100',
+                                    isCollapsed ? 'justify-center px-0' : 'gap-2 px-2'
+                                )}
+                                title={isCollapsed ? "Enable Notifications" : undefined}
+                            >
+                                <BellRing className="h-4 w-4 shrink-0 stroke-[1.9]" />
+                                <span className={labelTransition(isExpanded, 'flex min-w-0 flex-1 items-center')}>
+                                    <span className="min-w-0 flex-1 truncate text-left">Enable Notifications</span>
                                 </span>
                             </button>
                         )}
