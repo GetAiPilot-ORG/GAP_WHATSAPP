@@ -20,6 +20,7 @@ import whatsappRoutes from './routes/whatsapp.routes.js';
 import webhookRoutes from './routes/webhook.routes.js';
 import googleAuthRoutes from './routes/googleAuth.routes.js';
 import appointmentsRoutes from './routes/appointments.routes.js';
+import pushRoutes from './routes/push.routes.js';
 
 dotenv.config({ path: "./.env" });
 
@@ -125,6 +126,7 @@ app.use('/api', waRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/integrations/google', googleAuthRoutes);
 app.use('/api/appointments', appointmentsRoutes);
+app.use('/api/push', pushRoutes);
 app.use(webhookRoutes); // Root level /webhook
 
 export default app;

@@ -1,6 +1,14 @@
 import crypto from 'crypto';
 import { supabase } from '../config/supabase.js';
 
+// Memory cache for active flows grouped by Organization ID
+const flowsCache = new Map<string, any[]>();
+
+export function invalidateFlowsCache(orgId: string) {
+  flowsCache.delete(orgId);
+  console.log(`[Cache] Cleared active flows cache for organization ${orgId}`);
+}
+
 const KNOWLEDGE_MAX_CONTEXT_CHARS = 10000;
 const AGENT_SETTINGS_ITEM_TYPE = "__agent_settings";
 
@@ -263,6 +271,70 @@ export async function getBotAgentReply(params: {
 - Act like you have perfect memory of this conversation.
 - Keep your responses highly conversational, concise, and direct. Avoid repeating yourself. Act like a real human texting a friend on WhatsApp.`;
 
+    systemPrompt += `\n\nDYNAMIC INTERACTIVE BUTTONS RULE (CRITICAL):
+- By default, always reply with standard conversational plain text.
+- If and ONLY if presenting distinct choices, options, products, pricing plans, booking options, or confirmations where buttons would significantly improve the user's experience, you MUST format your response as a raw JSON object (with no other introductory or concluding conversational text). Do NOT use markdown code blocks (e.g. do not wrap in \`\`\`json).
+- The JSON object MUST strictly adhere to this structure:
+  {
+    "text": "The main message text (body) here",
+    "buttons": [
+      { "id": "btn_unique_id", "text": "Button Label", "type": "reply" }
+    ],
+    "footer": "Optional footer text"
+  }
+- Rules for buttons:
+  - Maximum of 3 buttons.
+  - Button text/label ("text") must be extremely short and concise (under 20 characters) due to Meta WhatsApp limits.
+  - Button ID ("id") must be a unique identifier under 256 characters.
+  - Do not mix URL/phone buttons with quick reply buttons. (Generate standard quick reply buttons with "id" and "text" only).`;
+
+    // Query active flows for dynamic routing from memory cache (event-driven invalidation)
+    let activeFlows = flowsCache.get(organization_id) || [];
+    if (activeFlows.length === 0) {
+      try {
+        const { data: flowsData } = await supabase
+          .from("w_flows")
+          .select("name, trigger_keywords, triggers, status")
+          .eq("organization_id", organization_id)
+          .eq("status", "active");
+        activeFlows = flowsData || [];
+        flowsCache.set(organization_id, activeFlows);
+        console.log(`[Cache] Populated active flows cache for organization ${organization_id} (count: ${activeFlows.length})`);
+      } catch (err) {
+        console.error("Error fetching active flows for AI context:", err);
+        activeFlows = [];
+      }
+    }
+
+    if (activeFlows.length > 0) {
+      let flowsPrompt = `\n\nAVAILABLE SYSTEM FLOWS YOU CAN TRIGGER:\n`;
+      for (const flow of activeFlows) {
+        const keywords: string[] = [];
+        if (Array.isArray(flow.trigger_keywords)) {
+          keywords.push(...flow.trigger_keywords.map((k: any) => String(k).trim()));
+        } else if (typeof flow.trigger_keywords === "string") {
+          keywords.push(...flow.trigger_keywords.split(",").map((k: string) => k.trim()));
+        }
+        if (Array.isArray(flow.triggers)) {
+          keywords.push(...flow.triggers.map((k: any) => String(k).trim()));
+        } else if (typeof flow.triggers === "string") {
+          keywords.push(...flow.triggers.split(",").map((k: string) => k.trim()));
+        }
+        const uniqueKeywords = [...new Set(keywords.filter(Boolean))];
+        
+        if (uniqueKeywords.length > 0) {
+          flowsPrompt += `- Flow Name: "${flow.name}", Trigger Keywords (Use as button ID): ${JSON.stringify(uniqueKeywords)}\n`;
+        }
+      }
+      flowsPrompt += `\nINSTRUCTIONS FOR TRIGGERING FLOWS:\n`;
+      flowsPrompt += `- If you identify that the user's intent is to do step-by-step onboarding, book a demo, or use a structured service that matches one of the flows listed above, DO NOT respond with a plain text message description.\n`;
+      flowsPrompt += `- Instead, you MUST output a raw JSON button payload (following the DYNAMIC INTERACTIVE BUTTONS RULE above).\n`;
+      flowsPrompt += `- Set the button "id" to one of that flow's Trigger Keywords exactly. Set the button "text" to a short, clear call-to-action (under 20 characters).\n`;
+      flowsPrompt += `- This will allow the user to click the button on WhatsApp and automatically trigger that flow.\n`;
+      
+      systemPrompt += flowsPrompt;
+    }
+
     if (knowledgeContext) {
       systemPrompt += `\n\nKnowledge Base:\n${knowledgeContext}`;
     }
@@ -333,7 +405,8 @@ You represent "${targetAgent.name}" as a professional, helpful customer represen
 - SERVICES/WHAT YOU DO: If asked what you do or about your services, answer as a company representative using the provided description and details. Try your best to give a helpful, human-like response and NEVER prefix this with "[FALLBACK]".
 - BUSINESS/ORGANIZATION QUESTIONS: Try your best to answer questions related to the organization or its domain.
 - FALLBACKS & OFF-TOPIC: Only use "[FALLBACK]" prefix if you have no clues to answer a specific factual query (not in Knowledge Base or context) or if the query is completely off-topic (e.g. recipes, general knowledge, coding, etc.).
-- RECOVERY FROM PAST FALLBACKS: If the user greets you again after a fallback, break out of the fallback state, acknowledge the greeting warmly, and do NOT repeat the decline response.`
+- RECOVERY FROM PAST FALLBACKS: If the user greets you again after a fallback, break out of the fallback state, acknowledge the greeting warmly, and do NOT repeat the decline response.
+- DYNAMIC INTERACTIVE BUTTONS: Default to plain text. Only return a raw JSON object (keys: text, buttons, footer) if buttons are needed for choices, bookings, or confirmations. No markdown formatting around JSON. Max 3 buttons, labels under 20 characters.`
     });
 
     const selectedModel = targetAgent.model || dbModel || process.env.OPENAI_MODEL || "gpt-4o-mini";

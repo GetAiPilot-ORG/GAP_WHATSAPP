@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node --max-old-space-size=8192 ./node_modules/vite/bin/vite.js build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -24,9 +24,11 @@
     "exceljs": "^4.4.0",
     "framer-motion": "^12.42.2",
     "gsap": "^3.15.0",
+    "idb-keyval": "^6.3.0",
     "lucide-react": "^0.562.0",
     "motion": "^12.42.2",
     "react": "^19.2.0",
+    "react-datepicker": "^9.1.0",
     "react-dom": "^19.2.0",
     "react-qr-code": "^2.0.18",
     "react-router-dom": "^7.11.0",
@@ -50,6 +52,7 @@
     "globals": "^16.5.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
-    "vite": "^7.2.4"
+    "vite": "^7.2.4",
+    "vite-plugin-pwa": "^1.3.0"
   }
 }

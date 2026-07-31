@@ -855,8 +855,8 @@ export default function Contacts() {
     return (
         <div className="min-h-full bg-gray-50/70">
             <div className="space-y-5 p-2 sm:p-5 lg:px-7">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="flex items-start justify-between w-full lg:w-auto">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between relative">
+                    <div className="flex items-start justify-between w-full lg:w-auto z-10 relative">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-950 flex items-center gap-2">
                                 Contacts
@@ -864,7 +864,20 @@ export default function Contacts() {
                             <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-gray-500">Manage customer profiles, account ownership, and tags.</p>
                         </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:flex-wrap sm:items-center sm:w-auto">
+                    
+                    {/* Decorative CCTV Graphic */}
+                    <div className="hidden lg:block absolute right-36 top-1/2 -translate-y-1/2 w-40 opacity-90 mix-blend-multiply pointer-events-none z-0 drop-shadow-sm">
+                        <video 
+                            src="/images/3d-stickle-cctv-camera-with-stickers.webm" 
+                            autoPlay 
+                            loop 
+                            muted 
+                            playsInline 
+                            className="w-full h-auto object-contain"
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:flex-wrap sm:items-center sm:w-auto relative z-10">
 
                         <input
                             ref={fileInputRef}
