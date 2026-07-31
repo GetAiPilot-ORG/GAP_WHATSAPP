@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { supabase } from '../config/supabase.js';
+import { decryptToken } from '../utils/crypto.js';
 
 // Memory cache for active flows grouped by Organization ID
 const flowsCache = new Map<string, any[]>();
@@ -219,7 +220,7 @@ export async function getBotAgentReply(params: {
       dbModel = settings.model;
     }
     if (!apiKey && settings?.api_key_encrypted) {
-      apiKey = settings.api_key_encrypted;
+      apiKey = decryptToken(settings.api_key_encrypted);
     }
 
     if (!apiKey) {
@@ -286,6 +287,7 @@ export async function getBotAgentReply(params: {
   - Maximum of 3 buttons.
   - Button text/label ("text") must be extremely short and concise (under 20 characters) due to Meta WhatsApp limits.
   - Button ID ("id") must be a unique identifier under 256 characters.
+  - CRITICAL FOR ROUTING: If the button is designed to trigger one of the AVAILABLE SYSTEM FLOWS listed below, you MUST set the button "id" to one of that flow's Trigger Keywords EXACTLY (e.g., if keywords are ["CRM", "GAP CRM"], set the "id" to "CRM"). Do NOT make up generic button IDs like "btn_1" or "btn_crm" for system flows, or else the system cannot match it.
   - Do not mix URL/phone buttons with quick reply buttons. (Generate standard quick reply buttons with "id" and "text" only).`;
 
     // Query active flows for dynamic routing from memory cache (event-driven invalidation)
@@ -329,7 +331,8 @@ export async function getBotAgentReply(params: {
       flowsPrompt += `\nINSTRUCTIONS FOR TRIGGERING FLOWS:\n`;
       flowsPrompt += `- If you identify that the user's intent is to do step-by-step onboarding, book a demo, or use a structured service that matches one of the flows listed above, DO NOT respond with a plain text message description.\n`;
       flowsPrompt += `- Instead, you MUST output a raw JSON button payload (following the DYNAMIC INTERACTIVE BUTTONS RULE above).\n`;
-      flowsPrompt += `- Set the button "id" to one of that flow's Trigger Keywords exactly. Set the button "text" to a short, clear call-to-action (under 20 characters).\n`;
+      flowsPrompt += `- Set the button "id" to one of that flow's Trigger Keywords exactly (e.g. set "id" to "CRM" or "GAP WHATSAPP PILOT"). It MUST match one of the listed keywords case-sensitively and character-for-character. DO NOT prefix or modify it (do not use "btn_crm" or "CRM_flow").\n`;
+      flowsPrompt += `- Set the button "text" to a short, clear call-to-action (under 20 characters).\n`;
       flowsPrompt += `- This will allow the user to click the button on WhatsApp and automatically trigger that flow.\n`;
       
       systemPrompt += flowsPrompt;
@@ -406,7 +409,7 @@ You represent "${targetAgent.name}" as a professional, helpful customer represen
 - BUSINESS/ORGANIZATION QUESTIONS: Try your best to answer questions related to the organization or its domain.
 - FALLBACKS & OFF-TOPIC: Only use "[FALLBACK]" prefix if you have no clues to answer a specific factual query (not in Knowledge Base or context) or if the query is completely off-topic (e.g. recipes, general knowledge, coding, etc.).
 - RECOVERY FROM PAST FALLBACKS: If the user greets you again after a fallback, break out of the fallback state, acknowledge the greeting warmly, and do NOT repeat the decline response.
-- DYNAMIC INTERACTIVE BUTTONS: Default to plain text. Only return a raw JSON object (keys: text, buttons, footer) if buttons are needed for choices, bookings, or confirmations. No markdown formatting around JSON. Max 3 buttons, labels under 20 characters.`
+- DYNAMIC INTERACTIVE BUTTONS: Default to plain text. Only return a raw JSON object (keys: text, buttons, footer) if buttons are needed for choices, bookings, or confirmations. No markdown formatting around JSON. Max 3 buttons, labels under 20 characters. For triggering system flows, you MUST set the button "id" to one of that flow's Trigger Keywords EXACTLY (do not use generic IDs like "btn_1" or "btn_crm").`
     });
 
     const selectedModel = targetAgent.model || dbModel || process.env.OPENAI_MODEL || "gpt-4o-mini";

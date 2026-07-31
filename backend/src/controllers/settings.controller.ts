@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import { supabase } from '../config/supabase.js';
+import { encryptToken } from '../utils/crypto.js';
 import crypto from 'crypto';
 import path from 'path';
 import { 
@@ -136,7 +137,7 @@ export async function saveOpenAISettings(req: any, res: Response) {
             .from('openai_settings')
             .upsert({
                 organization_id,
-                api_key_encrypted: api_key, // TODO: Encrypt this!
+                api_key_encrypted: encryptToken(api_key),
                 model: model || 'gpt-4o-mini',
                 updated_at: new Date().toISOString()
             }, { onConflict: 'organization_id' })
