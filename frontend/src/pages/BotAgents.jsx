@@ -1,4 +1,8 @@
 import { useEffect, useMemo, useRef, useState, Fragment } from 'react'
+import { gsap } from 'gsap'
+import { useGSAP } from '@gsap/react'
+
+gsap.registerPlugin(useGSAP);
 import { Dialog as HeadlessDialog, Transition as HeadlessTransition } from '@headlessui/react'
 import {
     AlertCircle,
@@ -82,6 +86,8 @@ export default function BotAgents() {
         onConfirm: () => { },
     })
     const fileInputRef = useRef(null)
+    const statsContainerRef = useRef(null)
+    const cardsContainerRef = useRef(null)
 
     const authHeaders = useMemo(() => ({
         Authorization: `Bearer ${session?.access_token}`,
@@ -201,6 +207,24 @@ export default function BotAgents() {
         { title: 'Create first agent', helper: hasAgents ? `${agents.length} agents created` : 'Click Create Agent', done: hasAgents },
         { title: 'Turn on auto replies', helper: stats.unknown > 0 ? `${stats.unknown} ready` : 'Enable unknown chats', done: stats.unknown > 0 },
     ]
+
+    useGSAP(() => {
+        if (!isLoading) {
+            gsap.fromTo(".stat-card-item", 
+                { opacity: 0, y: 15 }, 
+                { opacity: 1, y: 0, duration: 0.45, stagger: 0.05, ease: "power2.out" }
+            )
+        }
+    }, { dependencies: [isLoading], scope: statsContainerRef })
+
+    useGSAP(() => {
+        if (!isLoading && filteredAgents.length > 0) {
+            gsap.fromTo(".agent-card-item", 
+                { opacity: 0, y: 20, scale: 0.98 }, 
+                { opacity: 1, y: 0, scale: 1, duration: 0.45, stagger: 0.08, ease: "power2.out" }
+            )
+        }
+    }, { dependencies: [isLoading, filteredAgents], scope: cardsContainerRef })
 
     const openCreate = () => {
         setDraft({
@@ -428,7 +452,7 @@ export default function BotAgents() {
                     </div>
                 ) : null}
 
-                <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
+                <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4" ref={statsContainerRef}>
                     <StatCard icon={Robot} label="Agents" value={stats.total} helper="Total trained bots" />
                     <StatCard icon={Check} label="Active" value={stats.active} helper="Replying now" />
                     <StatCard icon={ShieldCheck} label="Auto reply ready" value={stats.unknown} helper="New chats covered" />
@@ -447,7 +471,7 @@ export default function BotAgents() {
                                 {knowledgeDocs.length} synced knowledge docs
                             </div>
                         </div>
-                        <div className="grid gap-3 p-4 grid-cols-1 md:grid-cols-2 2xl:grid-cols-2 min-[1700px]:grid-cols-3">
+                        <div className="grid gap-3 p-4 grid-cols-1 md:grid-cols-2 2xl:grid-cols-2 min-[1700px]:grid-cols-3" ref={cardsContainerRef}>
                             {filteredAgents.length === 0 ? (
                                 <EmptyAgentsState hasAgents={hasAgents} query={query} onCreate={openCreate} isLimitReached={isLimitReached} />
                             ) : filteredAgents.map(agent => (
@@ -473,7 +497,7 @@ export default function BotAgents() {
                             </button>
                         </section>
 
-                        <section data-tour="agents-knowledge" className="rounded-lg border border-gray-200 bg-white p-4">
+                        <section data-tour="agents-knowledge" className="rounded-none border border-zinc-200 bg-white p-4">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <h2 className="font-bold text-gray-950">Knowledge sync</h2>
@@ -482,23 +506,23 @@ export default function BotAgents() {
                                 <Database size={22} weight="duotone" className="text-gray-400" />
                             </div>
                             <input ref={fileInputRef} type="file" multiple accept=".pdf,.docx,.txt,.md,.csv,.json" className="hidden" onChange={event => uploadKnowledgeFiles(event.target.files)} />
-                            <button onClick={() => fileInputRef.current?.click()} className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 px-3 py-3 text-sm font-semibold text-gray-700 hover:border-green-300 hover:bg-green-50">
+                            <button onClick={() => fileInputRef.current?.click()} className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-300 px-3 py-3 text-sm font-semibold text-zinc-700 hover:border-zinc-400 hover:bg-zinc-50/50 active:scale-[0.98] transition-all">
                                 {uploadingKb ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadSimple size={18} weight="bold" />}
                                 {uploadingKb ? 'Indexing...' : 'Upload and index docs'}
                             </button>
                             <div className="mt-4 space-y-2">
                                 {knowledgeDocs.slice(0, 5).map(doc => (
-                                    <div key={doc.id} className="flex items-center gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
-                                        <FileText size={18} weight="duotone" className="text-gray-400" />
+                                    <div key={doc.id} className="flex items-center gap-2 rounded-none border border-zinc-200 bg-[#f8f9fa] px-3 py-2.5 transition-all hover:border-zinc-300">
+                                        <FileText size={18} weight="duotone" className="text-zinc-400" />
                                         <div className="min-w-0 flex-1">
-                                            <div className="truncate text-sm font-semibold text-gray-800">{doc.name}</div>
-                                            <div className="text-xs text-gray-400">{doc.size_label} - {getDocCharCount(doc).toLocaleString()} chars</div>
+                                            <div className="truncate text-sm font-semibold text-zinc-800">{doc.name}</div>
+                                            <div className="text-xs text-zinc-400">{doc.size_label} - {getDocCharCount(doc).toLocaleString()} chars</div>
                                         </div>
-                                        <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700">{doc.status || 'INDEXED'}</span>
+                                        <span className="inline-flex items-center rounded bg-emerald-50/50 border border-emerald-100 px-2 py-0.5 text-[9px] font-bold text-emerald-700">{doc.status || 'INDEXED'}</span>
                                     </div>
                                 ))}
                                 {knowledgeDocs.length === 0 ? (
-                                    <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-4 text-center text-sm text-gray-500">
+                                    <div className="rounded-none border border-dashed border-zinc-300 bg-[#f8f9fa] px-3 py-4 text-center text-sm text-zinc-500">
                                         Upload FAQ, pricing, services, or product docs. Agent isi knowledge se answer karega.
                                     </div>
                                 ) : null}
@@ -558,53 +582,107 @@ function AgentCard({ agent, onEdit, onToggle, onDelete }) {
             : 'Keyword only'
 
     return (
-        <div className="group flex flex-col h-full rounded-lg border border-gray-200 bg-white p-3.5 sm:p-4 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50/20">
-            <div className="flex items-start justify-between gap-2 lg:gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                    <img src="/images/agent Bot.png" alt="Bot Icon" className="h-[52px] w-[52px] shrink-0 object-contain drop-shadow-md transition-transform hover:scale-105" />
-                    <div className="min-w-0 flex flex-col justify-center">
-                        <h3 className="truncate text-[15px] font-bold text-gray-950">{agent.name}</h3>
-                        <p className="mt-0.5 truncate text-[11px] font-medium text-gray-500" title={`${agent.model} • Temp ${agent.temperature}`}>
+        <div className="agent-card-item group relative flex flex-col justify-between h-full rounded-none border border-zinc-200 bg-[#f8f9fa] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-zinc-350 hover:shadow-[0_8px_30px_rgba(0,0,0,0.02)]">
+            <div>
+                {/* Header Row */}
+                <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                        <h3 className="text-base font-bold text-zinc-950 tracking-tight leading-snug">{agent.name}</h3>
+                        <p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-zinc-400 font-medium" title={`${agent.model} • Temp ${agent.temperature}`}>
                             {agent.model} &bull; Temp {agent.temperature}
                         </p>
                     </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-1.5">
-                    <button onClick={() => onToggle(agent)} className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] font-bold transition ${agent.isActive ? 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100' : 'border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100'}`} title={agent.isActive ? 'Pause agent' : 'Activate agent'}>
-                        <span className={`h-1.5 w-1.5 rounded-full ${agent.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
-                        <span className="hidden sm:inline">{agent.isActive ? 'Active' : 'Paused'}</span>
-                    </button>
-                    <button onClick={() => onDelete(agent)} className="rounded-lg p-1.5 text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors shrink-0" title="Delete">
-                        <Trash size={16} weight="duotone" />
+                    <button 
+                        onClick={() => onDelete(agent)} 
+                        className="rounded-md p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-650 transition-all shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 duration-200" 
+                        title="Delete agent"
+                    >
+                        <Trash size={15} />
                     </button>
                 </div>
-            </div>
-            <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-1.5">
-                <div className="flex items-center gap-2 text-[11px] font-semibold text-gray-700">
-                    <ChatCircleText size={14} weight="duotone" className="text-[#0064b7]" />
-                    {automationLabel}
-                </div>
-            </div>
-            <p className="mt-3 line-clamp-2 text-[13px] leading-5 text-gray-600">{agent.description || 'No description yet.'}</p>
-            
-            <div className="mt-auto pt-3 flex flex-col gap-3">
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                    <MiniMetric label="Docs" value={agent.documentCount || 0} />
-                    <MiniMetric label="Chars" value={Number(agent.characterCount || 0).toLocaleString()} />
-                </div>
-                
-                {((agent.triggerKeywords && agent.triggerKeywords.length > 0) || agent.automation.auto_reply_unknown || agent.automation.default_for_new_chats) && (
-                    <div className="flex flex-wrap gap-1.5">
-                        {(agent.triggerKeywords || []).slice(0, 4).map(keyword => <span key={keyword} className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">{keyword}</span>)}
-                        {agent.automation.auto_reply_unknown ? <span className="rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-semibold text-green-700">unknown auto</span> : null}
-                        {agent.automation.default_for_new_chats ? <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[11px] font-semibold text-purple-700">default</span> : null}
+
+                {/* Description */}
+                <p className="mt-4 line-clamp-2 text-xs leading-relaxed text-zinc-500 min-h-[32px]">
+                    {agent.description || 'No description yet.'}
+                </p>
+
+                {/* Automation Status & Badges */}
+                <div className="mt-4 space-y-3 pt-4 border-t border-zinc-200/60">
+                    <div className="flex items-center gap-2 text-xs text-zinc-605">
+                        <ChatCircleText size={15} className="text-zinc-400" />
+                        <span className="font-medium text-zinc-700">{automationLabel}</span>
                     </div>
-                )}
-                
-                <button onClick={() => onEdit(agent)} className="group/btn flex w-fit items-center justify-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-2 py-2 text-[13px] font-bold text-gray-700 shadow-sm transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-[#0064b7] active:scale-[0.98]">
-                    <img src="/images/upgrade-2.png" alt="Configure" className="h-5 w-5 object-contain drop-shadow-sm transition-transform duration-300 group-hover/btn:scale-110 group-hover/btn:rotate-6" />
-                    Configure agent
-                </button>
+
+                    {((agent.triggerKeywords && agent.triggerKeywords.length > 0) || agent.automation.auto_reply_unknown || agent.automation.default_for_new_chats) && (
+                        <div className="flex flex-wrap gap-1">
+                            {(agent.triggerKeywords || []).slice(0, 3).map(keyword => (
+                                <span key={keyword} className="inline-flex items-center rounded bg-zinc-200/50 border border-zinc-200/30 px-2.5 py-0.5 text-[10px] font-medium text-zinc-600">
+                                    {keyword}
+                                </span>
+                            ))}
+                            {agent.automation.auto_reply_unknown && (
+                                <span className="inline-flex items-center rounded bg-emerald-50/50 border border-emerald-100 px-2.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                                    unknown-auto
+                                </span>
+                            )}
+                            {agent.automation.default_for_new_chats && (
+                                <span className="inline-flex items-center rounded bg-indigo-50/50 border border-indigo-100 px-2.5 py-0.5 text-[10px] font-medium text-indigo-700">
+                                    default
+                                </span>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Footer metrics & action */}
+            <div className="mt-5 pt-4">
+                <div className="grid grid-cols-2 gap-4 border-t border-b border-zinc-200/60 py-3.5 my-4 divide-x divide-zinc-200/60">
+                    <div className="pr-2">
+                        <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-400 block mb-0.5">Documents</span>
+                        <span className="text-sm font-semibold text-zinc-900">{agent.documentCount || 0}</span>
+                    </div>
+                    <div className="pl-4">
+                        <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-400 block mb-0.5">Chars</span>
+                        <span className="text-sm font-semibold text-zinc-900">{Number(agent.characterCount || 0).toLocaleString()}</span>
+                    </div>
+                </div>
+
+                <div className="mt-4 flex gap-2">
+                    <button 
+                        onClick={() => onEdit(agent)} 
+                        className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-zinc-100/60 py-2.5 text-xs font-semibold text-zinc-700 hover:border-zinc-300 hover:bg-zinc-100 active:scale-[0.98] transition-all"
+                    >
+                        <GearSix size={14} className="text-zinc-500" />
+                        Configure
+                    </button>
+                    <button
+                        onClick={() => onToggle(agent)}
+                        className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg border py-2.5 text-xs font-semibold active:scale-[0.98] transition-all duration-200 ${
+                            agent.isActive
+                                ? 'border-zinc-250 bg-zinc-100/60 text-zinc-700 hover:bg-red-50/30 hover:border-red-200 hover:text-red-600'
+                                : 'border-zinc-200 bg-zinc-50 text-zinc-500 hover:bg-emerald-50/30 hover:border-emerald-250 hover:text-emerald-700'
+                        }`}
+                        title={agent.isActive ? 'Pause Agent' : 'Activate Agent'}
+                    >
+                        {agent.isActive ? (
+                            <>
+                                <span className="relative flex h-1.5 w-1.5">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                                </span>
+                                <span className="group-hover:hidden">Active</span>
+                                <span className="hidden group-hover:inline">Pause</span>
+                            </>
+                        ) : (
+                            <>
+                                <span className="h-1.5 w-1.5 rounded-full bg-zinc-300" />
+                                <span className="group-hover:hidden">Paused</span>
+                                <span className="hidden group-hover:inline">Activate</span>
+                            </>
+                        )}
+                    </button>
+                </div>
             </div>
         </div>
     )
@@ -796,19 +874,15 @@ function ApiKeyModal({ apiKey, setApiKey, configured, isSaving, onClose, onSave 
 function StatCard({ icon, label, value, helper }) {
     const IconComponent = icon
     return (
-        <div className="rounded-lg border border-gray-200 bg-white px-4 py-3">
+        <div className="stat-card-item rounded-xl border border-zinc-200/80 bg-white p-5 transition-all duration-200 hover:shadow-[0_8px_30px_rgba(0,0,0,0.02)]">
             <div className="flex items-center justify-between">
-                <div className="text-xs font-medium text-gray-500">{label}</div>
-                <IconComponent size={18} weight="duotone" className="text-gray-400" />
+                <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">{label}</span>
+                <IconComponent size={18} className="text-zinc-400" />
             </div>
-            <div className="mt-2 text-2xl font-bold text-gray-950">{value}</div>
-            {helper ? <div className="mt-1 text-xs text-gray-500">{helper}</div> : null}
+            <div className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950">{value}</div>
+            {helper ? <div className="mt-1 text-xs text-zinc-500 leading-normal">{helper}</div> : null}
         </div>
     )
-}
-
-function MiniMetric({ label, value }) {
-    return <div className="rounded-lg bg-gray-50 px-3 py-2"><div className="text-[10px] font-bold uppercase text-gray-400">{label}</div><div className="font-bold text-gray-900">{value}</div></div>
 }
 
 function Field({ label, children, className = '' }) {
