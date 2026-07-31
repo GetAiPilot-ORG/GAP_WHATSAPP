@@ -330,13 +330,13 @@ export default function FlowBuilder() {
         if (loading || waAccountsLoading || editingFlow) return;
 
         // Animate stats cards
-        gsap.fromTo('.stat-card-anim', 
+        gsap.fromTo('.stat-card-anim',
             { opacity: 0, y: 20 },
             { opacity: 1, y: 0, duration: 0.6, stagger: 0.08, ease: 'power3.out' }
         );
-        
+
         // Animate flow cards
-        gsap.fromTo('.flow-card-anim', 
+        gsap.fromTo('.flow-card-anim',
             { opacity: 0, y: 24 },
             { opacity: 1, y: 0, duration: 0.7, stagger: 0.06, ease: 'power3.out', delay: 0.15 }
         );
@@ -423,12 +423,12 @@ export default function FlowBuilder() {
                     </div>
                     {/* Premium Infinite Loop Video Frame */}
                     <div className="w-full md:w-[320px] shrink-0 border border-zinc-200 rounded-none overflow-hidden bg-zinc-950 flex items-center justify-center shadow-[0_8px_30px_rgba(0,0,0,0.02)]">
-                        <video 
-                            src="/videos/FlowVideo.mp4" 
-                            autoPlay 
-                            loop 
-                            muted 
-                            playsInline 
+                        <video
+                            src="/videos/FlowVideo.mp4"
+                            autoPlay
+                            loop
+                            muted
+                            playsInline
                             className="w-full h-full object-cover"
                         />
                     </div>
@@ -538,15 +538,13 @@ export default function FlowBuilder() {
                                         {/* Always-visible Premium Toggle Switch */}
                                         <button
                                             onClick={() => toggleFlowStatus(flow)}
-                                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${
-                                                flow.status === 'active' ? 'bg-[#10b981]' : 'bg-amber-200'
-                                            }`}
+                                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${flow.status === 'active' ? 'bg-[#10b981]' : 'bg-amber-200'
+                                                }`}
                                             title={flow.status === 'active' ? 'Pause Flow' : 'Activate Flow'}
                                         >
                                             <span
-                                                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ease-in-out ${
-                                                    flow.status === 'active' ? 'translate-x-[18px]' : 'translate-x-[2px]'
-                                                }`}
+                                                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ease-in-out ${flow.status === 'active' ? 'translate-x-[18px]' : 'translate-x-[2px]'
+                                                    }`}
                                             />
                                         </button>
 
@@ -700,11 +698,10 @@ export default function FlowBuilder() {
                                                 <tr key={run.id}>
                                                     <td className="px-4 py-3 text-gray-700">{run.started_at ? new Date(run.started_at).toLocaleString() : '-'}</td>
                                                     <td className="px-4 py-3">
-                                                        <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                                                            run.status === 'completed' ? 'bg-green-50 text-green-700' :
-                                                            run.status === 'failed' ? 'bg-red-50 text-red-700' :
-                                                            'bg-blue-50 text-blue-700'
-                                                        }`}>
+                                                        <span className={`rounded-full px-2 py-1 text-xs font-semibold ${run.status === 'completed' ? 'bg-green-50 text-green-700' :
+                                                                run.status === 'failed' ? 'bg-red-50 text-red-700' :
+                                                                    'bg-blue-50 text-blue-700'
+                                                            }`}>
                                                             {run.status}
                                                         </span>
                                                     </td>
@@ -940,9 +937,8 @@ function TemplateGalleryModal({
                                 <button
                                     key={item}
                                     onClick={() => onCategoryChange(item)}
-                                    className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-semibold transition-all ${
-                                        category === item ? 'bg-black text-white' : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-                                    }`}
+                                    className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-semibold transition-all ${category === item ? 'bg-black text-white' : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                                        }`}
                                 >
                                     {item}
                                 </button>
@@ -968,9 +964,8 @@ function TemplateGalleryModal({
                         return (
                             <div
                                 key={template.id}
-                                className={`rounded-xl border bg-white overflow-hidden transition-all duration-200 ${
-                                    selected ? 'border-[#25D366] ring-2 ring-[#25D366]/10' : 'border-gray-200 hover:border-gray-300'
-                                }`}
+                                className={`rounded-xl border bg-white overflow-hidden transition-all duration-200 ${selected ? 'border-[#25D366] ring-2 ring-[#25D366]/10' : 'border-gray-200 hover:border-gray-300'
+                                    }`}
                             >
                                 {/* Collapsed Header */}
                                 <div
@@ -1001,7 +996,7 @@ function TemplateGalleryModal({
                                 {selected && (
                                     <div className="border-t border-gray-150 bg-gray-50/50 p-3 space-y-3">
                                         <p className="text-xs text-gray-600 leading-relaxed">{template.description}</p>
-                                        
+
                                         <div className="flex items-center justify-between gap-2.5 pt-2">
                                             <button
                                                 onClick={() => onToggleStar(template.id)}
@@ -1010,7 +1005,7 @@ function TemplateGalleryModal({
                                                 <Star className={`h-3 w-3 ${starred ? 'fill-current' : ''}`} />
                                                 Star
                                             </button>
-                                            
+
                                             <button
                                                 onClick={() => setIsFillDetailsOpen(true)}
                                                 className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#25D366] hover:bg-[#1fb85a] px-3 py-1.5 text-xs font-semibold text-white shadow-sm"
@@ -1128,9 +1123,8 @@ function TemplateGalleryModal({
                                 <button
                                     key={item}
                                     onClick={() => onCategoryChange(item)}
-                                    className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${
-                                        category === item ? 'bg-black text-white' : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-                                    }`}
+                                    className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${category === item ? 'bg-black text-white' : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                                        }`}
                                 >
                                     {item}
                                 </button>
@@ -1149,9 +1143,8 @@ function TemplateGalleryModal({
                                         key={template.id}
                                         type="button"
                                         onClick={() => onSelectTemplate(template)}
-                                        className={`w-full rounded-lg border bg-white p-4 text-left transition-colors ${
-                                            selected ? 'border-[#25D366] ring-2 ring-[#25D366]/10' : 'border-gray-200 hover:border-gray-300'
-                                        }`}
+                                        className={`w-full rounded-lg border bg-white p-4 text-left transition-colors ${selected ? 'border-[#25D366] ring-2 ring-[#25D366]/10' : 'border-gray-200 hover:border-gray-300'
+                                            }`}
                                     >
                                         <div className="flex items-start justify-between gap-3">
                                             <div className="min-w-0">
@@ -1195,11 +1188,10 @@ function TemplateGalleryModal({
                                 </div>
                                 <button
                                     onClick={() => onToggleStar(selectedTemplate.id)}
-                                    className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold ${
-                                        templateStarStats[selectedTemplate.id]?.starred
+                                    className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold ${templateStarStats[selectedTemplate.id]?.starred
                                             ? 'border-amber-200 bg-amber-50 text-amber-700'
                                             : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-                                    }`}
+                                        }`}
                                 >
                                     <Star className={`h-4 w-4 ${templateStarStats[selectedTemplate.id]?.starred ? 'fill-current' : ''}`} />
                                     Star · {getTemplateStars(selectedTemplate, templateStarStats)}
@@ -1407,12 +1399,12 @@ function TriggersContainer({ triggers }) {
     useEffect(() => {
         const container = containerRef.current;
         if (!container) return;
-        
+
         checkScroll();
-        
+
         const handleScroll = () => checkScroll();
         container.addEventListener('scroll', handleScroll);
-        
+
         let resizeObserver;
         if (typeof ResizeObserver !== 'undefined') {
             resizeObserver = new ResizeObserver(() => checkScroll());
@@ -1430,13 +1422,12 @@ function TriggersContainer({ triggers }) {
     return (
         <div className="relative">
             {/* Top Fade Indicator */}
-            <div 
-                className={`absolute top-0 left-0 right-0 h-4 bg-gradient-to-b from-[#f8f9fa] to-transparent pointer-events-none z-10 transition-opacity duration-200 ${
-                    showTopFade ? 'opacity-100' : 'opacity-0'
-                }`} 
+            <div
+                className={`absolute top-0 left-0 right-0 h-4 bg-gradient-to-b from-[#f8f9fa] to-transparent pointer-events-none z-10 transition-opacity duration-200 ${showTopFade ? 'opacity-100' : 'opacity-0'
+                    }`}
             />
-            
-            <div 
+
+            <div
                 ref={containerRef}
                 className="h-[72px] overflow-y-auto no-scrollbar scroll-smooth pr-1"
             >
@@ -1454,10 +1445,9 @@ function TriggersContainer({ triggers }) {
             </div>
 
             {/* Bottom Fade Indicator */}
-            <div 
-                className={`absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-[#f8f9fa] to-transparent pointer-events-none z-10 transition-opacity duration-200 ${
-                    showBottomFade ? 'opacity-100' : 'opacity-0'
-                }`} 
+            <div
+                className={`absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-[#f8f9fa] to-transparent pointer-events-none z-10 transition-opacity duration-200 ${showBottomFade ? 'opacity-100' : 'opacity-0'
+                    }`}
             />
         </div>
     );
