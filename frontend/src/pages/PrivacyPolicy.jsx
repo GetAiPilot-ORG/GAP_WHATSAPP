@@ -29,6 +29,10 @@ const POLICY_SECTIONS = [
       },
       {
         type: 'paragraph',
+        text: `${PRODUCT_NAME} is a WhatsApp Business management application developed and operated by ${COMPANY_NAME}. It is a dedicated module within the ${COMPANY_NAME} platform. Users accessing WhatsApp Business features from ${COMPANY_NAME} are securely redirected to ${PRODUCT_NAME} to complete Meta's Embedded Signup and manage their WhatsApp Business accounts. Both services are operated by the same organization and are covered by this Privacy Policy.`,
+      },
+      {
+        type: 'paragraph',
         text: `This Privacy Policy explains how we collect, use, disclose, store, and protect information when you access or use our platform available at ${DOMAIN} and any associated services, APIs, mobile applications, or tools (collectively, the "Services"). This Policy applies to all users, including workspace owners, administrators, team agents, and end-customers whose data may be processed through the Services.`,
       },
       {
