@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Plus, Edit2, Trash2, Play, Copy, Pause, TrendingUp, Zap, Activity, X, LayoutTemplate, Star, Search, Sparkles, Clock, Layers, CheckCircle2, Smartphone, ShieldCheck, QrCode, Info, ChevronRight, MessageSquare, LifeBuoy, Send, MoreHorizontal, ArrowLeft } from 'lucide-react';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
@@ -737,10 +738,10 @@ export default function FlowBuilder() {
                 </div>
             )}
 
-            {expandedVideoUrl && (
+            {expandedVideoUrl && createPortal(
                 <div
                     onClick={() => setExpandedVideoUrl(null)}
-                    className="fixed inset-0 z-[9999] flex items-center justify-center bg-zinc-950/70 p-4 backdrop-blur-md animate-fade-in"
+                    className="fixed inset-0 z-[99999] flex items-center justify-center bg-zinc-950/70 p-4 backdrop-blur-md animate-fade-in"
                 >
                     <div
                         onClick={(e) => e.stopPropagation()}
@@ -760,7 +761,8 @@ export default function FlowBuilder() {
                             className="h-full w-full object-contain"
                         />
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* Create Flow Modal */}
