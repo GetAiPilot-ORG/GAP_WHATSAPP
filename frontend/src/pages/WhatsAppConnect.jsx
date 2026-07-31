@@ -426,7 +426,7 @@ export default function WhatsAppConnect() {
                 />
             </section>
 
-             {activeConnections.length > 0 && (
+            {activeConnections.length > 0 && (
                 <section data-tour="connect-accounts" className="mb-6 mt-4 sm:mb-10 sm:mt-6">
                     {/* Mobile Compact Status Row */}
                     <div className="flex items-center justify-between gap-2.5 rounded-xl border border-emerald-100 bg-emerald-50/40 p-2.5 md:hidden mb-3">
@@ -649,8 +649,8 @@ export default function WhatsAppConnect() {
                 </section>
             )}
 
-            <section className="grid grid-cols-1 gap-2.5 sm:gap-4 lg:grid-cols-2">
-                <div data-tour="connect-manual" className="rounded-lg border border-gray-200 bg-white p-3.5 sm:p-6">
+            <section className="grid grid-cols-1 gap-2.5 sm:gap-4 lg:grid-cols-5">
+                <div data-tour="connect-manual" className="rounded-none border border-zinc-200 bg-white p-3.5 sm:p-6 lg:col-span-3">
                     <button
                         type="button"
                         onClick={() => setManualOpen(prev => !prev)}
@@ -658,12 +658,12 @@ export default function WhatsAppConnect() {
                     >
                         <span>
                             <span className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-950">
-                                <KeyRound className="h-4 w-4 text-blue-600" />
+                                <KeyRound className="h-4 w-4 text-zinc-650" />
                                 Advanced manual token setup
                             </span>
                             <span className="mt-0.5 block text-xs sm:text-sm text-gray-500">Only for teams who already have WABA ID, phone number ID and permanent token.</span>
                         </span>
-                        <ArrowRight className={`h-4 w-4 text-gray-400 transition ${manualOpen ? 'rotate-90' : ''}`} />
+                        <ArrowRight className={`h-4 w-4 text-zinc-400 transition ${manualOpen ? 'rotate-90' : ''}`} />
                     </button>
                     {manualOpen && (
                         <form onSubmit={handleManualConnect} className="mt-5 space-y-3">
@@ -676,7 +676,7 @@ export default function WhatsAppConnect() {
                                 value={manualCreds.businessAccountId}
                                 onChange={e => setManualCreds(prev => ({ ...prev, businessAccountId: e.target.value }))}
                                 disabled={manualPhoneNumbers.length > 0}
-                                className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-xs sm:text-sm focus:border-green-400 focus:outline-none focus:ring-2 focus:ring-green-100 disabled:bg-gray-50"
+                                className="w-full rounded-none border border-zinc-200 px-2.5 py-2 text-xs sm:text-sm focus:border-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-200 disabled:bg-gray-50"
                             />
                             <input
                                 type="text"
@@ -685,13 +685,13 @@ export default function WhatsAppConnect() {
                                 value={manualCreds.accessToken}
                                 onChange={e => setManualCreds(prev => ({ ...prev, accessToken: e.target.value }))}
                                 disabled={manualPhoneNumbers.length > 0}
-                                className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-xs sm:text-sm focus:border-green-400 focus:outline-none focus:ring-2 focus:ring-green-100 disabled:bg-gray-50"
+                                className="w-full rounded-none border border-zinc-200 px-2.5 py-2 text-xs sm:text-sm focus:border-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-200 disabled:bg-gray-50"
                             />
                             {manualPhoneNumbers.length > 0 && (
                                 <select
                                     value={manualSelectedPhoneId}
                                     onChange={e => setManualSelectedPhoneId(e.target.value)}
-                                    className="w-full rounded-lg border border-green-200 bg-green-50 px-2.5 py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-green-100"
+                                    className="w-full rounded-none border border-zinc-200 bg-zinc-50 px-2.5 py-2 text-xs sm:text-sm focus:outline-none focus:ring-1 focus:ring-zinc-200"
                                 >
                                     {manualPhoneNumbers.map(phone => (
                                         <option key={phone.id} value={phone.id}>{phone.verified_name} ({phone.display_phone_number})</option>
@@ -701,13 +701,13 @@ export default function WhatsAppConnect() {
                             <button
                                 type="submit"
                                 disabled={manualStatus === 'validating' || manualStatus === 'saving'}
-                                className="inline-flex items-center justify-center gap-2 rounded-xl bg-gray-950 px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400"
+                                className="inline-flex items-center justify-center gap-2 rounded-none bg-zinc-950 px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
                             >
                                 {(manualStatus === 'validating' || manualStatus === 'saving') && <Loader2 className="h-4 w-4 animate-spin" />}
                                 {manualPhoneNumbers.length > 0 ? 'Link to platform' : 'Validate access'}
                             </button>
                             <div className="pt-3">
-                                <div className="overflow-hidden rounded-xl border border-gray-100 shadow-sm">
+                                <div className="overflow-hidden rounded-none border border-zinc-200 shadow-sm">
                                     <video
                                         src="https://v1.pinimg.com/videos/iht/expMp4/f0/9b/a6/f09ba694033f34eb5017ec4a8101ef5f_720w.mp4"
                                         autoPlay
@@ -722,8 +722,8 @@ export default function WhatsAppConnect() {
                     )}
                 </div>
 
-                <div className="rounded-lg border border-amber-200 bg-white p-3.5 sm:p-6">
-                    <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2 py-0.5 sm:px-3 sm:py-1 text-[10px] sm:text-xs font-bold uppercase text-amber-800">
+                <div className="rounded-none border border-zinc-200 bg-white p-3.5 sm:p-6 lg:col-span-2 border-l-4 border-l-amber-500">
+                    <div className="inline-flex items-center gap-1.5 rounded-none bg-amber-50 border border-amber-200 px-2 py-0.5 sm:px-3 sm:py-1 text-[10px] sm:text-xs font-bold uppercase text-amber-805">
                         <QrCode className="h-3.5 w-3.5" />
                         Testing only
                     </div>
@@ -782,9 +782,8 @@ function GuideCard({ icon, title, items, stepNumber, isExpanded, onToggle }) {
 
             {/* Content list with smooth CSS grid height transition */}
             <div
-                className={`grid transition-all duration-300 ease-in-out md:block md:opacity-100 ${
-                    isExpanded ? 'grid-rows-[1fr] opacity-100 border-t border-gray-100/60 md:border-t-0' : 'grid-rows-[0fr] opacity-0'
-                }`}
+                className={`grid transition-all duration-300 ease-in-out md:block md:opacity-100 ${isExpanded ? 'grid-rows-[1fr] opacity-100 border-t border-gray-100/60 md:border-t-0' : 'grid-rows-[0fr] opacity-0'
+                    }`}
             >
                 <div className="overflow-hidden">
                     <div className="p-2.5 pt-2 sm:p-3 sm:pt-2.5 md:p-0 md:mt-3 md:sm:mt-4">
@@ -926,8 +925,8 @@ function AccountCard({ account, diagnostics, loading, onCheck, onReconnect, onDi
 
     const [showFullWarning, setShowFullWarning] = useState(false)
     const isLongSummary = summary && summary.length > 80
-    const displayedSummary = isLongSummary && !showFullWarning 
-        ? `${summary.slice(0, 80)}...` 
+    const displayedSummary = isLongSummary && !showFullWarning
+        ? `${summary.slice(0, 80)}...`
         : summary
 
     return (
@@ -1067,8 +1066,8 @@ function getAccountSummary(account, diagnostics, tokenExpired, tokenMissing) {
     if (tokenExpired) {
         return 'Is connected account ka Meta token expire ho gaya hai. "Reconnect Meta" click karke same number ko fresh permission ke saath link karein.'
     }
-    const cleanIssues = (diagnostics?.issues || []).filter(issue => 
-        !issue.toLowerCase().includes('column') && 
+    const cleanIssues = (diagnostics?.issues || []).filter(issue =>
+        !issue.toLowerCase().includes('column') &&
         !issue.toLowerCase().includes('does not exist') &&
         !issue.toLowerCase().includes('w_wa_accounts')
     )
