@@ -52,6 +52,7 @@ export default function FlowBuilder() {
     const [loading, setLoading] = useState(true);
     const [flowsError, setFlowsError] = useState('');
     const [runsModalFlow, setRunsModalFlow] = useState(null);
+    const [expandedVideoUrl, setExpandedVideoUrl] = useState(null);
     const [flowRuns, setFlowRuns] = useState([]);
     const [runsLoading, setRunsLoading] = useState(false);
     const [showTemplatesModal, setShowTemplatesModal] = useState(false);
@@ -422,15 +423,26 @@ export default function FlowBuilder() {
                         </div>
                     </div>
                     {/* Premium Infinite Loop Video Frame */}
-                    <div className="w-full md:w-[320px] shrink-0 border border-zinc-200 rounded-none overflow-hidden bg-zinc-950 flex items-center justify-center shadow-[0_8px_30px_rgba(0,0,0,0.02)]">
+                    <div
+                        onClick={() => setExpandedVideoUrl("/videos/FlowVideo.mp4")}
+                        className="group relative w-full md:w-[390px] shrink-0 border border-zinc-200 rounded-none overflow-hidden bg-zinc-950 flex items-center justify-center cursor-pointer shadow-[0_8px_30px_rgba(0,0,0,0.02)] transition-all duration-300 hover:border-zinc-400"
+                    >
                         <video
                             src="/videos/FlowVideo.mp4"
                             autoPlay
                             loop
                             muted
                             playsInline
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                         />
+                        {/* Hover Play Button Overlay */}
+                        <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-none border border-white/40 bg-black/60 text-white shadow-xl backdrop-blur-sm transition-transform duration-300 group-hover:scale-110">
+                                <svg className="h-5 w-5 fill-current" viewBox="0 0 24 24">
+                                    <path d="M8 5v14l11-7z" />
+                                </svg>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -514,16 +526,21 @@ export default function FlowBuilder() {
                     const IconComp = theme.icon;
 
                     return (
-                        <div key={flow.id} className="flow-card-anim flex flex-col rounded-none border border-zinc-200 bg-[#f8f9fa] p-6 hover:-translate-y-0.5 hover:border-zinc-350 hover:shadow-[0_8px_30px_rgba(0,0,0,0.02)] transition-all duration-300 group">
-                            <div className="flex-1 flex flex-col justify-between gap-3.5">
+                        <div key={flow.id} className="flow-card-anim flex flex-col rounded-none border border-zinc-200 bg-gradient-to-b from-white to-zinc-50/20 p-6 hover:-translate-y-0.5 hover:border-zinc-350 hover:shadow-[0_12px_36px_rgba(0,0,0,0.03)] transition-all duration-300 group relative overflow-hidden">
+                            {/* Premium Metallic Gray Top Gradient Line (Permanently Visible) */}
+                            <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-zinc-200 via-zinc-400 to-zinc-300 opacity-80 group-hover:opacity-100 transition-opacity duration-300" />
+                            {/* Soft top-left corner glow (Permanently Visible) */}
+                            <div className="absolute -top-12 -left-12 w-24 h-24 bg-zinc-400/5 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
+
+                            <div className="flex-1 flex flex-col justify-between gap-5 relative z-10">
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="flex items-start flex-1 min-w-0">
-                                        <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 border shadow-sm ${theme.bgColor}`}>
-                                            <IconComp className="h-5 w-5" />
+                                        <div className={`h-9 w-9 flex items-center justify-center shrink-0 border border-zinc-200 bg-zinc-50/50 text-zinc-700 rounded-none shadow-sm`}>
+                                            <IconComp className="h-4.5 w-4.5" />
                                         </div>
                                         <div className="ml-3.5 min-w-0 flex-1">
                                             <div className="flex flex-wrap items-center gap-1.5">
-                                                <h3 className="font-semibold text-zinc-900 truncate text-sm sm:text-base leading-tight fb-font-outfit" title={flow.name}>
+                                                <h3 className="font-semibold text-zinc-950 truncate text-sm sm:text-base leading-tight fb-font-outfit" title={flow.name}>
                                                     {flow.name}
                                                 </h3>
                                             </div>
@@ -538,7 +555,7 @@ export default function FlowBuilder() {
                                         {/* Always-visible Premium Toggle Switch */}
                                         <button
                                             onClick={() => toggleFlowStatus(flow)}
-                                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${flow.status === 'active' ? 'bg-[#10b981]' : 'bg-amber-200'
+                                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${flow.status === 'active' ? 'bg-[#10b981]' : 'bg-zinc-200'
                                                 }`}
                                             title={flow.status === 'active' ? 'Pause Flow' : 'Activate Flow'}
                                         >
@@ -552,14 +569,14 @@ export default function FlowBuilder() {
                                         <div className="flex items-center gap-1">
                                             <button
                                                 onClick={() => handleDuplicateFlow(flow)}
-                                                className="p-1.5 text-zinc-400 hover:bg-zinc-200/50 rounded-md transition-all cursor-pointer"
+                                                className="p-1.5 text-zinc-400 hover:bg-zinc-100 rounded-none transition-all cursor-pointer"
                                                 title="Duplicate"
                                             >
                                                 <Copy className="h-3.5 w-3.5" />
                                             </button>
                                             <button
                                                 onClick={() => handleDeleteFlow(flow.id)}
-                                                className="p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-650 rounded-md transition-all cursor-pointer"
+                                                className="p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-650 rounded-none transition-all cursor-pointer"
                                                 title="Delete"
                                             >
                                                 <Trash2 className="h-3.5 w-3.5" />
@@ -569,58 +586,60 @@ export default function FlowBuilder() {
                                 </div>
 
                                 <div>
-                                    <div className="grid grid-cols-3 gap-3 border-t border-b border-zinc-200/60 py-3 my-3 divide-x divide-zinc-200/60 text-left text-xs">
-                                        <div className="pr-1">
-                                            <span className="block text-[9px] font-semibold text-zinc-400 uppercase tracking-wider leading-none">Nodes</span>
-                                            <span className="block text-sm font-bold text-zinc-900 mt-1.5 fb-font-outfit leading-none">{Array.isArray(flow.nodes) ? flow.nodes.length : 0}</span>
+                                    {/* Structure and Volume */}
+                                    <div className="border-t border-dashed border-zinc-200 pt-3 flex items-center justify-between text-xs">
+                                        <div>
+                                            <span className="block text-[8px] font-mono font-bold uppercase tracking-widest text-zinc-400 leading-none">Structure</span>
+                                            <span className="block text-xs font-bold text-zinc-950 mt-1.5 fb-font-outfit">{Array.isArray(flow.nodes) ? flow.nodes.length : 0} nodes</span>
                                         </div>
-                                        <div className="pl-3.5 pr-1">
-                                            <span className="block text-[9px] font-semibold text-zinc-400 uppercase tracking-wider leading-none">Sent Messages</span>
-                                            <div className="flex items-center gap-1.5 mt-1.5">
-                                                <span className="block text-sm font-bold text-zinc-900 fb-font-outfit leading-none">{(flow.messagesSent || 0).toLocaleString()}</span>
-                                                <svg width="24" height="10" viewBox="0 0 24 10" fill="none" className="opacity-80">
+                                        <div className="text-right">
+                                            <span className="block text-[8px] font-mono font-bold uppercase tracking-widest text-zinc-400 leading-none">Volume</span>
+                                            <div className="flex items-center gap-1.5 mt-1.5 justify-end">
+                                                <span className="block text-xs font-bold text-zinc-950 fb-font-outfit">{(flow.messagesSent || 0).toLocaleString()} sent</span>
+                                                <svg width="24" height="10" viewBox="0 0 24 10" fill="none" className="opacity-80 shrink-0">
                                                     <path d="M2 8 L6 6.5 L10 3.5 L14 5 L22 1" stroke={flow.status === 'active' ? '#10b981' : '#a1a1aa'} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                                                 </svg>
                                             </div>
                                         </div>
-                                        <div className="pl-3.5 min-w-0">
-                                            <span className="block text-[9px] font-semibold text-zinc-400 uppercase tracking-wider leading-none">Runs on</span>
-                                            <span className="block text-[9px] font-semibold text-blue-750 bg-blue-50/60 border border-blue-100/30 rounded px-1.5 py-0.5 mt-1.5 truncate text-center fb-font-outfit">
-                                                {flow.wa_account_scope === 'all' ? 'All numbers' : `${flow.wa_account_ids?.length || 0} selected`}
-                                            </span>
-                                        </div>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-zinc-200/60 divide-x divide-zinc-200/60">
-                                        <div className="pr-2">
-                                            <span className="block text-[9px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">Triggers</span>
+                                    {/* Triggers and Scope */}
+                                    <div className="border-t border-dashed border-zinc-200 pt-3.5 mt-3.5 flex items-start justify-between text-xs">
+                                        <div className="flex-1 pr-3">
+                                            <span className="block text-[8px] font-mono font-bold uppercase tracking-widest text-zinc-400 mb-1.5 leading-none">Triggers</span>
                                             <TriggersContainer triggers={flow.triggers} />
                                         </div>
-                                        <div className="pl-4 text-left">
-                                            <span className="text-[9px] font-semibold text-zinc-400 block uppercase tracking-wider">Last edited</span>
-                                            <span className="text-[10px] font-medium text-zinc-500 block mt-1.5">
-                                                {formatRelativeTime(flow.updated_at || flow.created_at)}
+                                        <div className="text-right shrink-0 flex flex-col items-end">
+                                            <span className="block text-[8px] font-mono font-bold uppercase tracking-widest text-zinc-400 mb-1.5 leading-none">Scope</span>
+                                            <span className="inline-block text-[9px] font-mono font-bold uppercase tracking-wider text-blue-750 bg-blue-50/60 border border-blue-100/30 rounded-none px-1.5 py-0.5 mt-0.5">
+                                                {flow.wa_account_scope === 'all' ? 'All numbers' : `${flow.wa_account_ids?.length || 0} selected`}
                                             </span>
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="mt-4 pt-3 border-t border-zinc-200 flex gap-2.5">
-                                <button
-                                    onClick={() => setEditingFlow(flow)}
-                                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-100/60 py-2.5 text-xs font-semibold text-zinc-700 hover:border-zinc-350 hover:bg-zinc-100 active:scale-[0.98] transition-all cursor-pointer"
-                                >
-                                    <Edit2 className="h-3.5 w-3.5 text-zinc-500" />
-                                    Edit Flow
-                                </button>
-                                <button
-                                    onClick={() => openRunsModal(flow)}
-                                    className="inline-flex items-center justify-center rounded-lg border border-zinc-200 bg-zinc-100/60 px-3.5 py-2.5 text-zinc-505 hover:text-zinc-850 hover:bg-zinc-100 active:scale-[0.98] transition-all cursor-pointer"
-                                    title="Run logs"
-                                >
-                                    <Activity className="h-3.5 w-3.5" />
-                                </button>
+                            {/* Footer & Actions */}
+                            <div className="mt-4 pt-3.5 border-t border-dashed border-zinc-200 flex flex-col gap-3">
+                                <div className="flex items-center justify-between text-[9px] font-mono uppercase tracking-wider text-zinc-400">
+                                    <span>Last edited {formatRelativeTime(flow.updated_at || flow.created_at)}</span>
+                                </div>
+                                <div className="flex gap-2.5 w-full">
+                                    <button
+                                        onClick={() => setEditingFlow(flow)}
+                                        className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-none border border-zinc-200 bg-white py-2 text-xs font-semibold text-zinc-700 hover:border-zinc-350 hover:bg-zinc-50 hover:text-zinc-950 active:scale-[0.98] transition-all cursor-pointer shadow-sm"
+                                    >
+                                        <Edit2 className="h-3.5 w-3.5 text-zinc-450" />
+                                        Edit Flow
+                                    </button>
+                                    <button
+                                        onClick={() => openRunsModal(flow)}
+                                        className="inline-flex items-center justify-center rounded-none border border-zinc-200 bg-white px-3.5 py-2 text-zinc-500 hover:text-zinc-950 hover:border-zinc-350 active:scale-[0.98] transition-all cursor-pointer shadow-sm"
+                                        title="Run logs"
+                                    >
+                                        <Activity className="h-3.5 w-3.5 text-zinc-450" />
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     );
@@ -662,15 +681,15 @@ export default function FlowBuilder() {
 
             {runsModalFlow && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-                    <div className="w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-2xl">
-                        <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+                    <div className="w-full max-w-3xl overflow-hidden rounded-none border border-zinc-200 bg-white shadow-2xl">
+                        <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-4">
                             <div>
                                 <h2 className="text-lg font-bold text-gray-900">Flow Runs</h2>
                                 <p className="text-sm text-gray-500">{runsModalFlow.name}</p>
                             </div>
                             <button
                                 onClick={() => { setRunsModalFlow(null); setFlowRuns([]); }}
-                                className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                                className="rounded-none p-2 text-gray-500 hover:bg-zinc-100 hover:text-gray-805 border border-zinc-200"
                             >
                                 <X className="h-5 w-5" />
                             </button>
@@ -679,13 +698,13 @@ export default function FlowBuilder() {
                             {runsLoading ? (
                                 <div className="py-10 text-center text-sm text-gray-500">Loading runs...</div>
                             ) : flowRuns.length === 0 ? (
-                                <div className="rounded-lg border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500">
+                                <div className="rounded-none border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500">
                                     No runs yet. Send a matching WhatsApp keyword to trigger this flow.
                                 </div>
                             ) : (
-                                <div className="overflow-hidden rounded-lg border border-gray-200">
-                                    <table className="min-w-full divide-y divide-gray-200 text-sm">
-                                        <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                                <div className="overflow-hidden rounded-none border border-zinc-200">
+                                    <table className="min-w-full divide-y divide-dashed divide-zinc-200 text-sm">
+                                        <thead className="bg-zinc-50 text-xs font-mono text-zinc-500">
                                             <tr>
                                                 <th className="px-4 py-3 text-left font-semibold">Started</th>
                                                 <th className="px-4 py-3 text-left font-semibold">Status</th>
@@ -693,20 +712,20 @@ export default function FlowBuilder() {
                                                 <th className="px-4 py-3 text-left font-semibold">Error</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-gray-100 bg-white">
+                                        <tbody className="divide-y divide-dashed divide-zinc-200 bg-white">
                                             {flowRuns.map(run => (
                                                 <tr key={run.id}>
                                                     <td className="px-4 py-3 text-gray-700">{run.started_at ? new Date(run.started_at).toLocaleString() : '-'}</td>
                                                     <td className="px-4 py-3">
-                                                        <span className={`rounded-full px-2 py-1 text-xs font-semibold ${run.status === 'completed' ? 'bg-green-50 text-green-700' :
-                                                                run.status === 'failed' ? 'bg-red-50 text-red-700' :
-                                                                    'bg-blue-50 text-blue-700'
+                                                        <span className={`rounded-none border px-2 py-0.5 text-xs font-semibold ${run.status === 'completed' ? 'border-green-200 bg-green-50/50 text-green-700' :
+                                                                run.status === 'failed' ? 'border-red-200 bg-red-50/50 text-red-700' :
+                                                                    'border-blue-200 bg-blue-50/50 text-blue-700'
                                                             }`}>
                                                             {run.status}
                                                         </span>
                                                     </td>
                                                     <td className="px-4 py-3 font-mono text-xs text-gray-500">{run.conversation_id}</td>
-                                                    <td className="px-4 py-3 text-red-600">{run.error_message || '-'}</td>
+                                                    <td className="px-4 py-3 text-red-650">{run.error_message || '-'}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -714,6 +733,32 @@ export default function FlowBuilder() {
                                 </div>
                             )}
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {expandedVideoUrl && (
+                <div
+                    onClick={() => setExpandedVideoUrl(null)}
+                    className="fixed inset-0 z-[9999] flex items-center justify-center bg-zinc-950/70 p-4 backdrop-blur-md animate-fade-in"
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="relative w-full max-w-4xl overflow-hidden border border-zinc-200/20 bg-black shadow-2xl rounded-none aspect-video"
+                    >
+                        <button
+                            onClick={() => setExpandedVideoUrl(null)}
+                            className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-none bg-black/60 text-white/80 hover:bg-black/80 hover:text-white border border-zinc-200/20 transition-all"
+                            title="Close preview"
+                        >
+                            <X className="h-5 w-5" />
+                        </button>
+                        <video
+                            src={expandedVideoUrl}
+                            autoPlay
+                            controls
+                            className="h-full w-full object-contain"
+                        />
                     </div>
                 </div>
             )}
@@ -1189,8 +1234,8 @@ function TemplateGalleryModal({
                                 <button
                                     onClick={() => onToggleStar(selectedTemplate.id)}
                                     className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold ${templateStarStats[selectedTemplate.id]?.starred
-                                            ? 'border-amber-200 bg-amber-50 text-amber-700'
-                                            : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                                        ? 'border-amber-200 bg-amber-50 text-amber-700'
+                                        : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
                                         }`}
                                 >
                                     <Star className={`h-4 w-4 ${templateStarStats[selectedTemplate.id]?.starred ? 'fill-current' : ''}`} />
@@ -1423,7 +1468,7 @@ function TriggersContainer({ triggers }) {
         <div className="relative">
             {/* Top Fade Indicator */}
             <div
-                className={`absolute top-0 left-0 right-0 h-4 bg-gradient-to-b from-[#f8f9fa] to-transparent pointer-events-none z-10 transition-opacity duration-200 ${showTopFade ? 'opacity-100' : 'opacity-0'
+                className={`absolute top-0 left-0 right-0 h-4 bg-gradient-to-b from-white to-transparent pointer-events-none z-10 transition-opacity duration-200 ${showTopFade ? 'opacity-100' : 'opacity-0'
                     }`}
             />
 
@@ -1446,7 +1491,7 @@ function TriggersContainer({ triggers }) {
 
             {/* Bottom Fade Indicator */}
             <div
-                className={`absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-[#f8f9fa] to-transparent pointer-events-none z-10 transition-opacity duration-200 ${showBottomFade ? 'opacity-100' : 'opacity-0'
+                className={`absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-white to-transparent pointer-events-none z-10 transition-opacity duration-200 ${showBottomFade ? 'opacity-100' : 'opacity-0'
                     }`}
             />
         </div>
