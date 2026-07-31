@@ -342,6 +342,22 @@ export default function LiveChat() {
 
     const fileInputRef = useRef(null)
     const [selectedFile, setSelectedFile] = useState(null)
+    const [imagePreviewUrl, setImagePreviewUrl] = useState(null)
+
+    useEffect(() => {
+        if (!selectedFile) {
+            setImagePreviewUrl(null)
+            return
+        }
+        if (selectedFile.type.startsWith('image/')) {
+            const url = URL.createObjectURL(selectedFile)
+            setImagePreviewUrl(url)
+            return () => URL.revokeObjectURL(url)
+        } else {
+            setImagePreviewUrl(null)
+        }
+    }, [selectedFile])
+
     const [pendingAudio, setPendingAudio] = useState(null) // { file: File, durationSeconds: number }
     const [isAudioPanelOpen, setIsAudioPanelOpen] = useState(false)
     const [isEmojiOpen, setIsEmojiOpen] = useState(false)
@@ -1949,6 +1965,19 @@ export default function LiveChat() {
         setMessageText(e.target.value)
     }
 
+    const handlePaste = (e) => {
+        const files = e.clipboardData?.files
+        if (files && files.length > 0) {
+            const file = files[0]
+            if (file.type.startsWith('image/')) {
+                e.preventDefault()
+                setSelectedFile(file)
+                setPendingAudio(null)
+                setIsAudioPanelOpen(false)
+            }
+        }
+    }
+
     const handleSendMessage = async (e) => {
         e.preventDefault()
 
@@ -2279,7 +2308,7 @@ export default function LiveChat() {
         }
 
         const resolvedUrl = msg.mediaUrl
-            ? (String(msg.mediaUrl).startsWith('http') ? msg.mediaUrl : `${BACKEND_BASE}${msg.mediaUrl}`)
+            ? (String(msg.mediaUrl).startsWith('http') || String(msg.mediaUrl).startsWith('blob:') ? msg.mediaUrl : `${BACKEND_BASE}${msg.mediaUrl}`)
             : null
 
         if (resolvedUrl) {
@@ -4224,14 +4253,30 @@ export default function LiveChat() {
                                             />
 
                                             {selectedFile && !isCustomerWindowExpired && (
-                                                <div className="flex items-center justify-between gap-2 border-b border-gray-100 bg-gray-50 px-3 py-2">
-                                                    <div className="text-xs text-gray-700 truncate">
-                                                        Attached: <span className="font-medium">{selectedFile.name}</span>
+                                                <div className="flex items-center justify-between gap-3 border-b border-gray-100 bg-gray-50 px-3 py-2">
+                                                    <div className="flex items-center gap-2.5 min-w-0">
+                                                        {imagePreviewUrl ? (
+                                                            <div className="relative h-10 w-10 shrink-0 border border-zinc-200 bg-white rounded-none overflow-hidden">
+                                                                <img
+                                                                    src={imagePreviewUrl}
+                                                                    alt="Preview"
+                                                                    className="h-full w-full object-cover"
+                                                                />
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none border border-zinc-200 bg-white text-zinc-400">
+                                                                <FileText className="h-5 w-5" />
+                                                            </div>
+                                                        )}
+                                                        <div className="text-xs text-gray-700 truncate">
+                                                            Attached: <span className="font-semibold">{selectedFile.name}</span>
+                                                            <span className="ml-1.5 text-[10px] text-gray-400">({(selectedFile.size / 1024).toFixed(1)} KB)</span>
+                                                        </div>
                                                     </div>
                                                     <button
                                                         type="button"
                                                         onClick={() => setSelectedFile(null)}
-                                                        className="text-xs text-gray-500 hover:text-gray-700"
+                                                        className="text-xs font-semibold text-gray-500 hover:text-gray-700"
                                                     >
                                                         Remove
                                                     </button>
@@ -4271,6 +4316,7 @@ export default function LiveChat() {
                                                 ref={messageInputRef}
                                                 value={messageText}
                                                 onChange={handleTextChange}
+                                                onPaste={handlePaste}
                                                 placeholder={isInternalNote ? "Type an internal note..." : "Type a message..."}
                                                 rows={1}
                                                 className="max-h-42 min-h-[36px] sm:min-h-[42px] w-full resize-none border-0 bg-transparent px-2 sm:px-4 py-[7px] sm:py-[11px] text-sm sm:text-[15px] leading-5 text-[#111b21] outline-none placeholder:text-[#8696a0] focus:border-transparent focus:outline-none focus:ring-0"
