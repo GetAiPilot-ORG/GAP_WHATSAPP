@@ -437,8 +437,11 @@ You represent "${targetAgent.name}" as a professional, helpful customer represen
       };
     }
 
-    const reply = data.choices?.[0]?.message?.content || "";
-    if (!reply) return null;
+    const rawReply = data.choices?.[0]?.message?.content || "";
+    if (!rawReply) return null;
+
+    // Normalize markdown double-asterisks (**) to single-asterisks (*) for WhatsApp bold formatting
+    const reply = rawReply.replace(/\*\*/g, "*");
 
     return { reply, agent: targetAgent };
   } catch (err) {
