@@ -50,7 +50,15 @@ const navigation = [
             { name: 'Explore Templates', href: '/templates/industries' }
         ]
     },
-    { name: 'Broadcasts', href: '/broadcast', icon: Megaphone },
+    {
+        name: 'Broadcasts',
+        href: '/broadcast',
+        icon: Megaphone,
+        subItems: [
+            { name: 'New Campaign', href: '/broadcast' },
+            { name: 'History', href: '/broadcast/history' }
+        ]
+    },
     { name: 'WA Link Generator', href: '/wa-link-generator', icon: MessageCircle },
 ]
 
