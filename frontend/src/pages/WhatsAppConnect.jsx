@@ -340,53 +340,46 @@ export default function WhatsAppConnect() {
 
     return (
         <div className="mx-auto max-w-7xl space-y-4 sm:space-y-6 pb-12 sm:pb-20">
-            <section className="rounded-lg border border-[#b9dcfb] bg-white">
-                <div className="grid gap-0 lg:grid-cols-[minmax(0,1.25fr)_360px]">
-                    <div className="border-b border-[#d9ecfd] bg-[#eef7ff] p-5 sm:p-6 lg:border-b-0 lg:border-r rounded-t-lg lg:rounded-l-lg lg:rounded-tr-none">
-                        <div className="inline-flex items-center gap-1.5 rounded-full border border-[#b9dcfb] bg-white px-2 py-0.5 text-[10px] sm:text-xs font-semibold text-[#0064b7]">
-                            <Sparkles className="h-3.5 w-3.5" />
-                            Start here
-                        </div>
-                        <h1 className="mt-3 sm:mt-4 max-w-3xl text-base sm:text-3xl font-semibold leading-normal sm:leading-tight text-gray-950">Connect WhatsApp so your dashboard, chats, broadcasts and automations can start working.</h1>
-                        <p className="mt-2.5 sm:mt-3 max-w-3xl text-[11px] sm:text-sm leading-relaxed sm:leading-6 text-gray-600">
-                            Simple meaning: aapka business WhatsApp number is platform se link hoga. Connection ke baad messages sync honge, templates create honge, wallet billing track hogi, and AI/flows ko real inbox access milega.
-                        </p>
-                        <div className="mt-4 sm:mt-5 flex flex-col gap-2 sm:flex-row">
-                            <button
-                                type="button"
-                                onClick={hasIntegrationConsent ? handleEmbeddedSignup : handleEnableAndConnect}
-                                data-tour="connect-primary"
-                                disabled={embedStatus === 'loading' || embedStatus === 'saving' || isSdkLoading}
-                                className="inline-flex min-h-9 sm:min-h-12 items-center justify-center gap-2 rounded-full bg-[#0070d1] px-4 sm:px-6 text-xs sm:text-sm font-semibold text-white transition-colors hover:bg-[#0064b7] disabled:cursor-not-allowed disabled:bg-[#79b8ef]"
-                            >
-                                {embedStatus === 'loading' || embedStatus === 'saving' || isSdkLoading ? (
-                                    <>
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                        {isSdkLoading ? 'Enabling...' : embedStatus === 'saving' ? 'Saving account...' : 'Opening Meta signup...'}
-                                    </>
-                                ) : (
-                                    <>
-                                        <Smartphone className="h-4 w-4" />
-                                        {hasIntegrationConsent ? 'Connect WhatsApp account' : 'Enable & Connect'}
-                                    </>
-                                )}
-                            </button>
-                            <Link
-                                to="/whatsapp-number"
-                                className="inline-flex min-h-9 sm:min-h-12 items-center justify-center gap-2 rounded-full border border-gray-200 bg-white px-4 sm:px-6 text-xs sm:text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50"
-                            >
-                                <PhoneCall className="h-4 w-4" />
-                                I need a new number
-                            </Link>
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 p-2 sm:p-3 lg:grid-cols-1">
-                        <MiniMetric icon={Wallet} label="Wallet" value={formatINRFromPaise(walletBalance)} tone="green" />
-                        <MiniMetric icon={FileCheck2} label="This month spend" value={formatINRFromPaise(monthSpend)} tone="blue" />
-                    </div>
+            <section className="rounded-lg border border-[#b9dcfb] bg-[#eef7ff] p-4 sm:p-5">
+                <div className="inline-flex items-center gap-1.5 rounded-full border border-[#b9dcfb] bg-white px-2 py-0.5 text-[10px] sm:text-xs font-semibold text-[#0064b7]">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Start here
+                </div>
+                <h1 className="mt-2.5 sm:mt-3 max-w-2xl text-base sm:text-2xl font-semibold leading-normal sm:leading-snug text-gray-950">Connect WhatsApp so your dashboard, chats, broadcasts and automations can start working.</h1>
+                <p className="mt-1.5 sm:mt-2 max-w-2xl text-[11px] sm:text-[13px] leading-relaxed text-gray-600">
+                    Simple meaning: aapka business WhatsApp number is platform se link hoga. Connection ke baad messages sync honge, templates create honge, wallet billing track hogi, and AI/flows ko real inbox access milega.
+                </p>
+                <div className="mt-3 sm:mt-4 flex flex-col gap-2 sm:flex-row">
+                    <button
+                        type="button"
+                        onClick={hasIntegrationConsent ? handleEmbeddedSignup : handleEnableAndConnect}
+                        data-tour="connect-primary"
+                        disabled={embedStatus === 'loading' || embedStatus === 'saving' || isSdkLoading}
+                        className="inline-flex min-h-9 sm:min-h-10 items-center justify-center gap-2 rounded-full bg-[#0070d1] px-4 sm:px-5 text-xs sm:text-sm font-semibold text-white transition-colors hover:bg-[#0064b7] disabled:cursor-not-allowed disabled:bg-[#79b8ef]"
+                    >
+                        {embedStatus === 'loading' || embedStatus === 'saving' || isSdkLoading ? (
+                            <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                {isSdkLoading ? 'Enabling...' : embedStatus === 'saving' ? 'Saving account...' : 'Opening Meta signup...'}
+                            </>
+                        ) : (
+                            <>
+                                <Smartphone className="h-4 w-4" />
+                                {hasIntegrationConsent ? 'Connect WhatsApp account' : 'Enable & Connect'}
+                            </>
+                        )}
+                    </button>
+                    <Link
+                        to="/whatsapp-number"
+                        className="inline-flex min-h-9 sm:min-h-10 items-center justify-center gap-2 rounded-full border border-gray-200 bg-white px-4 sm:px-5 text-xs sm:text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50"
+                    >
+                        <PhoneCall className="h-4 w-4" />
+                        I need a new number
+                    </Link>
                 </div>
             </section>
 
+            {activeConnections.length === 0 && (
             <section className="grid grid-cols-1 gap-1.5 md:gap-4 md:grid-cols-3">
                 <GuideCard
                     icon={Building2}
@@ -425,6 +418,7 @@ export default function WhatsAppConnect() {
                     ]}
                 />
             </section>
+            )}
 
             {activeConnections.length > 0 && (
                 <section data-tour="connect-accounts" className="mb-6 mt-4 sm:mb-10 sm:mt-6">
