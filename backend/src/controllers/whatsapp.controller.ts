@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import fs from "fs";
 import { supabase } from "../config/supabase.js";
+import { io } from "../socket.js";
 import { encryptToken, decryptToken } from "../utils/crypto.js";
 import { AccountHealthService } from "../services/accountHealth.service.js";
 import { cleanText, cleanNullableText, isValidEmail } from "../utils/format.js";
@@ -525,13 +526,13 @@ export function findStaleMetaTemplateIds(metaRows: any[], localRows: any[]) {
   const metaKeys = new Set(
     metaRows.map(
       (row) =>
-        `${String(row.name || "").toLowerCase()}::${String(row.language || "en_US")}`,
+        `${String(row.name || "").trim().toLowerCase()}::${String(row.language || "en_US").trim().toLowerCase()}`,
     ),
   );
 
   return localRows
     .filter((row) => {
-      const key = `${String(row.name || "").toLowerCase()}::${String(row.language || "en_US")}`;
+      const key = `${String(row.name || "").trim().toLowerCase()}::${String(row.language || "en_US").trim().toLowerCase()}`;
       return row.template_id && row.status !== "DRAFT" && !metaKeys.has(key);
     })
     .map((row) => row.id);
@@ -633,7 +634,7 @@ export async function bulkUpsertLocalTemplateSubmissions(
   // Fetch existing records for this account, including the primary key ID
   const { data: existingRows } = await supabase
     .from('w_template_submissions')
-    .select('id, name, language, status, submitted_at, approved_at, rejected_at, submitted_by')
+    .select('id, template_id, name, language, status, submitted_at, approved_at, rejected_at, submitted_by')
     .eq('organization_id', orgId)
     .eq('wa_account_id', waAccountId);
 
@@ -644,9 +645,15 @@ export async function bulkUpsertLocalTemplateSubmissions(
   }
 
   // Identify and delete local templates that no longer exist in Meta (ignoring DRAFTs)
-  const metaKeys = new Set((filteredMetaTemplates).map((t: any) => `${String(t.name).toLowerCase()}::${String(t.language || 'en_US')}`))
+  const metaKeys = new Set((filteredMetaTemplates).map((t: any) => `${String(t.name).trim().toLowerCase()}::${String(t.language || 'en_US').trim().toLowerCase()}`))
+  const metaIds = new Set((filteredMetaTemplates).map((t: any) => String(t.id || '').trim()).filter(Boolean));
   const toDeleteIds = (existingRows || [])
-    .filter((r: any) => r.status !== 'DRAFT' && !metaKeys.has(`${String(r.name).toLowerCase()}::${String(r.language || 'en_US')}`))
+    .filter((r: any) => {
+      if (r.status === 'DRAFT') return false;
+      const key = `${String(r.name).trim().toLowerCase()}::${String(r.language || 'en_US').trim().toLowerCase()}`;
+      const templateId = String(r.template_id || '').trim();
+      return (templateId ? !metaIds.has(templateId) : true) && !metaKeys.has(key);
+    })
     .map((r: any) => r.id);
 
   if (toDeleteIds.length > 0) {
@@ -1072,7 +1079,7 @@ export async function createTemplate(req: any, res: Response) {
 
 export async function deleteTemplate(req: any, res: Response) {
   const orgId = req.organization_id;
-  const { name } = req.params;
+  const name = String(req.params.name || "").trim();
 
   try {
     if (!orgId) throw new Error("No organization found");
@@ -1099,7 +1106,7 @@ export async function deleteTemplate(req: any, res: Response) {
       .select("template_id, status")
       .eq("organization_id", orgId)
       .eq("wa_account_id", account.id)
-      .eq("name", name)
+      .ilike("name", name)
       .maybeSingle();
 
     // Only skip Meta API if the template is explicitly a DRAFT (never submitted to Meta)
@@ -1113,33 +1120,14 @@ export async function deleteTemplate(req: any, res: Response) {
         .delete()
         .eq("organization_id", orgId)
         .eq("wa_account_id", account.id)
-        .eq("name", name);
+        .ilike("name", name);
       markTemplateDeleted(orgId, name);
       return res.json({ success: true });
     }
 
-    // 2. Look up the Meta template ID (hsm_id) for a cleaner delete
-    // hsm_id is required for precise deletion; fall back to name-only delete if lookup fails
-    let deleteUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/${waba_id}/message_templates?name=${encodeURIComponent(name)}`;
-    try {
-      const listRes = await fetch(
-        `https://graph.facebook.com/${GRAPH_API_VERSION}/${waba_id}/message_templates?name=${encodeURIComponent(name)}&fields=id,name,status`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      const listJson = await listRes.json();
-      if (listRes.ok && listJson.data?.length > 0) {
-        const hsmId = listJson.data[0].id;
-        deleteUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/${waba_id}/message_templates?name=${encodeURIComponent(name)}&hsm_id=${hsmId}`;
-        console.log(`[Template Delete] Using hsm_id=${hsmId} for template "${name}"`);
-      } else {
-        console.log(`[Template Delete] hsm_id not found for "${name}", using name-only delete. listRes.ok=${listRes.ok}, count=${listJson.data?.length}`);
-      }
-    } catch (lookupErr) {
-      console.warn(
-        "[Template Delete] Could not fetch hsm_id, using name-only delete:",
-        lookupErr,
-      );
-    }
+    // Meta deletes by name across languages unless an hsm_id is explicitly supplied.
+    // Use name-only deletion here so every language variant stays in sync with Meta.
+    const deleteUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/${waba_id}/message_templates?name=${encodeURIComponent(name)}`;
 
     const response = await fetch(deleteUrl, {
       method: "DELETE",
@@ -1173,7 +1161,7 @@ export async function deleteTemplate(req: any, res: Response) {
           .delete()
           .eq("organization_id", orgId)
           .eq("wa_account_id", account.id)
-          .eq("name", name);
+          .ilike("name", name);
 
         // Mark as recently deleted so the next sync doesn't re-insert it
         markTemplateDeleted(orgId, name);
@@ -1194,15 +1182,27 @@ export async function deleteTemplate(req: any, res: Response) {
     }
 
     // Delete local cache record
-    await supabase
+    const deleteQuery = supabase
       .from("w_template_submissions")
       .delete()
       .eq("organization_id", orgId)
       .eq("wa_account_id", account.id)
-      .eq("name", name);
+      .ilike("name", name);
+    await deleteQuery;
 
     // Mark template as recently deleted so the next sync doesn't re-insert it
     markTemplateDeleted(orgId, name);
+
+    try {
+      io?.emit("template_deleted", {
+        organization_id: orgId,
+        wa_account_id: account.id,
+        name,
+        template_id: localTemplate?.template_id || null,
+      });
+    } catch (emitErr) {
+      console.warn("[Templates] Failed to emit template_deleted event:", emitErr);
+    }
 
     res.json({ success: true });
   } catch (err: any) {

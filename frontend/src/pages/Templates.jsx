@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { io } from 'socket.io-client'
 import { Plus, Search, Filter, MoreHorizontal, FileText, CheckCircle, Clock, XCircle, Image as ImageIcon, Video, Trash2, Link as LinkIcon, Phone, AlertCircle, RefreshCw, UploadCloud, Type, MessageSquareText, MousePointerClick, ChevronDown, Loader2, Check, CheckCheck, MessageSquare, Image, ExternalLink, ArrowRight, ShieldCheck, HelpCircle, Tag, Building2, Target, Sparkles, LockKeyhole, CalendarDays } from 'lucide-react'
 import Modal from '../components/Modal'
 import { useAuth } from '../context/AuthContext'
@@ -16,6 +17,12 @@ import { useGSAP } from '@gsap/react'
 gsap.registerPlugin(useGSAP)
 
 const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+const BACKEND_BASE = API_URL.replace(/\/api$/, '');
+const socket = io(BACKEND_BASE, {
+    withCredentials: true,
+    transports: ['websocket', 'polling'],
+    autoConnect: true,
+})
 
 const formatDateToIST = (dateStr) => {
     if (!dateStr) return 'recently';
@@ -162,6 +169,32 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
         setViewMode(defaultView);
     }, [defaultView]);
 
+    useEffect(() => {
+        const handleTemplateDeleted = (payload) => {
+            if (!payload?.name && !payload?.template_id) return;
+            const deletedName = String(payload?.name || '').trim().toLowerCase();
+            const deletedTemplateId = String(payload?.template_id || '').trim();
+            queryClient.setQueryData(['whatsapp-templates'], (old) => {
+                if (!Array.isArray(old)) return old;
+                return old.filter(t => {
+                    const matchesName = deletedName
+                        ? String(t.name || '').trim().toLowerCase() === deletedName
+                        : false;
+                    const matchesTemplateId = deletedTemplateId
+                        ? String(t.id || t.template_id || '').trim() === deletedTemplateId
+                        : false;
+                    return !matchesName && !matchesTemplateId;
+                });
+            });
+            queryClient.invalidateQueries({ queryKey: ['whatsapp-templates'] });
+        };
+
+        socket.on('template_deleted', handleTemplateDeleted);
+        return () => {
+            socket.off('template_deleted', handleTemplateDeleted);
+        };
+    }, [queryClient]);
+
     // Compute unified templates list
     const allTemplatesList = useMemo(() => {
         return templates;
@@ -262,11 +295,10 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                 // so the UI updates even before Meta propagates the deletion
                 queryClient.setQueryData(['whatsapp-templates'], (old) => {
                     if (!Array.isArray(old)) return old;
-                    return old.filter(t => t.name !== name);
+                    const deletedName = String(name || '').trim().toLowerCase();
+                    return old.filter(t => String(t.name || '').trim().toLowerCase() !== deletedName);
                 });
-                // Refetch after a short delay to let Meta API propagate the deletion
-                // This prevents the template from reappearing due to Meta cache lag
-                setTimeout(() => fetchData(), 2500);
+                queryClient.invalidateQueries({ queryKey: ['whatsapp-templates'] });
             } else {
                 const data = await res.json();
                 notify.error(data.error || 'Failed to delete template')
