@@ -89,7 +89,8 @@ export default function App() {
                       <Route path="templates" element={<Templates />} />
                       <Route path="templates/new" element={<TemplateWizard />} />
                       <Route path="templates/industries" element={<Templates defaultView="INDUSTRIES" />} />
-                      <Route path="broadcast" element={<Broadcast />} />
+                      <Route path="broadcast" element={<Broadcast defaultTab="new" />} />
+                      <Route path="broadcast/history" element={<Broadcast defaultTab="history" />} />
                       <Route path="live-chat" element={<LiveChat />} />
                       <Route path="bot-agents" element={<BotAgents />} />
                       <Route path="billing" element={<BillingPage />} />
