@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Search, Filter, MoreHorizontal, FileText, CheckCircle, Clock, XCircle, Image as ImageIcon, Video, Trash2, Link as LinkIcon, Phone, AlertCircle, RefreshCw, UploadCloud, Type, MessageSquareText, MousePointerClick, ChevronDown, Loader2, Check, CheckCheck, MessageSquare, Image, ExternalLink, ArrowRight, ShieldCheck, HelpCircle, Tag, Building2, Target, Sparkles, LockKeyhole, CalendarDays } from 'lucide-react'
 import Modal from '../components/Modal'
 import { useAuth } from '../context/AuthContext'
@@ -89,6 +89,7 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
     const navigate = useNavigate();
     const { session, apiCall } = useAuth();
     const { alertDialog, confirmDialog } = useDialog();
+    const queryClient = useQueryClient();
     const [viewMode, setViewMode] = useState(defaultView);
     const [iscreateOpen, setIsCreateOpen] = useState(false)
     const [selectedTemplate, setSelectedTemplate] = useState(null)
@@ -257,7 +258,15 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
             });
             if (res.ok) {
                 notify.success(`Template "${name}" deleted successfully`)
-                fetchData();
+                // Optimistically remove the deleted template from the cache immediately
+                // so the UI updates even before Meta propagates the deletion
+                queryClient.setQueryData(['whatsapp-templates'], (old) => {
+                    if (!Array.isArray(old)) return old;
+                    return old.filter(t => t.name !== name);
+                });
+                // Refetch after a short delay to let Meta API propagate the deletion
+                // This prevents the template from reappearing due to Meta cache lag
+                setTimeout(() => fetchData(), 2500);
             } else {
                 const data = await res.json();
                 notify.error(data.error || 'Failed to delete template')
