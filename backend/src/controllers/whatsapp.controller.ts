@@ -23,6 +23,32 @@ import { buildMetaTemplatePayload } from '../utils/templateBuilder.js';
 
 const GRAPH_API_VERSION = process.env.META_GRAPH_VERSION || process.env.META_API_VERSION || "v21.0";
 
+// In-memory registry of recently deleted templates (orgId::name -> expiry timestamp)
+// Prevents deleted templates from being re-inserted on the next Meta sync
+// when Meta API still returns them for a brief window after deletion
+const recentlyDeletedTemplates = new Map<string, number>();
+const RECENTLY_DELETED_TTL_MS = 30_000; // 30 seconds
+
+function markTemplateDeleted(orgId: string, name: string) {
+  const key = `${orgId}::${String(name).toLowerCase()}`;
+  recentlyDeletedTemplates.set(key, Date.now() + RECENTLY_DELETED_TTL_MS);
+  // Cleanup expired entries
+  for (const [k, expiry] of recentlyDeletedTemplates) {
+    if (Date.now() > expiry) recentlyDeletedTemplates.delete(k);
+  }
+}
+
+function isTemplateRecentlyDeleted(orgId: string, name: string): boolean {
+  const key = `${orgId}::${String(name).toLowerCase()}`;
+  const expiry = recentlyDeletedTemplates.get(key);
+  if (!expiry) return false;
+  if (Date.now() > expiry) {
+    recentlyDeletedTemplates.delete(key);
+    return false;
+  }
+  return true;
+}
+
 export async function getNumberRequests(req: any, res: Response) {
   const orgId = req.organization_id;
 
@@ -599,6 +625,11 @@ export async function bulkUpsertLocalTemplateSubmissions(
 ) {
   const now = new Date().toISOString();
 
+  // Filter out templates that were recently deleted to prevent them from being re-inserted
+  // when Meta API still returns them briefly after a deletion request
+  const filteredMetaTemplates = (metaTemplates || []).filter(
+    (t: any) => !isTemplateRecentlyDeleted(orgId, t.name)
+  );
   // Fetch existing records for this account, including the primary key ID
   const { data: existingRows } = await supabase
     .from('w_template_submissions')
@@ -613,7 +644,7 @@ export async function bulkUpsertLocalTemplateSubmissions(
   }
 
   // Identify and delete local templates that no longer exist in Meta (ignoring DRAFTs)
-  const metaKeys = new Set((metaTemplates || []).map((t: any) => `${String(t.name).toLowerCase()}::${String(t.language || 'en_US')}`));
+  const metaKeys = new Set((filteredMetaTemplates).map((t: any) => `${String(t.name).toLowerCase()}::${String(t.language || 'en_US')}`))
   const toDeleteIds = (existingRows || [])
     .filter((r: any) => r.status !== 'DRAFT' && !metaKeys.has(`${String(r.name).toLowerCase()}::${String(r.language || 'en_US')}`))
     .map((r: any) => r.id);
@@ -631,9 +662,9 @@ export async function bulkUpsertLocalTemplateSubmissions(
   }
 
   // If there are no templates returned from Meta, we are done
-  if (!metaTemplates || metaTemplates.length === 0) return;
+  if (!filteredMetaTemplates || filteredMetaTemplates.length === 0) return;
 
-  const payloads = metaTemplates.map((template: any) => {
+  const payloads = filteredMetaTemplates.map((template: any) => {
     const status = normalizeMetaTemplateStatus(template.status);
     const key = `${String(template.name).toLowerCase()}::${String(template.language || 'en_US')}`;
     const existing = existingMap.get(key);
@@ -720,7 +751,9 @@ export async function getTemplates(req: any, res: Response) {
       return res.status(response.status).json({ error: json.error?.message || 'Failed to fetch templates from Meta' });
     }
     const metaTemplates = json.data || [];
-    await bulkUpsertLocalTemplateSubmissions(orgId, account.id, waba_id, metaTemplates);
+    // Filter out recently deleted templates before syncing and merging
+    const activeMetaTemplates = metaTemplates.filter((t: any) => !isTemplateRecentlyDeleted(orgId, t.name));
+    await bulkUpsertLocalTemplateSubmissions(orgId, account.id, waba_id, activeMetaTemplates);
 
     const { data: localRows, error: localErr } = await supabase
       .from('w_template_submissions')
@@ -729,7 +762,7 @@ export async function getTemplates(req: any, res: Response) {
       .eq('wa_account_id', account.id);
     if (localErr) console.warn('[Templates] Local cache read failed:', localErr.message);
 
-    res.json(mergeTemplateRows(metaTemplates, localRows || []));
+    res.json(mergeTemplateRows(activeMetaTemplates, localRows || []));
   } catch (err: any) {
     console.error('Error fetching templates:', err);
     res.status(500).json({ error: err.message });
@@ -1060,7 +1093,7 @@ export async function deleteTemplate(req: any, res: Response) {
     const token = decryptToken(account.access_token_encrypted);
     const waba_id = account.whatsapp_business_account_id;
 
-    // 1. Fetch local template first to verify if it is local-only
+    // 1. Fetch local template first to check if it's a pure local DRAFT (never sent to Meta)
     const { data: localTemplate } = await supabase
       .from("w_template_submissions")
       .select("template_id, status")
@@ -1069,27 +1102,37 @@ export async function deleteTemplate(req: any, res: Response) {
       .eq("name", name)
       .maybeSingle();
 
-    if (!localTemplate || !localTemplate.template_id || localTemplate.status === 'DRAFT') {
-      // Clean up local cache if it is a draft or does not exist on Meta
+    // Only skip Meta API if the template is explicitly a DRAFT (never submitted to Meta)
+    // If localTemplate is missing or has no template_id, we still attempt Meta deletion by name
+    // because the template may exist on Meta even if our local cache doesn't have the ID
+    const isLocalOnlyDraft = localTemplate?.status === 'DRAFT' && !localTemplate?.template_id;
+    if (isLocalOnlyDraft) {
+      // Pure local draft — clean up local cache only, Meta was never contacted
       await supabase
         .from("w_template_submissions")
         .delete()
         .eq("organization_id", orgId)
         .eq("wa_account_id", account.id)
         .eq("name", name);
+      markTemplateDeleted(orgId, name);
       return res.json({ success: true });
     }
 
-    let deleteUrl = `https://graph.facebook.com/v20.0/${waba_id}/message_templates?name=${encodeURIComponent(name)}`;
+    // 2. Look up the Meta template ID (hsm_id) for a cleaner delete
+    // hsm_id is required for precise deletion; fall back to name-only delete if lookup fails
+    let deleteUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/${waba_id}/message_templates?name=${encodeURIComponent(name)}`;
     try {
       const listRes = await fetch(
-        `https://graph.facebook.com/v20.0/${waba_id}/message_templates?name=${encodeURIComponent(name)}&fields=id,name,status`,
+        `https://graph.facebook.com/${GRAPH_API_VERSION}/${waba_id}/message_templates?name=${encodeURIComponent(name)}&fields=id,name,status`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
       const listJson = await listRes.json();
       if (listRes.ok && listJson.data?.length > 0) {
         const hsmId = listJson.data[0].id;
-        deleteUrl = `https://graph.facebook.com/v20.0/${waba_id}/message_templates?name=${encodeURIComponent(name)}&hsm_id=${hsmId}`;
+        deleteUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/${waba_id}/message_templates?name=${encodeURIComponent(name)}&hsm_id=${hsmId}`;
+        console.log(`[Template Delete] Using hsm_id=${hsmId} for template "${name}"`);
+      } else {
+        console.log(`[Template Delete] hsm_id not found for "${name}", using name-only delete. listRes.ok=${listRes.ok}, count=${listJson.data?.length}`);
       }
     } catch (lookupErr) {
       console.warn(
@@ -1132,6 +1175,8 @@ export async function deleteTemplate(req: any, res: Response) {
           .eq("wa_account_id", account.id)
           .eq("name", name);
 
+        // Mark as recently deleted so the next sync doesn't re-insert it
+        markTemplateDeleted(orgId, name);
         return res.json({ success: true });
       }
 
@@ -1155,6 +1200,9 @@ export async function deleteTemplate(req: any, res: Response) {
       .eq("organization_id", orgId)
       .eq("wa_account_id", account.id)
       .eq("name", name);
+
+    // Mark template as recently deleted so the next sync doesn't re-insert it
+    markTemplateDeleted(orgId, name);
 
     res.json({ success: true });
   } catch (err: any) {
