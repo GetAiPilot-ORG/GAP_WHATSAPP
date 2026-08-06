@@ -83,7 +83,7 @@ export const sendPushNotificationToUsers = async (userIds: string[], payload: an
         const stringPayload = JSON.stringify(payload);
 
         // Send to all devices
-        const pushPromises = subscriptions.map(async (sub) => {
+        const pushPromises = subscriptions.map(async (sub: any) => {
             const pushSubscription = {
                 endpoint: sub.endpoint,
                 keys: {
@@ -127,7 +127,7 @@ export const sendPushNotificationToOrg = async (orgId: string, payload: any) => 
 
         const stringPayload = JSON.stringify(payload);
 
-        const pushPromises = subscriptions.map(async (sub) => {
+        const pushPromises = subscriptions.map(async (sub: any) => {
             const pushSubscription = {
                 endpoint: sub.endpoint,
                 keys: {

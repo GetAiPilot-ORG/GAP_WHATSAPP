@@ -1,4 +1,8 @@
 import { useEffect, useMemo, useRef, useState, Fragment } from 'react'
+import { gsap } from 'gsap'
+import { useGSAP } from '@gsap/react'
+
+gsap.registerPlugin(useGSAP);
 import { Dialog as HeadlessDialog, Transition as HeadlessTransition } from '@headlessui/react'
 import {
     AlertCircle,
@@ -82,6 +86,8 @@ export default function BotAgents() {
         onConfirm: () => { },
     })
     const fileInputRef = useRef(null)
+    const statsContainerRef = useRef(null)
+    const cardsContainerRef = useRef(null)
 
     const authHeaders = useMemo(() => ({
         Authorization: `Bearer ${session?.access_token}`,
@@ -172,19 +178,19 @@ export default function BotAgents() {
     const currentPlanConfig = useMemo(() => {
         let lookupKey = normalizedPlanName
         if (
-            normalizedPlanName.includes('gap max') || 
-            normalizedPlanName.includes('gap core') || 
+            normalizedPlanName.includes('gap max') ||
+            normalizedPlanName.includes('gap core') ||
             normalizedPlanName.includes('gap pro')
         ) {
             lookupKey = 'pro'
         } else if (
-            normalizedPlanName.includes('free trial') || 
+            normalizedPlanName.includes('free trial') ||
             normalizedPlanName.includes('trial')
         ) {
             lookupKey = 'starter'
         }
-        return FALLBACK_PLANS.find(p => 
-            lookupKey.includes(p.id.toLowerCase()) || 
+        return FALLBACK_PLANS.find(p =>
+            lookupKey.includes(p.id.toLowerCase()) ||
             lookupKey.includes(p.name.toLowerCase())
         )
     }, [normalizedPlanName])
@@ -201,6 +207,29 @@ export default function BotAgents() {
         { title: 'Create first agent', helper: hasAgents ? `${agents.length} agents created` : 'Click Create Agent', done: hasAgents },
         { title: 'Turn on auto replies', helper: stats.unknown > 0 ? `${stats.unknown} ready` : 'Enable unknown chats', done: stats.unknown > 0 },
     ]
+
+    const hasAnimatedStats = useRef(false);
+    const hasAnimatedCards = useRef(false);
+
+    useGSAP(() => {
+        if (!isLoading && !hasAnimatedStats.current) {
+            hasAnimatedStats.current = true;
+            gsap.fromTo(".stat-card-item",
+                { opacity: 0, y: 15 },
+                { opacity: 1, y: 0, duration: 0.45, stagger: 0.05, ease: "power2.out" }
+            );
+        }
+    }, { dependencies: [isLoading], scope: statsContainerRef })
+
+    useGSAP(() => {
+        if (!isLoading && filteredAgents.length > 0 && !hasAnimatedCards.current) {
+            hasAnimatedCards.current = true;
+            gsap.fromTo(".agent-card-item",
+                { opacity: 0, y: 20, scale: 0.98 },
+                { opacity: 1, y: 0, scale: 1, duration: 0.45, stagger: 0.08, ease: "power2.out" }
+            );
+        }
+    }, { dependencies: [isLoading, filteredAgents], scope: cardsContainerRef })
 
     const openCreate = () => {
         setDraft({
@@ -365,13 +394,13 @@ export default function BotAgents() {
     }
 
     return (
-        <div className="min-h-full bg-[#f5f7fa]  sm:px-4 lg:px-7">
+        <div className="min-h-full bg-[#f8f9fa] sm:px-4 lg:px-7">
             <div className="space-y-5">
-                <div className="relative rounded-lg border border-gray-200 bg-white p-4 sm:p-5">
+                <div className="relative rounded-none border border-zinc-200 bg-white p-4 sm:p-5">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <div className="max-w-2xl">
-                            <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-[#0064b7]">
-                                <Sparkle size={14} weight="fill" />
+                            <div className="inline-flex items-center gap-1.5 rounded-none border border-zinc-200 bg-white px-2.5 py-0.5 text-[10px] sm:text-xs font-semibold text-zinc-700 tracking-wider uppercase font-mono">
+                                <Sparkle size={14} weight="fill" className="text-blue-600" />
                                 WhatsApp AI setup
                             </div>
                             <h1 className="mt-3 text-2xl font-semibold leading-tight text-gray-950 sm:text-3xl">Bot Agents</h1>
@@ -379,11 +408,11 @@ export default function BotAgents() {
                         </div>
                         <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:flex-wrap sm:items-center sm:w-auto">
 
-                            <button onClick={refreshAll} className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-all active:scale-[0.98]">
+                            <button onClick={refreshAll} className="inline-flex items-center justify-center gap-2 rounded-none border border-zinc-200 bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-all active:scale-[0.98]">
                                 <Database size={18} weight="duotone" />
                                 Sync
                             </button>
-                            <button data-tour="agents-api" onClick={() => setShowApiSettings(true)} className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3.5 py-2 text-sm font-semibold transition-all active:scale-[0.98] ${apiKeyConfigured ? 'border-green-200 bg-green-50 text-green-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
+                            <button data-tour="agents-api" onClick={() => setShowApiSettings(true)} className={`inline-flex items-center justify-center gap-2 rounded-none border px-3.5 py-2 text-sm font-semibold transition-all active:scale-[0.98] ${apiKeyConfigured ? 'border-green-200 bg-green-50 text-green-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
                                 <Key size={18} weight="duotone" />
                                 API Settings
                                 {apiKeyConfigured ? <Check size={16} weight="bold" /> : null}
@@ -394,7 +423,7 @@ export default function BotAgents() {
                                     data-tour="agents-create"
                                     disabled={isLimitReached}
                                     title={isLimitReached ? `AI agent limit reached for ${currentPlanName} plan (${agents.length}/${aiAgentLimit}). Upgrade your plan to add more.` : 'Click here to create your first agent'}
-                                    className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-all active:scale-[0.98] ${isLimitReached ? 'cursor-not-allowed bg-gray-400' : 'bg-green-600 hover:bg-green-700'}`}
+                                    className={`inline-flex w-full items-center justify-center gap-2 rounded-none px-4 py-2.5 text-sm font-semibold text-white transition-all active:scale-[0.98] ${isLimitReached ? 'cursor-not-allowed bg-gray-400' : 'bg-green-600 hover:bg-green-700'}`}
                                 >
                                     <Plus size={18} weight="bold" />
                                     {hasAgents ? 'Create Agent' : 'Create first agent'}
@@ -403,32 +432,32 @@ export default function BotAgents() {
                         </div>
                     </div>
 
-                    <div className="mt-2 flex flex-col sm:flex-row flex-wrap gap-3 lg:pr-[140px]">
+                    <div className="mt-4 flex flex-col sm:flex-row flex-wrap gap-0 border border-dashed border-zinc-300 bg-zinc-50/40 lg:mr-[140px]">
                         {setupSteps.map((step, index) => (
-                            <div key={step.title} className={`flex items-start gap-3 rounded-lg border p-3 pr-8 ${step.done ? 'border-green-200 bg-green-50' : 'border-blue-100 bg-blue-50/60'}`}>
-                                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${step.done ? 'bg-green-600 text-white' : 'bg-white text-[#0064b7] ring-1 ring-blue-100'}`}>
-                                    {step.done ? <Check size={15} weight="bold" /> : index + 1}
+                            <div key={step.title} className={`flex-1 flex items-start gap-3 p-4 border-zinc-200 sm:border-r last:border-r-0 ${index > 0 ? 'border-t sm:border-t-0' : ''} ${step.done ? 'bg-green-50/10' : ''}`}>
+                                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-none text-[10px] font-mono font-bold ${step.done ? 'bg-green-600 text-white' : 'bg-white text-zinc-650 border border-zinc-200'}`}>
+                                    {step.done ? <Check size={12} weight="bold" /> : index + 1}
                                 </span>
                                 <span className="min-w-0">
-                                    <span className="block text-sm font-semibold text-gray-950">{step.title}</span>
-                                    <span className="mt-0.5 block text-xs text-gray-600">{step.helper}</span>
+                                    <span className="block text-xs font-bold uppercase tracking-wide text-gray-950">{step.title}</span>
+                                    <span className="mt-0.5 block text-xs text-gray-500 font-medium">{step.helper}</span>
                                 </span>
                             </div>
                         ))}
                     </div>
                     <div className="hidden lg:flex absolute right-4 bottom-0 pointer-events-none">
-                        <video src="/images/3d-stickle-happy-retro-robot.webm" autoPlay loop muted playsInline className="h-[140px] w-auto object-contain drop-shadow-lg" />
+                        <video src="/images/3d-stickle-happy-retro-robot.webm" autoPlay loop muted playsInline className="h-[190px] w-auto object-contain drop-shadow-lg" />
                     </div>
                 </div>
 
                 {fetchError ? (
-                    <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                        <AlertCircle className="mt-0.5 h-4 w-4" />
+                    <div className="flex items-start gap-2 rounded-none border border-red-200 border-l-4 border-l-red-650 bg-red-50 px-4 py-3 text-sm text-red-700">
+                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                         <span>{fetchError}</span>
                     </div>
                 ) : null}
 
-                <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
+                <div className="grid grid-cols-2 gap-[1px] lg:grid-cols-4 bg-zinc-200 border border-zinc-200" ref={statsContainerRef}>
                     <StatCard icon={Robot} label="Agents" value={stats.total} helper="Total trained bots" />
                     <StatCard icon={Check} label="Active" value={stats.active} helper="Replying now" />
                     <StatCard icon={ShieldCheck} label="Auto reply ready" value={stats.unknown} helper="New chats covered" />
@@ -436,18 +465,18 @@ export default function BotAgents() {
                 </div>
 
                 <div className="grid gap-4 xl:grid-cols-[1fr_320px] 2xl:grid-cols-[1fr_360px]">
-                    <section data-tour="agents-list" className="rounded-lg border border-gray-200 bg-white">
-                        <div className="flex flex-col gap-3 border-b border-gray-200 p-4 md:flex-row md:items-center md:justify-between">
+                    <section data-tour="agents-list" className="rounded-none border border-zinc-200 bg-white">
+                        <div className="flex flex-col gap-3 border-b border-zinc-200 p-4 md:flex-row md:items-center md:justify-between">
                             <div className="relative flex-1">
                                 <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={17} />
-                                <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search agents, keywords, docs..." className="w-full rounded-lg border border-gray-300 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20" />
+                                <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search agents, keywords, docs..." className="w-full rounded-none border border-zinc-205 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-zinc-405 focus:ring-1 focus:ring-zinc-200" />
                             </div>
-                            <div className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                            <div className="flex items-center gap-2 rounded-none border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs font-mono text-zinc-650">
                                 <Database size={16} weight="duotone" />
                                 {knowledgeDocs.length} synced knowledge docs
                             </div>
                         </div>
-                        <div className="grid gap-3 p-4 grid-cols-1 md:grid-cols-2 2xl:grid-cols-2 min-[1700px]:grid-cols-3">
+                        <div className="grid gap-4 p-4 grid-cols-1 md:grid-cols-2 2xl:grid-cols-2 min-[1700px]:grid-cols-3 bg-white" ref={cardsContainerRef}>
                             {filteredAgents.length === 0 ? (
                                 <EmptyAgentsState hasAgents={hasAgents} query={query} onCreate={openCreate} isLimitReached={isLimitReached} />
                             ) : filteredAgents.map(agent => (
@@ -457,9 +486,9 @@ export default function BotAgents() {
                     </section>
 
                     <aside className="space-y-4">
-                        <section className="rounded-lg border border-blue-100 bg-blue-50 p-4">
+                        <section className="rounded-none border border-dashed border-zinc-300 bg-zinc-50/40 p-4">
                             <div className="flex gap-3">
-                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-[#0064b7] ring-1 ring-blue-100">
+                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none bg-white text-zinc-700 border border-zinc-200">
                                     <Target size={20} weight="duotone" />
                                 </span>
                                 <div>
@@ -467,13 +496,13 @@ export default function BotAgents() {
                                     <p className="mt-1 text-sm leading-5 text-gray-600">Non-tech flow simple rakho: docs upload, agent create, phir unknown chats ko auto reply.</p>
                                 </div>
                             </div>
-                            <button onClick={openCreate} disabled={isLimitReached} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#0070d1] px-3 py-2.5 text-sm font-semibold text-white hover:bg-[#0064b7] disabled:bg-gray-400">
+                            <button onClick={openCreate} disabled={isLimitReached} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-none bg-[#0070d1] px-3 py-2.5 text-sm font-semibold text-white hover:bg-[#0064b7] disabled:bg-gray-400">
                                 Click here to create first agent
                                 <ArrowRight size={16} weight="bold" />
                             </button>
                         </section>
 
-                        <section data-tour="agents-knowledge" className="rounded-lg border border-gray-200 bg-white p-4">
+                        <section data-tour="agents-knowledge" className="rounded-none border border-zinc-200 bg-white p-4">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <h2 className="font-bold text-gray-950">Knowledge sync</h2>
@@ -482,30 +511,30 @@ export default function BotAgents() {
                                 <Database size={22} weight="duotone" className="text-gray-400" />
                             </div>
                             <input ref={fileInputRef} type="file" multiple accept=".pdf,.docx,.txt,.md,.csv,.json" className="hidden" onChange={event => uploadKnowledgeFiles(event.target.files)} />
-                            <button onClick={() => fileInputRef.current?.click()} className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 px-3 py-3 text-sm font-semibold text-gray-700 hover:border-green-300 hover:bg-green-50">
+                            <button onClick={() => fileInputRef.current?.click()} className="mt-4 flex w-full items-center justify-center gap-2 rounded-none border border-dashed border-zinc-300 px-3 py-3 text-sm font-semibold text-zinc-700 hover:border-zinc-400 hover:bg-zinc-50/50 active:scale-[0.98] transition-all">
                                 {uploadingKb ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadSimple size={18} weight="bold" />}
                                 {uploadingKb ? 'Indexing...' : 'Upload and index docs'}
                             </button>
                             <div className="mt-4 space-y-2">
                                 {knowledgeDocs.slice(0, 5).map(doc => (
-                                    <div key={doc.id} className="flex items-center gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
-                                        <FileText size={18} weight="duotone" className="text-gray-400" />
+                                    <div key={doc.id} className="flex items-center gap-2 rounded-none border border-zinc-200 bg-[#f8f9fa] px-3 py-2.5 transition-all hover:border-zinc-300">
+                                        <FileText size={18} weight="duotone" className="text-zinc-400" />
                                         <div className="min-w-0 flex-1">
-                                            <div className="truncate text-sm font-semibold text-gray-800">{doc.name}</div>
-                                            <div className="text-xs text-gray-400">{doc.size_label} - {getDocCharCount(doc).toLocaleString()} chars</div>
+                                            <div className="truncate text-sm font-semibold text-zinc-800">{doc.name}</div>
+                                            <div className="text-xs text-zinc-400">{doc.size_label} - {getDocCharCount(doc).toLocaleString()} chars</div>
                                         </div>
-                                        <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700">{doc.status || 'INDEXED'}</span>
+                                        <span className="inline-flex items-center rounded-none border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-bold text-emerald-700">{doc.status || 'INDEXED'}</span>
                                     </div>
                                 ))}
                                 {knowledgeDocs.length === 0 ? (
-                                    <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-4 text-center text-sm text-gray-500">
+                                    <div className="rounded-none border border-dashed border-zinc-300 bg-[#f8f9fa] px-3 py-4 text-center text-sm text-zinc-500">
                                         Upload FAQ, pricing, services, or product docs. Agent isi knowledge se answer karega.
                                     </div>
                                 ) : null}
                             </div>
                         </section>
 
-                        <section className="rounded-lg border border-green-200 bg-green-50 p-4">
+                        <section className="rounded-none border border-dashed border-green-200 bg-green-50/40 p-4">
                             <div className="flex gap-3">
                                 <Sparkle size={22} weight="duotone" className="mt-0.5 text-green-700" />
                                 <div>
@@ -558,53 +587,106 @@ function AgentCard({ agent, onEdit, onToggle, onDelete }) {
             : 'Keyword only'
 
     return (
-        <div className="group flex flex-col h-full rounded-lg border border-gray-200 bg-white p-3.5 sm:p-4 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50/20">
-            <div className="flex items-start justify-between gap-2 lg:gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                    <img src="/images/agent Bot.png" alt="Bot Icon" className="h-[52px] w-[52px] shrink-0 object-contain drop-shadow-md transition-transform hover:scale-105" />
-                    <div className="min-w-0 flex flex-col justify-center">
-                        <h3 className="truncate text-[15px] font-bold text-gray-950">{agent.name}</h3>
-                        <p className="mt-0.5 truncate text-[11px] font-medium text-gray-500" title={`${agent.model} • Temp ${agent.temperature}`}>
+        <div className="agent-card-item group relative flex flex-col justify-between h-full rounded-none border border-zinc-200 bg-white p-5 transition-all duration-300 hover:border-zinc-300 hover:shadow-sm">
+            <div>
+                {/* Header Row */}
+                <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                        <h3 className="text-base font-bold text-zinc-950 tracking-tight leading-snug">{agent.name}</h3>
+                        <p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-zinc-400 font-medium" title={`${agent.model} • Temp ${agent.temperature}`}>
                             {agent.model} &bull; Temp {agent.temperature}
                         </p>
                     </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-1.5">
-                    <button onClick={() => onToggle(agent)} className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] font-bold transition ${agent.isActive ? 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100' : 'border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100'}`} title={agent.isActive ? 'Pause agent' : 'Activate agent'}>
-                        <span className={`h-1.5 w-1.5 rounded-full ${agent.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
-                        <span className="hidden sm:inline">{agent.isActive ? 'Active' : 'Paused'}</span>
-                    </button>
-                    <button onClick={() => onDelete(agent)} className="rounded-lg p-1.5 text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors shrink-0" title="Delete">
-                        <Trash size={16} weight="duotone" />
+                    <button
+                        onClick={() => onDelete(agent)}
+                        className="rounded-none p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-650 transition-all shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 duration-200"
+                        title="Delete agent"
+                    >
+                        <Trash size={15} />
                     </button>
                 </div>
-            </div>
-            <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-1.5">
-                <div className="flex items-center gap-2 text-[11px] font-semibold text-gray-700">
-                    <ChatCircleText size={14} weight="duotone" className="text-[#0064b7]" />
-                    {automationLabel}
-                </div>
-            </div>
-            <p className="mt-3 line-clamp-2 text-[13px] leading-5 text-gray-600">{agent.description || 'No description yet.'}</p>
-            
-            <div className="mt-auto pt-3 flex flex-col gap-3">
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                    <MiniMetric label="Docs" value={agent.documentCount || 0} />
-                    <MiniMetric label="Chars" value={Number(agent.characterCount || 0).toLocaleString()} />
-                </div>
-                
-                {((agent.triggerKeywords && agent.triggerKeywords.length > 0) || agent.automation.auto_reply_unknown || agent.automation.default_for_new_chats) && (
-                    <div className="flex flex-wrap gap-1.5">
-                        {(agent.triggerKeywords || []).slice(0, 4).map(keyword => <span key={keyword} className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">{keyword}</span>)}
-                        {agent.automation.auto_reply_unknown ? <span className="rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-semibold text-green-700">unknown auto</span> : null}
-                        {agent.automation.default_for_new_chats ? <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[11px] font-semibold text-purple-700">default</span> : null}
+
+                {/* Description */}
+                <p className="mt-4 line-clamp-2 text-xs leading-relaxed text-zinc-500 min-h-[32px]">
+                    {agent.description || 'No description yet.'}
+                </p>
+
+                {/* Automation Status & Badges */}
+                <div className="mt-4 space-y-3 pt-4 border-t border-dashed border-zinc-200">
+                    <div className="flex items-center gap-2 text-xs">
+                        <ChatCircleText size={15} className="text-zinc-400" />
+                        <span className="font-semibold text-zinc-700">{automationLabel}</span>
                     </div>
-                )}
-                
-                <button onClick={() => onEdit(agent)} className="group/btn flex w-fit items-center justify-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-2 py-2 text-[13px] font-bold text-gray-700 shadow-sm transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-[#0064b7] active:scale-[0.98]">
-                    <img src="/images/upgrade-2.png" alt="Configure" className="h-5 w-5 object-contain drop-shadow-sm transition-transform duration-300 group-hover/btn:scale-110 group-hover/btn:rotate-6" />
-                    Configure agent
-                </button>
+
+                    {((agent.triggerKeywords && agent.triggerKeywords.length > 0) || agent.automation.auto_reply_unknown || agent.automation.default_for_new_chats) && (
+                        <div className="flex flex-wrap gap-1">
+                            {(agent.triggerKeywords || []).slice(0, 3).map(keyword => (
+                                <span key={keyword} className="inline-flex items-center rounded-none border border-zinc-200 bg-zinc-50/50 px-2 py-0.5 text-[9px] font-mono text-zinc-600">
+                                    {keyword}
+                                </span>
+                            ))}
+                            {agent.automation.auto_reply_unknown && (
+                                <span className="inline-flex items-center rounded-none border border-emerald-200 bg-emerald-50/40 px-2 py-0.5 text-[9px] font-mono text-emerald-700">
+                                    unknown-auto
+                                </span>
+                            )}
+                            {agent.automation.default_for_new_chats && (
+                                <span className="inline-flex items-center rounded-none border border-indigo-200 bg-indigo-50/40 px-2 py-0.5 text-[9px] font-mono text-indigo-700">
+                                    default
+                                </span>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Footer metrics & action */}
+            <div className="mt-5 pt-4">
+                <div className="grid grid-cols-2 gap-4 border-t border-b border-dashed border-zinc-200 py-3.5 my-4 divide-x divide-dashed divide-zinc-200">
+                    <div className="pr-2">
+                        <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-400 block mb-0.5">Documents</span>
+                        <span className="text-sm font-semibold text-zinc-900">{agent.documentCount || 0}</span>
+                    </div>
+                    <div className="pl-4">
+                        <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-400 block mb-0.5">Chars</span>
+                        <span className="text-sm font-semibold text-zinc-900">{Number(agent.characterCount || 0).toLocaleString()}</span>
+                    </div>
+                </div>
+
+                <div className="mt-4 flex gap-2">
+                    <button
+                        onClick={() => onEdit(agent)}
+                        className="flex-1 flex items-center justify-center gap-2 rounded-none border border-zinc-200 bg-zinc-50 py-2.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100/80 active:scale-[0.98] transition-all"
+                    >
+                        <GearSix size={14} className="text-zinc-500" />
+                        Configure
+                    </button>
+                    <button
+                        onClick={() => onToggle(agent)}
+                        className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-none border py-2.5 text-xs font-semibold active:scale-[0.98] transition-all duration-200 ${agent.isActive
+                            ? 'border-zinc-250 bg-zinc-50 text-zinc-750 hover:bg-red-50/30 hover:border-red-200 hover:text-red-650'
+                            : 'border-zinc-200 bg-zinc-100/60 text-zinc-500 hover:bg-emerald-50/30 hover:border-emerald-250 hover:text-emerald-700'
+                            }`}
+                        title={agent.isActive ? 'Pause Agent' : 'Activate Agent'}
+                    >
+                        {agent.isActive ? (
+                            <>
+                                <span className="relative flex h-1.5 w-1.5">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-none bg-emerald-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-none h-1.5 w-1.5 bg-emerald-500"></span>
+                                </span>
+                                <span className="group-hover:hidden">Active</span>
+                                <span className="hidden group-hover:inline">Pause</span>
+                            </>
+                        ) : (
+                            <>
+                                <span className="h-1.5 w-1.5 rounded-none bg-zinc-300" />
+                                <span className="group-hover:hidden">Paused</span>
+                                <span className="hidden group-hover:inline">Activate</span>
+                            </>
+                        )}
+                    </button>
+                </div>
             </div>
         </div>
     )
@@ -649,33 +731,33 @@ function AgentDrawer({ draft, setDraft, docs, models, selectedDocs, selectedChar
     return (
         <div className="fixed inset-0 z-50 overflow-hidden">
             <div className="absolute inset-0 bg-gray-950/30 backdrop-blur-sm" onClick={onClose} />
-            <div className="absolute inset-y-0 right-0 flex w-full max-w-4xl flex-col bg-white shadow-2xl">
-                <div className="border-b border-gray-200 bg-white px-4 py-4 sm:px-6 sm:py-5">
+            <div className="absolute inset-y-0 right-0 flex w-full max-w-4xl flex-col bg-white border-l border-zinc-200 shadow-2xl">
+                <div className="border-b border-zinc-200 bg-white px-4 py-4 sm:px-6 sm:py-5">
                     <div className="flex items-start justify-between gap-4">
                         <div>
-                            <div className="text-xs font-bold uppercase tracking-wide text-green-700">{draft.id ? 'Configure agent' : 'Create bot agent'}</div>
+                            <div className="text-[10px] font-bold uppercase tracking-wide text-green-700 font-mono">{draft.id ? 'Configure agent' : 'Create bot agent'}</div>
                             <h2 className="mt-1 text-xl font-bold text-gray-950 sm:text-2xl">{draft.id ? draft.name : 'Train a new WhatsApp bot'}</h2>
                             <p className="mt-1 text-sm text-gray-500">Attach saved knowledge, choose trigger rules, and control automatic replies.</p>
                         </div>
-                        <button onClick={onClose} className="rounded-full p-2 text-gray-500 hover:bg-gray-100">
+                        <button onClick={onClose} className="rounded-none p-2 text-gray-500 hover:bg-gray-100 border border-zinc-200">
                             <X size={20} weight="bold" />
                         </button>
                     </div>
                     <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                        <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                        <div className="rounded-none border border-zinc-200 bg-zinc-50/55 px-3 py-2">
                             <div className="text-[10px] font-bold uppercase text-gray-400">Status</div>
-                            <div className="mt-1 text-sm font-bold text-gray-900">{draft.isActive ? 'Active' : 'Paused'}</div>
+                            <div className="mt-1 text-sm font-bold text-gray-905">{draft.isActive ? 'Active' : 'Paused'}</div>
                         </div>
-                        <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                        <div className="rounded-none border border-zinc-200 bg-zinc-50/55 px-3 py-2">
                             <div className="text-[10px] font-bold uppercase text-gray-400">Knowledge</div>
-                            <div className="mt-1 text-sm font-bold text-gray-900">{selectedDocs.length} docs</div>
+                            <div className="mt-1 text-sm font-bold text-gray-905">{selectedDocs.length} docs</div>
                         </div>
-                        <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                        <div className="rounded-none border border-zinc-200 bg-zinc-50/55 px-3 py-2">
                             <div className="text-[10px] font-bold uppercase text-gray-400">Automation</div>
-                            <div className="mt-1 text-sm font-bold text-gray-900">{draft.automation.auto_reply_unknown || draft.automation.default_for_new_chats ? 'Auto-ready' : 'Keyword only'}</div>
+                            <div className="mt-1 text-sm font-bold text-gray-905">{draft.automation.auto_reply_unknown || draft.automation.default_for_new_chats ? 'Auto-ready' : 'Keyword only'}</div>
                         </div>
                     </div>
-                    <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
+                    <div className="mt-4 rounded-none border border-dashed border-blue-200 bg-blue-50/30 px-4 py-3">
                         <div className="flex flex-col gap-2 text-sm text-gray-700 sm:flex-row sm:items-center sm:justify-between">
                             <span className="font-semibold text-gray-950">Setup guide</span>
                             <span>1. Profile</span>
@@ -686,60 +768,60 @@ function AgentDrawer({ draft, setDraft, docs, models, selectedDocs, selectedChar
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto bg-gray-50 p-3 sm:p-5">
+                <div className="flex-1 overflow-y-auto bg-gray-55 p-3 sm:p-5">
                     <div className="space-y-4">
-                        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                        <section className="rounded-none border border-zinc-200 bg-white p-5">
                             <SectionTitle title="Profile" subtitle="Simple naam aur role likho. Customer ko ye ek helpful team member jaisa lagega." />
-                            <div className="grid gap-4 md:grid-cols-2">
-                                <Field label="Agent name"><input value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} className="field-input" placeholder="Customer Support Bot" /></Field>
+                            <div className="grid gap-4 md:grid-cols-2 mt-4">
+                                <Field label="Agent name"><input value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} className="field-input rounded-none border-zinc-200 focus:border-zinc-400 focus:ring-1 focus:ring-zinc-200" placeholder="Customer Support Bot" /></Field>
                                 <Field label="Model"><CustomSelect value={draft.model} onChange={value => setDraft({ ...draft, model: value })} options={models} /></Field>
                             </div>
-                            <Field label="Description" className="mt-4"><textarea value={draft.description} onChange={event => setDraft({ ...draft, description: event.target.value })} rows={5} className="field-input min-h-28 resize-y leading-6" placeholder="Example: Answers pricing, services, timings, and booking questions politely." /></Field>
+                            <Field label="Description" className="mt-4"><textarea value={draft.description} onChange={event => setDraft({ ...draft, description: event.target.value })} rows={5} className="field-input rounded-none border-zinc-200 focus:border-zinc-400 focus:ring-1 focus:ring-zinc-200 min-h-28 resize-y leading-6" placeholder="Example: Answers pricing, services, timings, and booking questions politely." /></Field>
                             <Field label={`Temperature (${draft.temperature})`} className="mt-4">
-                                <input type="range" min="0" max="2" step="0.1" value={draft.temperature} onChange={event => setDraft({ ...draft, temperature: parseFloat(event.target.value) })} className="w-full accent-green-600" />
+                                <input type="range" min="0" max="2" step="0.1" value={draft.temperature} onChange={event => setDraft({ ...draft, temperature: parseFloat(event.target.value) })} className="w-full accent-green-650" />
                                 <div className="mt-1 flex justify-between text-xs text-gray-500"><span>Precise</span><span>Creative</span></div>
                             </Field>
                         </section>
 
-                        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                        <section className="rounded-none border border-zinc-200 bg-white p-5">
                             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <SectionTitle title="Automation policy" subtitle="Yahan decide hota hai bot kab reply karega. Start ke liye unknown chats on rakhna best hai." />
                                 <Toggle checked={draft.isActive} onChange={value => setDraft({ ...draft, isActive: value })} label={draft.isActive ? 'Active' : 'Inactive'} />
                             </div>
-                            <div className="divide-y divide-gray-100 rounded-xl border border-gray-200">
+                            <div className="divide-y divide-dashed divide-zinc-200 rounded-none border border-zinc-200 bg-zinc-50/20">
                                 <PolicyToggle title="Reply on trigger keywords" description="Use keywords like help, price, support." checked={draft.automation.reply_on_keywords} onChange={value => updateAutomation('reply_on_keywords', value)} />
                                 <PolicyToggle title="Auto reply unknown numbers" description="Reply when a new number messages first." checked={draft.automation.auto_reply_unknown} onChange={value => updateAutomation('auto_reply_unknown', value)} />
                                 <PolicyToggle title="Default for new chats" description="Use this bot if no keyword matches." checked={draft.automation.default_for_new_chats} onChange={value => updateAutomation('default_for_new_chats', value)} />
                                 <PolicyToggle title="Pause after human reply" description="Keep human handoff clean." checked={draft.automation.handoff_on_human_reply} onChange={value => updateAutomation('handoff_on_human_reply', value)} />
                             </div>
-                            <Field label="Trigger keywords" className="mt-4"><input value={draft.triggerKeywords} onChange={event => setDraft({ ...draft, triggerKeywords: event.target.value })} className="field-input" placeholder="help, support, price, booking, demo" /></Field>
+                            <Field label="Trigger keywords" className="mt-4"><input value={draft.triggerKeywords} onChange={event => setDraft({ ...draft, triggerKeywords: event.target.value })} className="field-input rounded-none border-zinc-200 focus:border-zinc-400 focus:ring-1 focus:ring-zinc-200" placeholder="help, support, price, booking, demo" /></Field>
                         </section>
 
-                        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                        <section className="rounded-none border border-zinc-200 bg-white p-5">
                             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <SectionTitle title="Knowledge Base training" subtitle="Select indexed documents. Saving trains this agent with selected content." />
-                                <div className="rounded-lg bg-green-50 px-3 py-2 text-right">
-                                    <div className="text-xs font-medium text-green-700">Selected</div>
+                                <div className="rounded-none border border-green-200 bg-green-50/40 px-3 py-2 text-right">
+                                    <div className="text-[10px] font-bold uppercase tracking-wider text-green-700 font-mono">Selected</div>
                                     <div className="text-sm font-bold text-green-950">{selectedDocs.length} docs - {selectedCharacters.toLocaleString()} chars</div>
                                 </div>
                             </div>
                             <div className="mb-3 flex gap-2">
-                                <button type="button" onClick={selectAllDocs} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-700 hover:bg-gray-50">Select all</button>
-                                <button type="button" onClick={clearDocs} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-700 hover:bg-gray-50">Clear</button>
+                                <button type="button" onClick={selectAllDocs} className="rounded-none border border-zinc-200 bg-white px-3 py-1.5 text-xs font-bold text-zinc-700 hover:bg-zinc-50">Select all</button>
+                                <button type="button" onClick={clearDocs} className="rounded-none border border-zinc-200 bg-white px-3 py-1.5 text-xs font-bold text-zinc-700 hover:bg-zinc-50">Clear</button>
                             </div>
                             <div className="grid gap-2 md:grid-cols-2">
                                 {docs.length === 0 ? (
-                                    <div className="col-span-full rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">No saved knowledge documents yet. Upload from Settings or the sync panel.</div>
+                                    <div className="col-span-full rounded-none border border-dashed border-zinc-300 p-6 text-center text-sm text-zinc-500">No saved knowledge documents yet. Upload from Settings or the sync panel.</div>
                                 ) : docs.map(doc => {
                                     const checked = draft.selectedKnowledgeIds.includes(doc.id)
                                     return (
-                                        <button key={doc.id} type="button" onClick={() => toggleDoc(doc.id)} className={`flex items-center gap-3 rounded-lg border p-3 text-left transition ${checked ? 'border-green-300 bg-green-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}>
-                                            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${checked ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                                        <button key={doc.id} type="button" onClick={() => toggleDoc(doc.id)} className={`flex items-center gap-3 rounded-none border p-3 text-left transition ${checked ? 'border-green-300 bg-green-50/30' : 'border-zinc-200 bg-white hover:bg-zinc-50'}`}>
+                                            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-none ${checked ? 'bg-green-600 text-white' : 'bg-zinc-100 text-zinc-500'}`}>
                                                 {checked ? <Check size={17} weight="bold" /> : <FileText size={18} weight="duotone" />}
                                             </div>
                                             <div className="min-w-0 flex-1">
-                                                <div className="truncate text-sm font-bold text-gray-900">{doc.name}</div>
-                                                <div className="text-xs text-gray-500">{doc.size_label} - {getDocCharCount(doc).toLocaleString()} chars</div>
+                                                <div className="truncate text-sm font-bold text-zinc-900">{doc.name}</div>
+                                                <div className="text-xs text-zinc-500">{doc.size_label} - {getDocCharCount(doc).toLocaleString()} chars</div>
                                             </div>
                                         </button>
                                     )
@@ -747,16 +829,16 @@ function AgentDrawer({ draft, setDraft, docs, models, selectedDocs, selectedChar
                             </div>
                         </section>
 
-                        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                        <section className="rounded-none border border-zinc-200 bg-white p-5">
                             <SectionTitle title="System prompt" subtitle="Core behavior rules. Keep this human, specific, and aligned with your business." />
-                            <textarea value={draft.systemPrompt} onChange={event => setDraft({ ...draft, systemPrompt: event.target.value })} rows={9} className="field-input mt-4 min-h-56 resize-y font-mono leading-6" placeholder="You are a helpful WhatsApp assistant. Use the knowledge base and answer naturally..." />
+                            <textarea value={draft.systemPrompt} onChange={event => setDraft({ ...draft, systemPrompt: event.target.value })} rows={9} className="field-input rounded-none border-zinc-200 focus:border-zinc-400 focus:ring-1 focus:ring-zinc-200 mt-4 min-h-56 resize-y font-mono leading-6" placeholder="You are a helpful WhatsApp assistant. Use the knowledge base and answer naturally..." />
                         </section>
                     </div>
                 </div>
 
-                <div className="flex flex-col-reverse gap-3 border-t border-gray-200 bg-white px-4 py-4 sm:flex-row sm:justify-end sm:px-6">
-                    <button onClick={onClose} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Cancel</button>
-                    <button onClick={onSave} disabled={!draft.name.trim() || isSaving} className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50">
+                <div className="flex flex-col-reverse gap-3 border-t border-zinc-200 bg-white px-4 py-4 sm:flex-row sm:justify-end sm:px-6">
+                    <button onClick={onClose} className="rounded-none border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50">Cancel</button>
+                    <button onClick={onSave} disabled={!draft.name.trim() || isSaving} className="inline-flex items-center justify-center gap-2 rounded-none bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50">
                         {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Brain size={18} weight="duotone" />}
                         {isSaving ? 'Training...' : 'Save and train'}
                     </button>
@@ -792,23 +874,18 @@ function ApiKeyModal({ apiKey, setApiKey, configured, isSaving, onClose, onSave 
         </div>
     )
 }
-
 function StatCard({ icon, label, value, helper }) {
     const IconComponent = icon
     return (
-        <div className="rounded-lg border border-gray-200 bg-white px-4 py-3">
+        <div className="stat-card-item rounded-none bg-white p-5">
             <div className="flex items-center justify-between">
-                <div className="text-xs font-medium text-gray-500">{label}</div>
-                <IconComponent size={18} weight="duotone" className="text-gray-400" />
+                <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">{label}</span>
+                <IconComponent size={18} className="text-zinc-400" />
             </div>
-            <div className="mt-2 text-2xl font-bold text-gray-950">{value}</div>
-            {helper ? <div className="mt-1 text-xs text-gray-500">{helper}</div> : null}
+            <div className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950">{value}</div>
+            {helper ? <div className="mt-1 text-xs text-zinc-500 leading-normal">{helper}</div> : null}
         </div>
     )
-}
-
-function MiniMetric({ label, value }) {
-    return <div className="rounded-lg bg-gray-50 px-3 py-2"><div className="text-[10px] font-bold uppercase text-gray-400">{label}</div><div className="font-bold text-gray-900">{value}</div></div>
 }
 
 function Field({ label, children, className = '' }) {
@@ -826,9 +903,9 @@ function SectionTitle({ title, subtitle }) {
 
 function Toggle({ checked, onChange, label }) {
     return (
-        <button type="button" onClick={() => onChange(!checked)} className={`inline-flex h-7 items-center gap-2 rounded-full border px-1.5 pr-2.5 text-xs font-bold transition ${checked ? 'border-green-200 bg-green-50 text-green-700' : 'border-gray-200 bg-gray-50 text-gray-500'}`}>
-            <span className={`relative inline-flex h-[18px] w-8 items-center rounded-full transition ${checked ? 'bg-green-500' : 'bg-gray-300'}`}>
-                <span className={`h-3.5 w-3.5 rounded-full bg-white shadow-sm transition ${checked ? 'translate-x-4' : 'translate-x-0.5'}`} />
+        <button type="button" onClick={() => onChange(!checked)} className={`inline-flex h-7 items-center gap-2 rounded-none border border-zinc-200 px-1.5 pr-2.5 text-xs font-bold transition ${checked ? 'border-green-200 bg-green-50 text-green-700' : 'border-gray-200 bg-gray-50 text-gray-500'}`}>
+            <span className={`relative inline-flex h-[18px] w-8 items-center rounded-none transition ${checked ? 'bg-green-500' : 'bg-gray-300'}`}>
+                <span className={`h-3.5 w-3.5 rounded-none bg-white shadow-sm transition ${checked ? 'translate-x-4' : 'translate-x-0.5'}`} />
             </span>
             <span>{label}</span>
         </button>
@@ -837,7 +914,7 @@ function Toggle({ checked, onChange, label }) {
 
 function PolicyToggle({ title, description, checked, onChange }) {
     return (
-        <div className={`flex flex-col gap-3 px-4 py-3 transition sm:flex-row sm:items-center sm:justify-between sm:gap-4 ${checked ? 'bg-green-50/70' : 'bg-white'}`}>
+        <div className={`flex flex-col gap-3 px-4 py-3 transition sm:flex-row sm:items-center sm:justify-between sm:gap-4 ${checked ? 'bg-green-50/20' : 'bg-white'}`}>
             <div className="min-w-0">
                 <div className="font-bold text-gray-950">{title}</div>
                 <p className="mt-1 text-sm text-gray-500">{description}</p>
@@ -856,7 +933,7 @@ function CustomSelect({ value, onChange, options }) {
                 type="button"
                 onClick={() => setOpen(v => !v)}
                 onBlur={() => setTimeout(() => setOpen(false), 120)}
-                className="w-full apple-select-trigger"
+                className="w-full apple-select-trigger rounded-none border border-zinc-200"
                 style={{ height: '42px' }}
             >
                 <span className="min-w-0 text-left">
@@ -866,7 +943,7 @@ function CustomSelect({ value, onChange, options }) {
                 <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-gray-505 transition ${open ? 'rotate-180 text-gray-800' : ''}`} />
             </button>
             {open ? (
-                <div className="absolute z-[80] mt-1 max-h-72 w-full overflow-y-auto apple-select-dropdown wa-chat-scroll">
+                <div className="absolute z-[80] mt-1 max-h-72 w-full overflow-y-auto apple-select-dropdown rounded-none border border-zinc-200 bg-white shadow-lg wa-chat-scroll">
                     {options.map(option => {
                         const active = option.value === value
                         return (
@@ -875,7 +952,7 @@ function CustomSelect({ value, onChange, options }) {
                                 type="button"
                                 onMouseDown={event => event.preventDefault()}
                                 onClick={() => { onChange(option.value); setOpen(false) }}
-                                className={`apple-select-option ${active ? 'apple-select-option-selected' : ''}`}
+                                className={`apple-select-option ${active ? 'apple-select-option-selected' : ''} rounded-none`}
                             >
                                 <span className="min-w-0 text-left">
                                     <span className="block truncate">{option.label}</span>
@@ -918,7 +995,7 @@ function AppleVercelConfirmModal({ isOpen, onClose, title, message, confirmLabel
                             leaveFrom="opacity-100 scale-100"
                             leaveTo="opacity-0 scale-95"
                         >
-                            <HeadlessDialog.Panel className="w-full max-w-[360px] transform overflow-hidden rounded-2xl border border-neutral-100/90 bg-white p-6 text-center shadow-[0_24px_50px_-12px_rgba(0,0,0,0.15)] transition-all">
+                            <HeadlessDialog.Panel className="w-full max-w-[360px] transform overflow-hidden rounded-none border border-zinc-200 bg-white p-6 text-center shadow-[0_24px_50px_-12px_rgba(0,0,0,0.15)] transition-all">
                                 <HeadlessDialog.Title as="h3" className="text-lg font-semibold text-neutral-900 tracking-tight leading-6">
                                     {title}
                                 </HeadlessDialog.Title>
@@ -930,14 +1007,14 @@ function AppleVercelConfirmModal({ isOpen, onClose, title, message, confirmLabel
                                     <button
                                         type="button"
                                         onClick={onClose}
-                                        className="flex-1 px-4 py-2.5 text-sm font-semibold text-neutral-600 bg-white border border-neutral-200 rounded-xl hover:bg-neutral-50 hover:text-neutral-900 active:bg-neutral-100 transition-colors duration-150 outline-none"
+                                        className="flex-1 px-4 py-2.5 text-sm font-semibold text-neutral-600 bg-white border border-neutral-200 rounded-none hover:bg-neutral-50 hover:text-neutral-900 active:bg-neutral-100 transition-colors duration-150 outline-none"
                                     >
                                         {cancelLabel || 'Cancel'}
                                     </button>
                                     <button
                                         type="button"
                                         onClick={onConfirm}
-                                        className={`flex-1 px-4 py-2.5 text-sm font-semibold text-white border border-transparent rounded-xl shadow-sm hover:shadow active:scale-[0.98] transition-all duration-150 outline-none ${tone === 'danger'
+                                        className={`flex-1 px-4 py-2.5 text-sm font-semibold text-white border border-transparent rounded-none shadow-sm hover:shadow active:scale-[0.98] transition-all duration-150 outline-none ${tone === 'danger'
                                             ? 'bg-red-600 hover:bg-red-500 active:bg-red-700'
                                             : 'bg-black hover:bg-neutral-900 active:bg-neutral-800'
                                             }`}

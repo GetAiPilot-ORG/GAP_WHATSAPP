@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Send, Users, FileText, Calendar, Check, ArrowRight, LayoutGrid, Loader2, Clock, Trash2, ChevronDown, ChevronUp, Upload, Link as LinkIcon, Info, Wallet, Pause, Play, Phone, MessageSquare, ShieldCheck, TrendingUp, Search, X } from 'lucide-react'
+import { Send, Users, FileText, Calendar, Check, ArrowRight, LayoutGrid, Loader2, Clock, Trash2, ChevronDown, ChevronUp, Upload, Link as LinkIcon, Info, Wallet, Pause, Play, Phone, MessageSquare, ShieldCheck, TrendingUp, Search, X, Megaphone } from 'lucide-react'
 import { format } from 'date-fns'
 import { useAuth } from '../context/AuthContext'
 import { useDialog } from '../context/DialogContext'
@@ -8,6 +8,7 @@ import { useWhatsAppAccounts } from '../context/WhatsAppAccountContext'
 import { formatINRFromPaise } from '../config/whatsappPricing'
 import { MESSAGING_TIERS, getMessagingTierLabel } from '../utils/messagingLimits'
 import DateTimePicker from '../components/DateTimePicker'
+import Modal from '../components/Modal'
 
 const STEPS = [
     { id: 1, name: 'Setup', icon: LayoutGrid },
@@ -115,7 +116,7 @@ function validateDynamicUrlButtonValue(button, value) {
     }
 }
 
-export default function Broadcast() {
+export default function Broadcast({ defaultTab = 'new' }) {
     const { session, apiCall } = useAuth()
     const { alertDialog, confirmDialog } = useDialog()
     const token = session?.access_token
@@ -163,7 +164,11 @@ export default function Broadcast() {
     };
 
 
-    const [activeTab, setActiveTab] = useState('new') // 'new' | 'history'
+    const [activeTab, setActiveTab] = useState(defaultTab) // 'new' | 'history'
+
+    useEffect(() => {
+        setActiveTab(defaultTab)
+    }, [defaultTab])
     const [campaignsList, setCampaignsList] = useState([])
     const [historySearch, setHistorySearch] = useState('')
     const [historyStatus, setHistoryStatus] = useState('all')
@@ -202,12 +207,23 @@ export default function Broadcast() {
     const [isEstimating, setIsEstimating] = useState(false)
     const [estimateError, setEstimateError] = useState('')
     const [isMobilePreviewOpen, setIsMobilePreviewOpen] = useState(false)
+    const [broadcastAgainCamp, setBroadcastAgainCamp] = useState(null)
     const visibleCampaigns = campaignsList.filter(item => {
         const matchesSearch = !historySearch.trim() ||
             String(item.name || '').toLowerCase().includes(historySearch.trim().toLowerCase()) ||
             String(item.template_name || '').toLowerCase().includes(historySearch.trim().toLowerCase())
         return matchesSearch && (historyStatus === 'all' || item.status === historyStatus)
     })
+
+    const templateUsageCounts = useMemo(() => {
+        const counts = {};
+        campaignsList.forEach(c => {
+            if (c.template_name) {
+                counts[c.template_name] = (counts[c.template_name] || 0) + 1;
+            }
+        });
+        return counts;
+    }, [campaignsList]);
 
     const selectedTemplate = templates.find(t => t.name === campaign.template_name && t.language === campaign.template_language)
         || templates.find(t => t.name === campaign.template_name)
@@ -833,6 +849,63 @@ export default function Broadcast() {
         });
     }
 
+    const handleBroadcastAgain = (camp, audienceMode) => {
+        const newMapping = { ...(camp.variable_mapping || {}) };
+        const newCustomTexts = {};
+        
+        const predefinedSources = ['name', 'phone', 'email'];
+        
+        for (const key of Object.keys(newMapping)) {
+            if (!key.startsWith('_') && !key.startsWith('button_url_') && !key.startsWith('header_media_')) {
+                const val = newMapping[key];
+                if (!predefinedSources.includes(val) && !String(val).startsWith('field:')) {
+                    newCustomTexts[key] = val;
+                    newMapping[key] = 'custom';
+                }
+            }
+        }
+
+        const newAudienceType = audienceMode === 'same' ? camp.audience_type : 'saved';
+        const newAudienceTag = audienceMode === 'same' ? camp.audience_tag : '';
+
+        setCampaign({
+            name: `${camp.name} (Copy)`,
+            wa_account_id: camp.wa_account_id,
+            scheduled_at: '',
+            audience_type: newAudienceType,
+            audience_tag: newAudienceTag,
+            template_name: camp.template_name,
+            template_language: camp.template_language || 'en_US',
+            variable_mapping: newMapping
+        });
+        
+        setCustomTexts(newCustomTexts);
+        setHeaderMediaUrl(camp.header_media_url || newMapping._header_media_url || newMapping.header_media_url || '');
+        
+        if (audienceMode === 'same' && (camp.audience_type === 'CSV_UPLOAD' || camp.csv_data)) {
+            setCampaign(prev => ({ ...prev, audience_type: 'CSV_UPLOAD' }));
+            if (camp.csv_data) {
+                setCsvData(camp.csv_data);
+                setCsvFileName('previous_upload.csv');
+            } else {
+                setCsvData(null);
+                setCsvFileName('');
+                alertDialog('Your previous CSV data is not available. Please re-upload your CSV.', { title: 'CSV Required', tone: 'warning' });
+            }
+        } else {
+            if (audienceMode === 'other') {
+                setCsvData(null);
+                setCsvFileName('');
+            }
+        }
+        
+        setSelectedContactKeys(null);
+        setSendResult(null);
+        setCurrentStep(1);
+        setActiveTab('new');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
         
 const renderLivePreview = () => {
         if (!selectedTemplate) return null;
@@ -1034,13 +1107,13 @@ const renderLivePreview = () => {
                 <div data-tour="broadcast-tabs" className="flex items-center shrink-0 gap-2 w-full md:w-auto justify-between md:justify-end">
                     <div className="flex bg-gray-100/80 p-1.5 rounded-xl border border-gray-200/60 shadow-sm backdrop-blur-sm w-full md:w-auto">
                         <button
-                            onClick={() => setActiveTab('new')}
+                            onClick={() => navigate('/broadcast')}
                             className={`flex-1 md:flex-initial text-center px-3 py-2 md:px-5 md:py-2.5 text-xs md:text-sm font-semibold rounded-lg transition-colors ${activeTab === 'new' ? 'bg-white shadow-sm text-[#0064b7] ring-1 ring-gray-200/50' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}`}
                         >
                             New Campaign
                         </button>
                         <button
-                            onClick={() => setActiveTab('history')}
+                            onClick={() => navigate('/broadcast/history')}
                             className={`flex-1 md:flex-initial text-center px-3 py-2 md:px-5 md:py-2.5 text-xs md:text-sm font-semibold rounded-lg transition-colors ${activeTab === 'history' ? 'bg-white shadow-sm text-[#0064b7] ring-1 ring-gray-200/50' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}`}
                         >
                             History
@@ -1111,9 +1184,15 @@ const renderLivePreview = () => {
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0 flex-1">
                                             <h3 className="truncate text-base font-bold text-gray-950">{camp.name}</h3>
-                                            <p className="mt-1 truncate text-xs text-gray-500 flex items-center gap-1.5">
-                                                <FileText className="w-3.5 h-3.5 text-gray-400" /> {camp.template_name}
-                                            </p>
+                                            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
+                                                <FileText className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                                <span className="truncate max-w-[150px]">{camp.template_name}</span>
+                                                {templateUsageCounts[camp.template_name] > 0 && (
+                                                    <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-semibold whitespace-nowrap">
+                                                        {templateUsageCounts[camp.template_name]} {templateUsageCounts[camp.template_name] === 1 ? 'time' : 'times'}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                         <span className={`px-2.5 py-1 text-[10px] font-bold rounded-lg uppercase tracking-wide inline-flex items-center gap-1 ${
                                             camp.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60' :
@@ -1177,6 +1256,12 @@ const renderLivePreview = () => {
                                                 <Trash2 className="w-3.5 h-3.5" /> Cancel
                                             </button>
                                         )}
+                                        <button
+                                            onClick={() => setBroadcastAgainCamp(camp)}
+                                            className="flex-1 justify-center text-[#0064b7] hover:text-white text-xs font-bold flex items-center gap-1.5 bg-[#eef7ff] active:scale-[0.98] hover:bg-[#0064b7] py-2 rounded-lg transition-all border border-[#b9dcfb] hover:border-[#0064b7]"
+                                        >
+                                            <Megaphone className="w-3.5 h-3.5" /> Broadcast Again
+                                        </button>
                                         {((camp.schema_version >= 2 && (camp.total_contacts || camp.prepared_count)) || ((camp.status === 'completed' || camp.status === 'cancelled') && camp.results?.length > 0)) && (
                                             <button
                                                 onClick={() => toggleCampaignDetails(camp)}
@@ -1229,7 +1314,13 @@ const renderLivePreview = () => {
                                                 <td className="px-5 py-4">
                                                     <div className="font-bold text-gray-900">{camp.name}</div>
                                                     <div className="text-xs font-medium text-gray-500 mt-1 flex items-center gap-1.5">
-                                                        <FileText className="w-3.5 h-3.5 text-gray-400" /> {camp.template_name}
+                                                        <FileText className="w-3.5 h-3.5 text-gray-400 shrink-0" /> 
+                                                        <span className="truncate max-w-[200px]">{camp.template_name}</span>
+                                                        {templateUsageCounts[camp.template_name] > 0 && (
+                                                            <span className="text-[10px] bg-gray-100/80 text-gray-500 border border-gray-200 px-1.5 py-0.5 rounded-md font-semibold whitespace-nowrap" title={`This template has been used in ${templateUsageCounts[camp.template_name]} campaigns`}>
+                                                                {templateUsageCounts[camp.template_name]} {templateUsageCounts[camp.template_name] === 1 ? 'time' : 'times'}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </td>
                                                 <td className="px-5 py-4">
@@ -1286,6 +1377,13 @@ const renderLivePreview = () => {
                                                                 <Trash2 className="w-3.5 h-3.5" /> Stop & Cancel
                                                             </button>
                                                         )}
+                                                        <button
+                                                            onClick={() => setBroadcastAgainCamp(camp)}
+                                                            className="text-[#0064b7] hover:text-[#0064b7] hover:bg-[#eef7ff] text-xs font-bold flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg transition-colors border border-gray-200"
+                                                            title="Broadcast Again"
+                                                        >
+                                                            <Megaphone className="w-3.5 h-3.5" /> Broadcast Again
+                                                        </button>
                                                         {((camp.schema_version >= 2 && (camp.total_contacts || camp.prepared_count)) || ((camp.status === 'completed' || camp.status === 'cancelled') && camp.results?.length > 0)) && (
                                                             <button
                                                                 onClick={() => toggleCampaignDetails(camp)}
@@ -2439,6 +2537,34 @@ const renderLivePreview = () => {
                     </div>
                 </div>
             )}
+            
+            <Modal isOpen={!!broadcastAgainCamp} onClose={() => setBroadcastAgainCamp(null)} title="Duplicate Campaign">
+                <div className="space-y-5 mt-2">
+                    <p className="text-sm text-gray-600 leading-relaxed">
+                        How would you like to set up the audience for this campaign? You can reuse the previous recipient list or select a new one.
+                    </p>
+                    <div className="flex gap-3 justify-end pt-2">
+                        <button
+                            onClick={() => {
+                                handleBroadcastAgain(broadcastAgainCamp, 'other');
+                                setBroadcastAgainCamp(null);
+                            }}
+                            className="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+                        >
+                            Select New Audience
+                        </button>
+                        <button
+                            onClick={() => {
+                                handleBroadcastAgain(broadcastAgainCamp, 'same');
+                                setBroadcastAgainCamp(null);
+                            }}
+                            className="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+                        >
+                            Reuse Previous Audience
+                        </button>
+                    </div>
+                </div>
+            </Modal>
         </div>
     )
 }
