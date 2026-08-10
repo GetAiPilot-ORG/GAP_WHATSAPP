@@ -29,6 +29,7 @@ import {
     Zap,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { supabase } from '../supabaseClient'
 import { formatINRFromPaise } from '../config/whatsappPricing'
 
 
@@ -115,6 +116,41 @@ export default function Dashboard() {
         enabled: !!session?.access_token,
     })
 
+    const { data: conversationCount } = useQuery({
+        queryKey: ['whatsapp-conversation-count', session?.access_token],
+        queryFn: async () => {
+            const { count, error } = await supabase
+                .from('w_conversations')
+                .select('id', { count: 'exact', head: true })
+
+            if (error || typeof count !== 'number' || count === 0) {
+                const { data: logs } = await supabase
+                    .from('whatsapp_message_usage_logs')
+                    .select('conversation_id, contact_id, recipient_number, sender_number, phone_number, to_number, from_number')
+                    .limit(500)
+
+                if (logs && logs.length > 0) {
+                    const uniqueIds = new Set(
+                        logs
+                            .map((l) => l.conversation_id || l.contact_id || l.recipient_number || l.sender_number || l.phone_number || l.to_number || l.from_number)
+                            .filter(Boolean)
+                    )
+                    if (uniqueIds.size > 0) return uniqueIds.size
+                }
+
+                const { count: contactsCount } = await supabase
+                    .from('w_contacts')
+                    .select('id', { count: 'exact', head: true })
+                if (contactsCount && contactsCount > 0) return contactsCount
+            }
+
+            return count ?? 0
+        },
+        staleTime: 1000 * 30,
+        refetchInterval: 15000,
+        enabled: !!session?.access_token,
+    })
+
     const model = useMemo(() => {
         const metrics = stats?.metrics || {}
         const contacts = contactsFrom(stats)
@@ -133,10 +169,15 @@ export default function Dashboard() {
         const failedRate = n(metrics.failedRate, totalMessages ? (failed / totalMessages) * 100 : 0)
         const quality = n(stats?.health?.quality, Math.max(0, 100 - Math.round(failedRate * 2)))
 
+        const activeConvCount = (conversationCount && conversationCount > 0) ? conversationCount : n(conversations.total)
+
         return {
             metrics,
             contacts,
-            conversations,
+            conversations: {
+                ...conversations,
+                total: activeConvCount,
+            },
             accounts,
             automation,
             campaigns,
@@ -153,7 +194,7 @@ export default function Dashboard() {
             hourlyTimeline: Array.isArray(stats?.hourlyTimeline) ? stats.hourlyTimeline : [],
             recentActivity: Array.isArray(stats?.recentActivity) ? stats.recentActivity : [],
         }
-    }, [stats])
+    }, [stats, conversationCount])
 
     const rangeLabel = ranges.find(item => item.value === range)?.label || 'Today'
     const healthLabel = model.failedRate > 15 ? 'Needs review' : model.failedRate > 5 ? 'Monitor' : 'Healthy'

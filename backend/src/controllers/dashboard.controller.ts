@@ -181,6 +181,18 @@ export async function getDashboardStats(req: any, res: Response) {
             };
         });
 
+        const uniqueMessageChatIds = new Set(
+            messages
+                .map((m: any) => m.conversation_id || m.contact?.phone || m.contact?.name)
+                .filter(Boolean)
+        );
+
+        const totalConversationsCount = conversations.length > 0
+            ? conversations.length
+            : ((contactsCountResult.count && contactsCountResult.count > 0)
+                ? contactsCountResult.count
+                : uniqueMessageChatIds.size);
+
         res.json({
             range,
             generated_at: new Date().toISOString(),
@@ -208,7 +220,7 @@ export async function getDashboardStats(req: any, res: Response) {
                 saved: savedContactsResult.count || 0,
             },
             conversations: {
-                total: conversations.length,
+                total: totalConversationsCount,
                 humanHandoff,
                 botActive: conversations.filter((c: any) => c.bot_enabled !== false && c.handoff_status === 'bot_active').length,
                 summariesReady,
