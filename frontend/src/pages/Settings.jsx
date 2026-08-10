@@ -1,11 +1,13 @@
 import { createElement, useState, useEffect, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Save, Upload, FileText, Trash2, Bot, Database, Globe, Users, ShoppingBag, Key, Webhook, Copy, Check, User, Mail, UserPlus, X, Trash, Image, RefreshCw, AlertCircle, Loader2, Building2, PhoneCall, Link as LinkIcon, Clock, Send, Bell, Volume2, VolumeX, Play, BellRing, CalendarClock, Headphones, Info, MonitorCheck, ShieldCheck, SlidersHorizontal, Sparkles, ArrowRight, Shield, Activity, Calendar, ChevronDown, BarChart2, TrendingUp, Send as SendIcon, CheckCircle2, XCircle, Eye, Megaphone } from 'lucide-react'
+import { Save, Upload, FileText, Trash2, Bot, Database, Globe, Users, ShoppingBag, Key, Webhook, Copy, Check, User, Mail, UserPlus, X, Trash, Image, RefreshCw, AlertCircle, Loader2, Building2, PhoneCall, Link as LinkIcon, Clock, Send, Bell, Volume2, VolumeX, Play, BellRing, CalendarClock, Headphones, Info, MonitorCheck, ShieldCheck, SlidersHorizontal, Sparkles, ArrowRight, Shield, Activity, Calendar, ChevronDown, BarChart2, TrendingUp, Send as SendIcon, CheckCircle2, XCircle, Eye, Megaphone, ExternalLink } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useDialog } from '../context/DialogContext'
 import { useNotificationSound } from '../hooks/useNotificationSound'
 import TourButton from '../onboarding/TourButton'
 import { useQueryClient } from '@tanstack/react-query'
+import InsightsViewToggle from '../components/insights/InsightsViewToggle'
+import InsightsChartView from '../components/insights/InsightsChartView'
 
 const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
 const DESKTOP_NOTIFICATION_KEY = 'gap_desktop_notifications_enabled'
@@ -40,6 +42,24 @@ export default function Settings() {
     const [broadcastInsights, setBroadcastInsights] = useState(null)
     const [isLoadingBroadcastInsights, setIsLoadingBroadcastInsights] = useState(false)
     const [broadcastInsightsError, setBroadcastInsightsError] = useState('')
+
+    const [insightsViewMode, setInsightsViewMode] = useState(() => {
+        try {
+            return localStorage.getItem('insights_view_mode') || 'list'
+        } catch {
+            return 'list'
+        }
+    })
+
+    const handleInsightsViewChange = (mode) => {
+        setInsightsViewMode(mode)
+        try {
+            localStorage.setItem('insights_view_mode', mode)
+        } catch {
+            // Ignored
+        }
+    }
+
     const {
         isEnabled: notificationSoundEnabled,
         setIsEnabled: setNotificationSoundEnabled,
@@ -626,6 +646,15 @@ export default function Settings() {
                             </button>
                         )
                     })}
+                    <Link
+                        to="/privacy-policy"
+                        target="_blank"
+                        className="flex shrink-0 items-center rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 text-gray-600 hover:text-gray-900 hover:bg-white/50 lg:hover:bg-gray-50 lg:text-gray-700 lg:w-full lg:shrink"
+                    >
+                        <Shield className="mr-2 h-4 w-4 shrink-0 text-indigo-600/70 lg:mr-3 lg:h-5 lg:w-5 lg:text-gray-400" />
+                        Privacy Policy
+                        <ExternalLink className="ml-1.5 h-3 w-3 text-gray-400/80 lg:ml-auto lg:h-3.5 lg:w-3.5" />
+                    </Link>
                 </nav>
             </div>
 
@@ -1375,21 +1404,36 @@ export default function Settings() {
                 )}
                 {activeTab === 'knowledge_base' && (
                     <div data-tour="settings-knowledge" className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between border-b border-gray-200 px-4 sm:px-8 py-6">
-                            <div>
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-gray-200 px-4 sm:px-8 py-6 relative overflow-hidden">
+                            <div className="relative z-10">
                                 <h2 className="text-lg font-semibold text-gray-900">Knowledge Base</h2>
                                 <p className="mt-1 max-w-2xl text-sm text-gray-500">
                                     Upload company documents once and active AI agents will use them while replying in WhatsApp chats.
                                 </p>
                             </div>
-                            <button
-                                onClick={fetchKnowledgeBase}
-                                disabled={isLoadingKnowledge || isUploadingKnowledge}
-                                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-60 shrink-0 w-full sm:w-auto justify-center"
-                            >
-                                {isLoadingKnowledge ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                                Refresh
-                            </button>
+                            
+                            {/* Decorative Animation Graphic */}
+                            <div className="hidden sm:block absolute right-36 top-1/2 -translate-y-1/2 w-48 opacity-90 mix-blend-multiply pointer-events-none">
+                                <video 
+                                    src="/images/Knowledge Base.webm" 
+                                    autoPlay 
+                                    loop 
+                                    muted 
+                                    playsInline 
+                                    className="w-full h-auto object-contain"
+                                />
+                            </div>
+
+                            <div className="relative z-10 shrink-0">
+                                <button
+                                    onClick={fetchKnowledgeBase}
+                                    disabled={isLoadingKnowledge || isUploadingKnowledge}
+                                    className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-60 shrink-0 w-full sm:w-auto justify-center"
+                                >
+                                    {isLoadingKnowledge ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                                    Refresh
+                                </button>
+                            </div>
                         </div>
 
                         <div className="space-y-6 p-4 sm:p-8">
@@ -1534,13 +1578,19 @@ export default function Settings() {
                             </div>
                         </div>
 
-                        <div className="absolute inset-0 flex items-center justify-center bg-white/35 backdrop-blur-[1px]">
-                            <div className="mx-6 max-w-sm rounded-xl border border-gray-200 bg-white/95 px-8 py-7 text-center shadow-xl">
-                                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-50 text-green-600">
-                                    <ShoppingBag className="h-5 w-5" />
+                        <div className="absolute inset-0 flex items-center justify-center bg-white/35 backdrop-blur-[1px] p-4">
+                            <div className="w-[95%] sm:w-full max-w-md rounded-2xl border border-gray-100 bg-white/95 p-6 sm:p-8 text-center shadow-[0_8px_30px_rgb(0,0,0,0.12)] backdrop-blur-sm transition-all hover:scale-[1.02]">
+                                <div className="mx-auto mb-6 flex justify-center">
+                                    <video 
+                                        src="/images/coming-soon.webm" 
+                                        autoPlay 
+                                        loop 
+                                        muted 
+                                        playsInline 
+                                        className="h-32 w-auto object-contain drop-shadow-sm rounded-lg"
+                                    />
                                 </div>
-                                <h3 className="text-lg font-semibold text-gray-900">Coming soon</h3>
-                                <p className="mt-2 text-sm leading-6 text-gray-500">
+                                <p className="mt-2 text-sm leading-relaxed text-gray-500">
                                     Store integrations and automation triggers are being prepared and will be available in a future update.
                                 </p>
                             </div>
@@ -1605,13 +1655,19 @@ export default function Settings() {
                             </div>
                         </div>
 
-                        <div className="absolute inset-0 flex items-center justify-center bg-white/35 backdrop-blur-[1px]">
-                            <div className="mx-6 max-w-sm rounded-xl border border-gray-200 bg-white/95 px-8 py-7 text-center shadow-xl">
-                                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
-                                    <Key className="h-5 w-5" />
+                        <div className="absolute inset-0 flex items-center justify-center bg-white/35 backdrop-blur-[1px] p-4">
+                            <div className="w-[95%] sm:w-full max-w-md rounded-2xl border border-gray-100 bg-white/95 p-6 sm:p-8 text-center shadow-[0_8px_30px_rgb(0,0,0,0.12)] backdrop-blur-sm transition-all hover:scale-[1.02]">
+                                <div className="mx-auto mb-6 flex justify-center">
+                                    <video 
+                                        src="/images/coming-soon.webm" 
+                                        autoPlay 
+                                        loop 
+                                        muted 
+                                        playsInline 
+                                        className="h-32 w-auto object-contain drop-shadow-sm rounded-lg"
+                                    />
                                 </div>
-                                <h3 className="text-lg font-semibold text-gray-900">Coming soon</h3>
-                                <p className="mt-2 text-sm leading-6 text-gray-500">
+                                <p className="mt-2 text-sm leading-relaxed text-gray-500">
                                     Developer API keys and webhook controls are being prepared and will be available in a future update.
                                 </p>
                             </div>
@@ -1714,14 +1770,12 @@ export default function Settings() {
                                     type="button"
                                     onClick={fetchBroadcastInsights}
                                     disabled={isLoadingBroadcastInsights}
-                                    className="inline-flex items-center gap-1.5 rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors self-start sm:self-auto"
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors shadow-2xs self-start sm:self-auto"
                                 >
                                     <RefreshCw className={`h-3.5 w-3.5 ${isLoadingBroadcastInsights ? 'animate-spin' : ''}`} />
                                     Refresh
                                 </button>
                             </div>
-
-
 
                             {broadcastInsightsError && (
                                 <div className="mx-5 mt-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -1729,52 +1783,11 @@ export default function Settings() {
                                 </div>
                             )}
 
-                            <div className="p-5 space-y-4">
-
-                                {/* Top 3-panel grid */}
-                                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                                    <InsightPanel
-                                        title="All Messages"
-                                        rows={[
-                                            { key: 'marketing', label: 'Messages sent', value: fmtNum(allMsg.total_sent) },
-                                            { key: 'service', label: 'Messages delivered', value: fmtNum(allMsg.total_delivered) },
-                                            { key: 'utility', label: 'Messages received', value: fmtNum(allMsg.total_received) },
-                                        ]}
-                                    />
-                                    <InsightPanel
-                                        title="Messages Delivered"
-                                        total={msgDelivered.total}
-                                        rows={(msgDelivered.categories || []).map(c => ({
-                                            key: c.key, label: c.label, value: fmtNum(c.delivered)
-                                        }))}
-                                    />
-                                    <InsightPanel
-                                        title="Free Messages Delivered"
-                                        total={freeDelivered.total}
-                                        rows={(freeDelivered.categories || []).map(c => ({
-                                            key: c.key, label: c.label, value: fmtNum(c.delivered)
-                                        }))}
-                                    />
-                                </div>
-
-                                {/* Bottom 2-panel grid */}
-                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                    <InsightPanel
-                                        title="Paid Messages Delivered"
-                                        total={paidDelivered.total}
-                                        rows={(paidDelivered.categories || []).map(c => ({
-                                            key: c.key, label: c.label, value: fmtNum(c.delivered)
-                                        }))}
-                                    />
-                                    <InsightPanel
-                                        title="Approximate Total Charges"
-                                        totalLabel={fmtRupees(charges.total_paise)}
-                                        rows={(charges.categories || []).map(c => ({
-                                            key: c.key, label: c.label, value: fmtRupees(c.charges_paise)
-                                        }))}
-                                    />
-                                </div>
-
+                            <div className="p-5">
+                                <InsightsChartView
+                                    broadcastInsights={broadcastInsights}
+                                    isLoading={isLoadingBroadcastInsights}
+                                />
                             </div>
                         </div>
                     )

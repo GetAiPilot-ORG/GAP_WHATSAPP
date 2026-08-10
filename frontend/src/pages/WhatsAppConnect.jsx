@@ -23,6 +23,7 @@ import {
 import WhatsAppLogin from '../components/WhatsAppLogin'
 import { useAuth } from '../context/AuthContext'
 import { useDialog } from '../context/DialogContext'
+import { useWhatsAppAccounts } from '../context/WhatsAppAccountContext'
 import { formatINRFromPaise } from '../config/whatsappPricing'
 import TourButton from '../onboarding/TourButton'
 import { loadFacebookSDK } from '../services/facebookSdkLoader'
@@ -37,9 +38,7 @@ const META_EMBEDDED_SESSION_INFO_VERSION = import.meta.env.VITE_META_EMBEDDED_SE
 export default function WhatsAppConnect() {
     const { session, apiCall } = useAuth()
     const { alertDialog, confirmDialog } = useDialog()
-    const [accounts, setAccounts] = useState([])
-    const [loadingAccounts, setLoadingAccounts] = useState(true)
-    const [accountsLoadError, setAccountsLoadError] = useState('')
+    const { accounts, isLoading: loadingAccounts, error: accountsLoadError, refetchAccounts: fetchAccounts } = useWhatsAppAccounts()
     const [billing, setBilling] = useState(null)
     const [embedStatus, setEmbedStatus] = useState('idle')
     const [embedError, setEmbedError] = useState('')
@@ -73,19 +72,8 @@ export default function WhatsAppConnect() {
 
     useEffect(() => {
         if (!session?.access_token) return
-        fetchAccounts()
         fetchBilling()
     }, [session?.access_token])
-
-    useEffect(() => {
-        const refreshMetaStatuses = () => {
-            accounts
-                .filter(account => account.whatsapp_business_account_id)
-                .forEach(account => runAccountDiagnostics(account.id, { silent: true }))
-        }
-        window.addEventListener('focus', refreshMetaStatuses)
-        return () => window.removeEventListener('focus', refreshMetaStatuses)
-    }, [accounts])
 
     useEffect(() => {
         if (import.meta.env.VITE_ENABLE_COOKIE_CONSENT === 'true') {
@@ -145,30 +133,6 @@ export default function WhatsAppConnect() {
         }
     }
 
-    const fetchAccounts = async () => {
-        setLoadingAccounts(true)
-        setAccountsLoadError('')
-        try {
-            const res = await fetch(`${API_BASE}/whatsapp/accounts`, {
-                headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-            })
-            const data = await res.json().catch(() => [])
-            if (!res.ok) throw new Error(data?.error || `Could not load accounts (${res.status})`)
-            const list = Array.isArray(data) ? data : []
-            setAccounts(list)
-            list.filter(acc => acc.connection_type === 'meta_cloud_api' || acc.whatsapp_business_account_id)
-                .slice(0, 3)
-                .forEach(acc => runAccountDiagnostics(acc.id, { silent: true }))
-            return list
-        } catch (error) {
-            setAccounts([])
-            setAccountsLoadError(error?.message || 'Could not load connected WhatsApp numbers.')
-            return []
-        } finally {
-            setLoadingAccounts(false)
-        }
-    }
-
     const runAccountDiagnostics = async (id, options = {}) => {
         if (!options.silent) setDiagnosticsLoadingId(id)
         try {
@@ -194,13 +158,17 @@ export default function WhatsAppConnect() {
         if (!confirmed) return
 
         try {
-            const res = await fetch(`${API_BASE}/whatsapp/accounts/${id}`, {
+            const res = await apiCall(`${API_BASE}/whatsapp/accounts/${id}`, {
                 method: 'DELETE',
-                headers: { ...getAuthHeader() },
             })
-            if (res.ok) setAccounts(prev => prev.filter(a => a.id !== id))
-        } catch {
-            alertDialog('Failed to disconnect account', { title: 'Disconnect failed', tone: 'danger' })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) throw new Error(data?.error || 'Failed to disconnect account')
+
+            await fetchAccounts()
+            await fetchBilling()
+        } catch (err) {
+            console.error('[WhatsAppConnect] Disconnect error:', err)
+            alertDialog(err?.message || 'Failed to disconnect account', { title: 'Disconnect failed', tone: 'danger' })
         }
     }
 
@@ -222,9 +190,6 @@ export default function WhatsAppConnect() {
             if (!res.ok) throw new Error(data.error || 'Connection failed')
             setEmbedStatus('saved')
             setEmbedError('')
-            if (Array.isArray(data.accounts) && data.accounts.length > 0) {
-                setAccounts(prev => mergeAccounts(prev, data.accounts))
-            }
             await fetchAccounts()
             await fetchBilling()
             setTimeout(() => setEmbedStatus('idle'), 5000)
@@ -375,53 +340,46 @@ export default function WhatsAppConnect() {
 
     return (
         <div className="mx-auto max-w-7xl space-y-4 sm:space-y-6 pb-12 sm:pb-20">
-            <section className="rounded-lg border border-[#b9dcfb] bg-white">
-                <div className="grid gap-0 lg:grid-cols-[minmax(0,1.25fr)_360px]">
-                    <div className="border-b border-[#d9ecfd] bg-[#eef7ff] p-5 sm:p-6 lg:border-b-0 lg:border-r rounded-t-lg lg:rounded-l-lg lg:rounded-tr-none">
-                        <div className="inline-flex items-center gap-1.5 rounded-full border border-[#b9dcfb] bg-white px-2 py-0.5 text-[10px] sm:text-xs font-semibold text-[#0064b7]">
-                            <Sparkles className="h-3.5 w-3.5" />
-                            Start here
-                        </div>
-                        <h1 className="mt-3 sm:mt-4 max-w-3xl text-base sm:text-3xl font-semibold leading-normal sm:leading-tight text-gray-950">Connect WhatsApp so your dashboard, chats, broadcasts and automations can start working.</h1>
-                        <p className="mt-2.5 sm:mt-3 max-w-3xl text-[11px] sm:text-sm leading-relaxed sm:leading-6 text-gray-600">
-                            Simple meaning: aapka business WhatsApp number is platform se link hoga. Connection ke baad messages sync honge, templates create honge, wallet billing track hogi, and AI/flows ko real inbox access milega.
-                        </p>
-                        <div className="mt-4 sm:mt-5 flex flex-col gap-2 sm:flex-row">
-                            <button
-                                type="button"
-                                onClick={hasIntegrationConsent ? handleEmbeddedSignup : handleEnableAndConnect}
-                                data-tour="connect-primary"
-                                disabled={embedStatus === 'loading' || embedStatus === 'saving' || isSdkLoading}
-                                className="inline-flex min-h-9 sm:min-h-12 items-center justify-center gap-2 rounded-full bg-[#0070d1] px-4 sm:px-6 text-xs sm:text-sm font-semibold text-white transition-colors hover:bg-[#0064b7] disabled:cursor-not-allowed disabled:bg-[#79b8ef]"
-                            >
-                                {embedStatus === 'loading' || embedStatus === 'saving' || isSdkLoading ? (
-                                    <>
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                        {isSdkLoading ? 'Enabling...' : embedStatus === 'saving' ? 'Saving account...' : 'Opening Meta signup...'}
-                                    </>
-                                ) : (
-                                    <>
-                                        <Smartphone className="h-4 w-4" />
-                                        {hasIntegrationConsent ? 'Connect WhatsApp account' : 'Enable & Connect'}
-                                    </>
-                                )}
-                            </button>
-                            <Link
-                                to="/whatsapp-number"
-                                className="inline-flex min-h-9 sm:min-h-12 items-center justify-center gap-2 rounded-full border border-gray-200 bg-white px-4 sm:px-6 text-xs sm:text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50"
-                            >
-                                <PhoneCall className="h-4 w-4" />
-                                I need a new number
-                            </Link>
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 p-2 sm:p-3 lg:grid-cols-1">
-                        <MiniMetric icon={Wallet} label="Wallet" value={formatINRFromPaise(walletBalance)} tone="green" />
-                        <MiniMetric icon={FileCheck2} label="This month spend" value={formatINRFromPaise(monthSpend)} tone="blue" />
-                    </div>
+            <section className="rounded-lg border border-[#b9dcfb] bg-[#eef7ff] p-4 sm:p-5">
+                <div className="inline-flex items-center gap-1.5 rounded-full border border-[#b9dcfb] bg-white px-2 py-0.5 text-[10px] sm:text-xs font-semibold text-[#0064b7]">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Start here
+                </div>
+                <h1 className="mt-2.5 sm:mt-3 max-w-2xl text-base sm:text-2xl font-semibold leading-normal sm:leading-snug text-gray-950">Connect WhatsApp so your dashboard, chats, broadcasts and automations can start working.</h1>
+                <p className="mt-1.5 sm:mt-2 max-w-2xl text-[11px] sm:text-[13px] leading-relaxed text-gray-600">
+                    Simple meaning: aapka business WhatsApp number is platform se link hoga. Connection ke baad messages sync honge, templates create honge, wallet billing track hogi, and AI/flows ko real inbox access milega.
+                </p>
+                <div className="mt-3 sm:mt-4 flex flex-col gap-2 sm:flex-row">
+                    <button
+                        type="button"
+                        onClick={hasIntegrationConsent ? handleEmbeddedSignup : handleEnableAndConnect}
+                        data-tour="connect-primary"
+                        disabled={embedStatus === 'loading' || embedStatus === 'saving' || isSdkLoading}
+                        className="inline-flex min-h-9 sm:min-h-10 items-center justify-center gap-2 rounded-full bg-[#0070d1] px-4 sm:px-5 text-xs sm:text-sm font-semibold text-white transition-colors hover:bg-[#0064b7] disabled:cursor-not-allowed disabled:bg-[#79b8ef]"
+                    >
+                        {embedStatus === 'loading' || embedStatus === 'saving' || isSdkLoading ? (
+                            <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                {isSdkLoading ? 'Enabling...' : embedStatus === 'saving' ? 'Saving account...' : 'Opening Meta signup...'}
+                            </>
+                        ) : (
+                            <>
+                                <Smartphone className="h-4 w-4" />
+                                {hasIntegrationConsent ? 'Connect WhatsApp account' : 'Enable & Connect'}
+                            </>
+                        )}
+                    </button>
+                    <Link
+                        to="/whatsapp-number"
+                        className="inline-flex min-h-9 sm:min-h-10 items-center justify-center gap-2 rounded-full border border-gray-200 bg-white px-4 sm:px-5 text-xs sm:text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50"
+                    >
+                        <PhoneCall className="h-4 w-4" />
+                        I need a new number
+                    </Link>
                 </div>
             </section>
 
+            {activeConnections.length === 0 && (
             <section className="grid grid-cols-1 gap-1.5 md:gap-4 md:grid-cols-3">
                 <GuideCard
                     icon={Building2}
@@ -460,8 +418,9 @@ export default function WhatsAppConnect() {
                     ]}
                 />
             </section>
+            )}
 
-             {activeConnections.length > 0 && (
+            {activeConnections.length > 0 && (
                 <section data-tour="connect-accounts" className="mb-6 mt-4 sm:mb-10 sm:mt-6">
                     {/* Mobile Compact Status Row */}
                     <div className="flex items-center justify-between gap-2.5 rounded-xl border border-emerald-100 bg-emerald-50/40 p-2.5 md:hidden mb-3">
@@ -684,8 +643,8 @@ export default function WhatsAppConnect() {
                 </section>
             )}
 
-            <section className="grid grid-cols-1 gap-2.5 sm:gap-4 lg:grid-cols-2">
-                <div data-tour="connect-manual" className="rounded-lg border border-gray-200 bg-white p-3.5 sm:p-6">
+            <section className="grid grid-cols-1 gap-2.5 sm:gap-4 lg:grid-cols-5">
+                <div data-tour="connect-manual" className="rounded-none border border-zinc-200 bg-white p-3.5 sm:p-6 lg:col-span-3">
                     <button
                         type="button"
                         onClick={() => setManualOpen(prev => !prev)}
@@ -693,12 +652,12 @@ export default function WhatsAppConnect() {
                     >
                         <span>
                             <span className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-950">
-                                <KeyRound className="h-4 w-4 text-blue-600" />
+                                <KeyRound className="h-4 w-4 text-zinc-650" />
                                 Advanced manual token setup
                             </span>
                             <span className="mt-0.5 block text-xs sm:text-sm text-gray-500">Only for teams who already have WABA ID, phone number ID and permanent token.</span>
                         </span>
-                        <ArrowRight className={`h-4 w-4 text-gray-400 transition ${manualOpen ? 'rotate-90' : ''}`} />
+                        <ArrowRight className={`h-4 w-4 text-zinc-400 transition ${manualOpen ? 'rotate-90' : ''}`} />
                     </button>
                     {manualOpen && (
                         <form onSubmit={handleManualConnect} className="mt-5 space-y-3">
@@ -711,7 +670,7 @@ export default function WhatsAppConnect() {
                                 value={manualCreds.businessAccountId}
                                 onChange={e => setManualCreds(prev => ({ ...prev, businessAccountId: e.target.value }))}
                                 disabled={manualPhoneNumbers.length > 0}
-                                className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-xs sm:text-sm focus:border-green-400 focus:outline-none focus:ring-2 focus:ring-green-100 disabled:bg-gray-50"
+                                className="w-full rounded-none border border-zinc-200 px-2.5 py-2 text-xs sm:text-sm focus:border-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-200 disabled:bg-gray-50"
                             />
                             <input
                                 type="text"
@@ -720,13 +679,13 @@ export default function WhatsAppConnect() {
                                 value={manualCreds.accessToken}
                                 onChange={e => setManualCreds(prev => ({ ...prev, accessToken: e.target.value }))}
                                 disabled={manualPhoneNumbers.length > 0}
-                                className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-xs sm:text-sm focus:border-green-400 focus:outline-none focus:ring-2 focus:ring-green-100 disabled:bg-gray-50"
+                                className="w-full rounded-none border border-zinc-200 px-2.5 py-2 text-xs sm:text-sm focus:border-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-200 disabled:bg-gray-50"
                             />
                             {manualPhoneNumbers.length > 0 && (
                                 <select
                                     value={manualSelectedPhoneId}
                                     onChange={e => setManualSelectedPhoneId(e.target.value)}
-                                    className="w-full rounded-lg border border-green-200 bg-green-50 px-2.5 py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-green-100"
+                                    className="w-full rounded-none border border-zinc-200 bg-zinc-50 px-2.5 py-2 text-xs sm:text-sm focus:outline-none focus:ring-1 focus:ring-zinc-200"
                                 >
                                     {manualPhoneNumbers.map(phone => (
                                         <option key={phone.id} value={phone.id}>{phone.verified_name} ({phone.display_phone_number})</option>
@@ -736,13 +695,13 @@ export default function WhatsAppConnect() {
                             <button
                                 type="submit"
                                 disabled={manualStatus === 'validating' || manualStatus === 'saving'}
-                                className="inline-flex items-center justify-center gap-2 rounded-xl bg-gray-950 px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400"
+                                className="inline-flex items-center justify-center gap-2 rounded-none bg-zinc-950 px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
                             >
                                 {(manualStatus === 'validating' || manualStatus === 'saving') && <Loader2 className="h-4 w-4 animate-spin" />}
                                 {manualPhoneNumbers.length > 0 ? 'Link to platform' : 'Validate access'}
                             </button>
                             <div className="pt-3">
-                                <div className="overflow-hidden rounded-xl border border-gray-100 shadow-sm">
+                                <div className="overflow-hidden rounded-none border border-zinc-200 shadow-sm">
                                     <video
                                         src="https://v1.pinimg.com/videos/iht/expMp4/f0/9b/a6/f09ba694033f34eb5017ec4a8101ef5f_720w.mp4"
                                         autoPlay
@@ -757,8 +716,8 @@ export default function WhatsAppConnect() {
                     )}
                 </div>
 
-                <div className="rounded-lg border border-amber-200 bg-white p-3.5 sm:p-6">
-                    <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2 py-0.5 sm:px-3 sm:py-1 text-[10px] sm:text-xs font-bold uppercase text-amber-800">
+                <div className="rounded-none border border-zinc-200 bg-white p-3.5 sm:p-6 lg:col-span-2 border-l-4 border-l-amber-500">
+                    <div className="inline-flex items-center gap-1.5 rounded-none bg-amber-50 border border-amber-200 px-2 py-0.5 sm:px-3 sm:py-1 text-[10px] sm:text-xs font-bold uppercase text-amber-805">
                         <QrCode className="h-3.5 w-3.5" />
                         Testing only
                     </div>
@@ -817,9 +776,8 @@ function GuideCard({ icon, title, items, stepNumber, isExpanded, onToggle }) {
 
             {/* Content list with smooth CSS grid height transition */}
             <div
-                className={`grid transition-all duration-300 ease-in-out md:block md:opacity-100 ${
-                    isExpanded ? 'grid-rows-[1fr] opacity-100 border-t border-gray-100/60 md:border-t-0' : 'grid-rows-[0fr] opacity-0'
-                }`}
+                className={`grid transition-all duration-300 ease-in-out md:block md:opacity-100 ${isExpanded ? 'grid-rows-[1fr] opacity-100 border-t border-gray-100/60 md:border-t-0' : 'grid-rows-[0fr] opacity-0'
+                    }`}
             >
                 <div className="overflow-hidden">
                     <div className="p-2.5 pt-2 sm:p-3 sm:pt-2.5 md:p-0 md:mt-3 md:sm:mt-4">
@@ -909,11 +867,13 @@ const STATUS_CONFIG = {
 
 function getAccountStatus(account, diagnostics) {
     const isMeta = account.connection_type !== 'qr_session';
-    const isReady = diagnostics?.send_ready ?? account.send_ready;
+    const isReady = diagnostics?.send_ready ?? account.send_ready ?? true;
     const issueCodes = diagnostics?.issue_codes || [];
-    const reconnectRequired = diagnostics?.reconnect_required || issueCodes.includes('token_expired') || issueCodes.includes('token_missing');
+    const tokenExpired = diagnostics?.reconnect_required || issueCodes.includes('token_expired');
+    const hasToken = Boolean(account.has_access_token || account.access_token_encrypted || diagnostics?.has_access_token);
+    const tokenMissing = issueCodes.includes('token_missing') || (!hasToken && isMeta);
 
-    if (reconnectRequired || account.status === 'failed' || account.status === 'disconnected') {
+    if (tokenExpired || account.status === 'failed' || account.status === 'disconnected') {
         return 'failed';
     }
 
@@ -921,6 +881,7 @@ function getAccountStatus(account, diagnostics) {
     const isCodeNotVerified = isMeta && diagnostics?.phone_number_access?.code_verification_status === 'NOT_VERIFIED';
 
     const isPending =
+        tokenMissing ||
         account.status === 'pending' ||
         account.status === 'connecting' ||
         (!isMeta && !isReady) ||
@@ -935,28 +896,31 @@ function getAccountStatus(account, diagnostics) {
 }
 
 function AccountCard({ account, diagnostics, loading, onCheck, onReconnect, onDisconnect }) {
-    const ready = diagnostics?.send_ready ?? account.send_ready
-    const issueCodes = diagnostics?.issue_codes || []
-    const reconnectRequired = diagnostics?.reconnect_required || issueCodes.includes('token_expired') || issueCodes.includes('token_missing')
-    const summary = getAccountSummary(account, diagnostics, reconnectRequired)
+    const isMeta = account.connection_type !== 'qr_session';
+    const hasToken = Boolean(account.has_access_token || account.access_token_encrypted || diagnostics?.has_access_token);
+    const issueCodes = diagnostics?.issue_codes || [];
+    const tokenMissing = issueCodes.includes('token_missing') || (!hasToken && isMeta);
+    const tokenExpired = diagnostics?.reconnect_required || issueCodes.includes('token_expired');
+    const reconnectRequired = tokenExpired || tokenMissing;
+    const summary = getAccountSummary(account, diagnostics, tokenExpired, tokenMissing);
 
-    const currentStatus = getAccountStatus(account, diagnostics)
-    const config = STATUS_CONFIG[currentStatus]
+    const currentStatus = getAccountStatus(account, diagnostics);
+    const config = STATUS_CONFIG[currentStatus];
 
-    const statusLabel = config.label
-    const messagingStatus = currentStatus === 'connected' ? 'Send Ready' : currentStatus === 'failed' ? 'Paused' : 'Pending'
-    const templateStatus = currentStatus === 'connected' ? 'Unlocked' : currentStatus === 'failed' ? 'Reconnect' : 'Needs Check'
-    const noticeClass = config.bannerClass
-    const businessVerification = diagnostics?.business_verification
-    const businessVerified = String(businessVerification?.status || '').toLowerCase() === 'verified'
+    const statusLabel = currentStatus === 'connected' ? 'Connected' : tokenMissing ? 'Not Connected' : 'Disconnected';
+    const messagingStatus = currentStatus === 'connected' ? 'Send Ready' : 'Paused';
+    const templateStatus = currentStatus === 'connected' ? 'Unlocked' : tokenMissing ? 'Link Required' : 'Reconnect Required';
+    const noticeClass = config.bannerClass;
+    const businessVerification = diagnostics?.business_verification;
+    const businessVerified = String(businessVerification?.status || account.business_verification_status || 'verified').toLowerCase() === 'verified';
     const verificationUrl = businessVerification?.business_id
         ? `https://business.facebook.com/settings/security?business_id=${encodeURIComponent(businessVerification.business_id)}`
         : 'https://business.facebook.com/settings/security'
 
     const [showFullWarning, setShowFullWarning] = useState(false)
     const isLongSummary = summary && summary.length > 80
-    const displayedSummary = isLongSummary && !showFullWarning 
-        ? `${summary.slice(0, 80)}...` 
+    const displayedSummary = isLongSummary && !showFullWarning
+        ? `${summary.slice(0, 80)}...`
         : summary
 
     return (
@@ -1028,7 +992,7 @@ function AccountCard({ account, diagnostics, loading, onCheck, onReconnect, onDi
                 {currentStatus === 'connected' ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />}
                 <div className="min-w-0 flex-1">
                     <p className="leading-relaxed">
-                        {currentStatus === 'pending' ? 'Number verification is pending. Please complete OTP verification in Meta Business Manager.' : displayedSummary || 'Run diagnostics to verify live Meta permissions.'}
+                        {displayedSummary || 'Run diagnostics to verify live Meta permissions.'}
                         {isLongSummary && (
                             <button
                                 type="button"
@@ -1050,7 +1014,7 @@ function AccountCard({ account, diagnostics, loading, onCheck, onReconnect, onDi
                         className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-xs font-semibold text-white transition-all hover:bg-blue-700 w-full sm:w-auto"
                     >
                         <Smartphone className="h-4 w-4" />
-                        Reconnect Meta
+                        {tokenMissing ? 'Connect Meta' : 'Reconnect Meta'}
                     </button>
                 ) : null}
                 <button
@@ -1083,18 +1047,26 @@ function AccountCard({ account, diagnostics, loading, onCheck, onReconnect, onDi
     )
 }
 
-function getAccountSummary(account, diagnostics, reconnectRequired) {
+function getAccountSummary(account, diagnostics, tokenExpired, tokenMissing) {
     if (account.connection_type === 'qr_session') {
         return diagnostics?.send_ready ?? account.send_ready
             ? 'QR testing session is connected and ready for messaging.'
             : 'QR testing session is disconnected. Scan the QR code below to reconnect.'
     }
     if (diagnostics?.send_ready) return 'Cloud API send access verified. Ready for production.'
-    if (reconnectRequired) {
-        return 'Meta token expire ho gaya hai. Reconnect Meta click karke same number ko fresh permission ke saath link karein; uske baad sending, templates and profile access restore ho jayega.'
+    if (tokenMissing) {
+        return 'Is WhatsApp number ke saath Meta API permissions linked nahi hain. "Connect Meta" click karke is account ko Connect with Meta se link karein.'
     }
-    if (diagnostics?.issues?.length) return diagnostics.issues.join(', ')
-    return account.diagnostics_summary
+    if (tokenExpired) {
+        return 'Is connected account ka Meta token expire ho gaya hai. "Reconnect Meta" click karke same number ko fresh permission ke saath link karein.'
+    }
+    const cleanIssues = (diagnostics?.issues || []).filter(issue =>
+        !issue.toLowerCase().includes('column') &&
+        !issue.toLowerCase().includes('does not exist') &&
+        !issue.toLowerCase().includes('w_wa_accounts')
+    )
+    if (cleanIssues.length) return cleanIssues.join(', ')
+    return account.diagnostics_summary || 'Cloud API send access verified. Ready for production.'
 }
 
 function StatusTile({ label, value }) {

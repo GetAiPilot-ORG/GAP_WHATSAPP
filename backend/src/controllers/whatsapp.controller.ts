@@ -1,7 +1,9 @@
 import { Request, Response } from "express";
 import fs from "fs";
 import { supabase } from "../config/supabase.js";
+import { io } from "../socket.js";
 import { encryptToken, decryptToken } from "../utils/crypto.js";
+import { AccountHealthService } from "../services/accountHealth.service.js";
 import { cleanText, cleanNullableText, isValidEmail } from "../utils/format.js";
 import {
   enrichTemplateExamplesWithRealisticSamples,
@@ -21,6 +23,32 @@ import {
 import { buildMetaTemplatePayload } from '../utils/templateBuilder.js';
 
 const GRAPH_API_VERSION = process.env.META_GRAPH_VERSION || process.env.META_API_VERSION || "v21.0";
+
+// In-memory registry of recently deleted templates (orgId::name -> expiry timestamp)
+// Prevents deleted templates from being re-inserted on the next Meta sync
+// when Meta API still returns them for a brief window after deletion
+const recentlyDeletedTemplates = new Map<string, number>();
+const RECENTLY_DELETED_TTL_MS = 30_000; // 30 seconds
+
+function markTemplateDeleted(orgId: string, name: string) {
+  const key = `${orgId}::${String(name).toLowerCase()}`;
+  recentlyDeletedTemplates.set(key, Date.now() + RECENTLY_DELETED_TTL_MS);
+  // Cleanup expired entries
+  for (const [k, expiry] of recentlyDeletedTemplates) {
+    if (Date.now() > expiry) recentlyDeletedTemplates.delete(k);
+  }
+}
+
+function isTemplateRecentlyDeleted(orgId: string, name: string): boolean {
+  const key = `${orgId}::${String(name).toLowerCase()}`;
+  const expiry = recentlyDeletedTemplates.get(key);
+  if (!expiry) return false;
+  if (Date.now() > expiry) {
+    recentlyDeletedTemplates.delete(key);
+    return false;
+  }
+  return true;
+}
 
 export async function getNumberRequests(req: any, res: Response) {
   const orgId = req.organization_id;
@@ -272,9 +300,14 @@ export async function deleteAccount(req: any, res: Response) {
   const { id } = req.params;
   const orgId = req.organization_id;
   try {
+    await AccountHealthService.updateHealth(id, {
+      connection_status: 'DISCONNECTED',
+      token_status: 'MISSING',
+    });
+
     const { error } = await supabase
       .from("w_wa_accounts")
-      .update({ status: "disconnected", access_token_encrypted: null })
+      .update({ status: "disconnected", connection_status: "DISCONNECTED", access_token_encrypted: null })
       .eq("id", id)
       .eq("organization_id", orgId);
 
@@ -293,7 +326,7 @@ export async function getAccountDiagnostics(req: any, res: Response) {
     const { data: account, error } = await supabase
       .from("w_wa_accounts")
       .select(
-        "id, organization_id, phone_number_id, whatsapp_business_account_id, access_token_encrypted, display_phone_number, name, status",
+        "id, organization_id, phone_number_id, whatsapp_business_account_id, access_token_encrypted, display_phone_number, name, status, connection_status, health_version",
       )
       .eq("id", id)
       .eq("organization_id", orgId)
@@ -303,7 +336,32 @@ export async function getAccountDiagnostics(req: any, res: Response) {
     if (!account?.id)
       return res.status(404).json({ error: "WhatsApp account not found" });
 
-    res.json(await getMetaAccountDiagnostics(account));
+    const diag = await getMetaAccountDiagnostics(account);
+
+    // Persist health updates asynchronously via AccountHealthService with exact Meta Graph API values
+    const tokenStatus = diag.reconnect_required || diag.issue_codes?.includes('token_expired')
+      ? 'EXPIRED'
+      : (diag.issue_codes?.includes('token_missing') ? 'MISSING' : 'VALID');
+
+    const bizStatus = diag.business_verification?.status
+      ? String(diag.business_verification.status).toUpperCase()
+      : 'UNKNOWN';
+
+    const qualityRating = diag.phone_number_access?.quality_rating
+      ? String(diag.phone_number_access.quality_rating).toUpperCase()
+      : 'UNKNOWN';
+
+    await AccountHealthService.updateHealth(account.id, {
+      connection_status: tokenStatus === 'EXPIRED' ? 'TOKEN_INVALID' : 'CONNECTED',
+      token_status: tokenStatus,
+      business_verification_status: bizStatus as any,
+      business_name: diag.business_verification?.business_name || null,
+      business_id: diag.business_verification?.business_id || null,
+      quality_rating: qualityRating as any,
+      diagnostics_json: diag,
+    }).catch(err => console.error('[Diagnostics] Failed to persist health update:', err.message));
+
+    res.json(diag);
   } catch (err: any) {
     console.error("WhatsApp account diagnostics error:", err);
     res
@@ -468,13 +526,13 @@ export function findStaleMetaTemplateIds(metaRows: any[], localRows: any[]) {
   const metaKeys = new Set(
     metaRows.map(
       (row) =>
-        `${String(row.name || "").toLowerCase()}::${String(row.language || "en_US")}`,
+        `${String(row.name || "").trim().toLowerCase()}::${String(row.language || "en_US").trim().toLowerCase()}`,
     ),
   );
 
   return localRows
     .filter((row) => {
-      const key = `${String(row.name || "").toLowerCase()}::${String(row.language || "en_US")}`;
+      const key = `${String(row.name || "").trim().toLowerCase()}::${String(row.language || "en_US").trim().toLowerCase()}`;
       return row.template_id && row.status !== "DRAFT" && !metaKeys.has(key);
     })
     .map((row) => row.id);
@@ -568,10 +626,15 @@ export async function bulkUpsertLocalTemplateSubmissions(
 ) {
   const now = new Date().toISOString();
 
+  // Filter out templates that were recently deleted to prevent them from being re-inserted
+  // when Meta API still returns them briefly after a deletion request
+  const filteredMetaTemplates = (metaTemplates || []).filter(
+    (t: any) => !isTemplateRecentlyDeleted(orgId, t.name)
+  );
   // Fetch existing records for this account, including the primary key ID
   const { data: existingRows } = await supabase
     .from('w_template_submissions')
-    .select('id, name, language, status, submitted_at, approved_at, rejected_at, submitted_by')
+    .select('id, template_id, name, language, status, submitted_at, approved_at, rejected_at, submitted_by')
     .eq('organization_id', orgId)
     .eq('wa_account_id', waAccountId);
 
@@ -582,9 +645,15 @@ export async function bulkUpsertLocalTemplateSubmissions(
   }
 
   // Identify and delete local templates that no longer exist in Meta (ignoring DRAFTs)
-  const metaKeys = new Set((metaTemplates || []).map((t: any) => `${String(t.name).toLowerCase()}::${String(t.language || 'en_US')}`));
+  const metaKeys = new Set((filteredMetaTemplates).map((t: any) => `${String(t.name).trim().toLowerCase()}::${String(t.language || 'en_US').trim().toLowerCase()}`))
+  const metaIds = new Set((filteredMetaTemplates).map((t: any) => String(t.id || '').trim()).filter(Boolean));
   const toDeleteIds = (existingRows || [])
-    .filter((r: any) => r.status !== 'DRAFT' && !metaKeys.has(`${String(r.name).toLowerCase()}::${String(r.language || 'en_US')}`))
+    .filter((r: any) => {
+      if (r.status === 'DRAFT') return false;
+      const key = `${String(r.name).trim().toLowerCase()}::${String(r.language || 'en_US').trim().toLowerCase()}`;
+      const templateId = String(r.template_id || '').trim();
+      return (templateId ? !metaIds.has(templateId) : true) && !metaKeys.has(key);
+    })
     .map((r: any) => r.id);
 
   if (toDeleteIds.length > 0) {
@@ -600,9 +669,9 @@ export async function bulkUpsertLocalTemplateSubmissions(
   }
 
   // If there are no templates returned from Meta, we are done
-  if (!metaTemplates || metaTemplates.length === 0) return;
+  if (!filteredMetaTemplates || filteredMetaTemplates.length === 0) return;
 
-  const payloads = metaTemplates.map((template: any) => {
+  const payloads = filteredMetaTemplates.map((template: any) => {
     const status = normalizeMetaTemplateStatus(template.status);
     const key = `${String(template.name).toLowerCase()}::${String(template.language || 'en_US')}`;
     const existing = existingMap.get(key);
@@ -671,8 +740,12 @@ export async function getTemplates(req: any, res: Response) {
       return res.json([]);
     }
 
-    const account = accounts[0];
+    const account = accounts.find((a: any) => Boolean(decryptToken(a.access_token_encrypted))) || accounts[0];
     const token = decryptToken(account.access_token_encrypted);
+    if (!token) {
+      return res.status(400).json({ error: "No valid Meta access token found. Please click Connect Meta to link your WhatsApp account." });
+    }
+
     const waba_id = account.whatsapp_business_account_id;
 
     const response = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${waba_id}/message_templates?fields=id,name,language,status,category,components,quality_score,rejected_reason&limit=250`, {
@@ -685,7 +758,9 @@ export async function getTemplates(req: any, res: Response) {
       return res.status(response.status).json({ error: json.error?.message || 'Failed to fetch templates from Meta' });
     }
     const metaTemplates = json.data || [];
-    await bulkUpsertLocalTemplateSubmissions(orgId, account.id, waba_id, metaTemplates);
+    // Filter out recently deleted templates before syncing and merging
+    const activeMetaTemplates = metaTemplates.filter((t: any) => !isTemplateRecentlyDeleted(orgId, t.name));
+    await bulkUpsertLocalTemplateSubmissions(orgId, account.id, waba_id, activeMetaTemplates);
 
     const { data: localRows, error: localErr } = await supabase
       .from('w_template_submissions')
@@ -694,7 +769,7 @@ export async function getTemplates(req: any, res: Response) {
       .eq('wa_account_id', account.id);
     if (localErr) console.warn('[Templates] Local cache read failed:', localErr.message);
 
-    res.json(mergeTemplateRows(metaTemplates, localRows || []));
+    res.json(mergeTemplateRows(activeMetaTemplates, localRows || []));
   } catch (err: any) {
     console.error('Error fetching templates:', err);
     res.status(500).json({ error: err.message });
@@ -711,12 +786,13 @@ export async function getTemplateContext(req: any, res: Response) {
       .eq('organization_id', orgId)
       .neq('status', 'disconnected')
       .not('whatsapp_business_account_id', 'is', null)
-      .order('created_at', { ascending: false })
-      .limit(1);
-    const account = accounts?.[0];
+      .order('created_at', { ascending: false });
+
+    const account = accounts?.find((a: any) => Boolean(decryptToken(a.access_token_encrypted))) || accounts?.[0];
     if (!account) return res.status(400).json({ error: 'No connected Meta account found' });
 
     const token = decryptToken(account.access_token_encrypted);
+    if (!token) return res.status(400).json({ error: 'No valid Meta access token found. Please click Connect Meta to link your account.' });
     const headers = { Authorization: `Bearer ${token}` };
     const base = `https://graph.facebook.com/${GRAPH_API_VERSION}/${account.whatsapp_business_account_id}`;
     const [catalogResponse, flowResponse] = await Promise.all([
@@ -1003,7 +1079,7 @@ export async function createTemplate(req: any, res: Response) {
 
 export async function deleteTemplate(req: any, res: Response) {
   const orgId = req.organization_id;
-  const { name } = req.params;
+  const name = String(req.params.name || "").trim();
 
   try {
     if (!orgId) throw new Error("No organization found");
@@ -1024,43 +1100,34 @@ export async function deleteTemplate(req: any, res: Response) {
     const token = decryptToken(account.access_token_encrypted);
     const waba_id = account.whatsapp_business_account_id;
 
-    // 1. Fetch local template first to verify if it is local-only
+    // 1. Fetch local template first to check if it's a pure local DRAFT (never sent to Meta)
     const { data: localTemplate } = await supabase
       .from("w_template_submissions")
       .select("template_id, status")
       .eq("organization_id", orgId)
       .eq("wa_account_id", account.id)
-      .eq("name", name)
+      .ilike("name", name)
       .maybeSingle();
 
-    if (!localTemplate || !localTemplate.template_id || localTemplate.status === 'DRAFT') {
-      // Clean up local cache if it is a draft or does not exist on Meta
+    // Only skip Meta API if the template is explicitly a DRAFT (never submitted to Meta)
+    // If localTemplate is missing or has no template_id, we still attempt Meta deletion by name
+    // because the template may exist on Meta even if our local cache doesn't have the ID
+    const isLocalOnlyDraft = localTemplate?.status === 'DRAFT' && !localTemplate?.template_id;
+    if (isLocalOnlyDraft) {
+      // Pure local draft — clean up local cache only, Meta was never contacted
       await supabase
         .from("w_template_submissions")
         .delete()
         .eq("organization_id", orgId)
         .eq("wa_account_id", account.id)
-        .eq("name", name);
+        .ilike("name", name);
+      markTemplateDeleted(orgId, name);
       return res.json({ success: true });
     }
 
-    let deleteUrl = `https://graph.facebook.com/v20.0/${waba_id}/message_templates?name=${encodeURIComponent(name)}`;
-    try {
-      const listRes = await fetch(
-        `https://graph.facebook.com/v20.0/${waba_id}/message_templates?name=${encodeURIComponent(name)}&fields=id,name,status`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      const listJson = await listRes.json();
-      if (listRes.ok && listJson.data?.length > 0) {
-        const hsmId = listJson.data[0].id;
-        deleteUrl = `https://graph.facebook.com/v20.0/${waba_id}/message_templates?name=${encodeURIComponent(name)}&hsm_id=${hsmId}`;
-      }
-    } catch (lookupErr) {
-      console.warn(
-        "[Template Delete] Could not fetch hsm_id, using name-only delete:",
-        lookupErr,
-      );
-    }
+    // Meta deletes by name across languages unless an hsm_id is explicitly supplied.
+    // Use name-only deletion here so every language variant stays in sync with Meta.
+    const deleteUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/${waba_id}/message_templates?name=${encodeURIComponent(name)}`;
 
     const response = await fetch(deleteUrl, {
       method: "DELETE",
@@ -1094,8 +1161,10 @@ export async function deleteTemplate(req: any, res: Response) {
           .delete()
           .eq("organization_id", orgId)
           .eq("wa_account_id", account.id)
-          .eq("name", name);
+          .ilike("name", name);
 
+        // Mark as recently deleted so the next sync doesn't re-insert it
+        markTemplateDeleted(orgId, name);
         return res.json({ success: true });
       }
 
@@ -1113,12 +1182,27 @@ export async function deleteTemplate(req: any, res: Response) {
     }
 
     // Delete local cache record
-    await supabase
+    const deleteQuery = supabase
       .from("w_template_submissions")
       .delete()
       .eq("organization_id", orgId)
       .eq("wa_account_id", account.id)
-      .eq("name", name);
+      .ilike("name", name);
+    await deleteQuery;
+
+    // Mark template as recently deleted so the next sync doesn't re-insert it
+    markTemplateDeleted(orgId, name);
+
+    try {
+      io?.emit("template_deleted", {
+        organization_id: orgId,
+        wa_account_id: account.id,
+        name,
+        template_id: localTemplate?.template_id || null,
+      });
+    } catch (emitErr) {
+      console.warn("[Templates] Failed to emit template_deleted event:", emitErr);
+    }
 
     res.json({ success: true });
   } catch (err: any) {

@@ -90,7 +90,7 @@ const faqs = [
     {
         id: 'gs-1',
         category: 'getting-started',
-        question: 'GAP FlowPilot kaise connect karein apne WhatsApp number se?',
+        question: 'GAP WhatsApp Pilot kaise connect karein apne WhatsApp number se?',
         answer:
             'Left sidebar mein "Connect Account" par click karein. Wahan QR code scan karein WhatsApp mobile app se. Ek baar connected hone ke baad, green status indicator dikhega aur aap messages receive karne ke liye ready ho jaayenge.',
     },
@@ -99,7 +99,7 @@ const faqs = [
         category: 'getting-started',
         question: 'Mera account kis tarah ka hona chahiye — personal ya business?',
         answer:
-            'GAP FlowPilot ke saath WhatsApp Business account sabse accha kaam karta hai. WhatsApp Business API use karne ke liye aapko ek approved Business Manager account chahiye. Personal numbers bhi kaam karte hain lekin kuch features (jaise broadcasts) limited ho sakte hain.',
+            'GAP WhatsApp Pilot ke saath WhatsApp Business account sabse accha kaam karta hai. WhatsApp Business API use karne ke liye aapko ek approved Business Manager account chahiye. Personal numbers bhi kaam karte hain lekin kuch features (jaise broadcasts) limited ho sakte hain.',
     },
     {
         id: 'gs-3',
@@ -358,7 +358,7 @@ export default function HelpCenter() {
                 </div>
                 <h1 className="text-3xl font-bold tracking-tight text-gray-950">Help Center</h1>
                 <p className="text-sm text-gray-500">
-                    GAP FlowPilot ke baare mein sawal? Yahan answers milenge. Har feature ka detailed guide available hai.
+                    GAP WhatsApp Pilot ke baare mein sawal? Yahan answers milenge. Har feature ka detailed guide available hai.
                 </p>
                 </div>
                 <div className="hidden md:block">
@@ -500,7 +500,7 @@ export default function HelpCenter() {
                 </div>
 
                 <a
-                    href="mailto:support@gapflowpilot.com"
+                    href="mailto:support@gapwhatsapppilot.com"
                     id="help-email-support"
                     className="group flex items-start gap-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-green-200 hover:shadow-md"
                 >
@@ -512,7 +512,7 @@ export default function HelpCenter() {
                             <p className="text-sm font-bold text-gray-950">Email Support</p>
                             <ExternalLink className="h-3.5 w-3.5 text-gray-400" />
                         </div>
-                        <p className="mt-1 text-sm text-gray-500">support@gapflowpilot.com pe email karein. 24 hrs mein reply milegi.</p>
+                        <p className="mt-1 text-sm text-gray-500">support@gapwhatsapppilot.com pe email karein. 24 hrs mein reply milegi.</p>
                     </div>
                 </a>
 

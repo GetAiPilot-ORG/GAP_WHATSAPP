@@ -55,7 +55,7 @@ export default function TeamMembers() {
             if (res.ok) {
                 const data = await res.json()
                 setMembers(data)
-                
+
                 // If a drawer is open, update its active info
                 if (selectedMember) {
                     const freshData = data.find(m => m.id === selectedMember.id)
@@ -249,10 +249,14 @@ export default function TeamMembers() {
             {/* Header Section */}
             <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:justify-between">
                 <div>
+                    <div className="inline-flex items-center gap-1.5 rounded-none border border-zinc-200 bg-white px-2.5 py-0.5 text-[10px] sm:text-xs font-semibold text-zinc-700 tracking-wider uppercase font-mono mb-2 w-fit">
+                        <Users size={14} className="text-zinc-650" />
+                        Workspace Access
+                    </div>
                     <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Team Members</h1>
                     <p className="text-xs sm:text-sm text-gray-500 mt-0.5 sm:mt-1">Manage your agents, availability, assignments and access</p>
                 </div>
-                
+
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
                     <div className="flex gap-2 w-full sm:w-auto">
                         {/* Search Input */}
@@ -263,7 +267,7 @@ export default function TeamMembers() {
                                 value={searchQuery}
                                 onChange={(e) => setFilterParam('search', e.target.value)}
                                 placeholder="Search name/email..."
-                                className="h-9 sm:h-10 w-full rounded-xl border border-gray-200 bg-white pl-8 pr-7 text-xs sm:text-sm focus:border-indigo-500 focus:outline-none transition"
+                                className="h-9 sm:h-10 w-full rounded-none border border-zinc-200 bg-white pl-8 pr-7 text-xs sm:text-sm focus:border-zinc-400 focus:outline-none transition-all shadow-sm"
                             />
                             {searchQuery && (
                                 <button onClick={() => setFilterParam('search', '')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -276,7 +280,7 @@ export default function TeamMembers() {
                         {isAdmin && (
                             <button
                                 onClick={() => setIsInviteOpen(true)}
-                                className="inline-flex h-9 sm:h-10 items-center justify-center gap-1.5 rounded-xl bg-[#128C7E] px-3 text-xs sm:text-sm font-semibold text-white transition-colors hover:bg-[#0f7a6f] shadow-sm shrink-0"
+                                className="inline-flex h-9 sm:h-10 items-center justify-center gap-1.5 rounded-none bg-zinc-950 px-4 text-xs sm:text-sm font-semibold text-white hover:bg-zinc-800 transition-colors shadow-sm shrink-0 border border-zinc-950"
                             >
                                 <UserPlus className="h-3.5 w-3.5" />
                                 <span>Invite</span>
@@ -290,7 +294,7 @@ export default function TeamMembers() {
                             <select
                                 value={roleFilter}
                                 onChange={(e) => setFilterParam('role', e.target.value)}
-                                className="h-9 sm:h-10 w-full rounded-xl border border-gray-200 bg-white pl-2.5 pr-7 text-xs sm:text-sm focus:border-indigo-500 focus:outline-none transition appearance-none cursor-pointer"
+                                className="h-9 sm:h-10 w-full rounded-none border border-zinc-200 bg-white pl-2.5 pr-7 text-xs sm:text-sm focus:border-zinc-400 focus:outline-none transition-all appearance-none cursor-pointer shadow-sm"
                             >
                                 <option value="all">All Roles</option>
                                 <option value="owner">Owner</option>
@@ -305,7 +309,7 @@ export default function TeamMembers() {
                             <select
                                 value={statusFilter}
                                 onChange={(e) => setFilterParam('status', e.target.value)}
-                                className="h-9 sm:h-10 w-full rounded-xl border border-gray-200 bg-white pl-2.5 pr-7 text-xs sm:text-sm focus:border-indigo-500 focus:outline-none transition appearance-none cursor-pointer"
+                                className="h-9 sm:h-10 w-full rounded-none border border-zinc-200 bg-white pl-2.5 pr-7 text-xs sm:text-sm focus:border-zinc-400 focus:outline-none transition-all appearance-none cursor-pointer shadow-sm"
                             >
                                 <option value="all">All Statuses</option>
                                 <option value="online">Online Agents</option>
@@ -318,20 +322,25 @@ export default function TeamMembers() {
             </div>
 
             {/* Stats Cards Section */}
-            <div className="grid grid-cols-2 gap-2 sm:gap-4 sm:grid-cols-4">
-                <SummaryCard icon={Users} title="Total Members" value={stats.total} color="bg-indigo-50 text-indigo-700" />
-                <SummaryCard icon={Activity} title="Online Agents" value={stats.onlineAgents} color="bg-green-50 text-green-700 font-bold" />
-                <SummaryCard icon={Clock} title="Offline Agents" value={stats.offlineAgents} color="bg-gray-50 text-gray-500" />
-                <SummaryCard icon={Send} title="Assigned Chats" value={stats.totalAssignedChats} color="bg-blue-50 text-blue-700" />
+            <div className="grid grid-cols-2 gap-[1px] sm:grid-cols-4 bg-zinc-200 border border-zinc-200 shadow-sm">
+                <SummaryCard icon={Users} title="Total Members" value={stats.total} helper="Registered workspace users" />
+                <SummaryCard icon={Activity} title="Online Agents" value={stats.onlineAgents} helper="Ready to accept chats" />
+                <SummaryCard icon={Clock} title="Offline Agents" value={stats.offlineAgents} helper="Away or inactive" />
+                <SummaryCard icon={Send} title="Assigned Chats" value={stats.totalAssignedChats} helper="Active customer conversations" />
             </div>
 
             {/* Owner Section (Always Available) */}
             {!isLoadingMembers && ownerMember && (
-                <div 
+                <div
                     onClick={() => setSelectedMember(ownerMember)}
-                    className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-4 cursor-pointer hover:bg-gray-50/40 transition-colors"
+                    className="relative overflow-hidden rounded-none border border-zinc-200 bg-gradient-to-b from-white to-zinc-50/20 p-3 sm:p-4 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-4 cursor-pointer hover:bg-zinc-50/40 hover:border-zinc-350 transition-all group"
                 >
-                    <div className="flex items-center">
+                    {/* Soft top-left corner glow */}
+                    <div className="absolute -top-12 -left-12 w-24 h-24 bg-zinc-400/5 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
+                    {/* Left hover accent line indicator */}
+                    <div className="absolute left-0 top-0 bottom-0 w-[3.5px] bg-green-500 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+
+                    <div className="flex items-center relative z-10">
                         <div className="relative flex-shrink-0">
                             <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-full flex items-center justify-center text-white font-bold overflow-hidden"
                                 style={ownerMember.avatar_color?.startsWith('/images/avatars/') ? {} : { backgroundColor: ownerMember.avatar_color || '#6366f1' }}>
@@ -383,37 +392,44 @@ export default function TeamMembers() {
             ) : (
                 <>
                     {/* Desktop Table View */}
-                    <div className="hidden sm:block overflow-hidden border border-gray-200 rounded-xl bg-white shadow-sm">
+                    <div className="hidden sm:block overflow-hidden border border-zinc-200 rounded-none bg-white shadow-sm relative group">
+                        {/* Premium Metallic Gray Top Gradient Line */}
+                        <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-zinc-200 via-zinc-400 to-zinc-300 opacity-80 group-hover:opacity-100 transition-opacity duration-300 z-10" />
+                        {/* Soft top-left corner glow */}
+                        <div className="absolute -top-12 -left-12 w-24 h-24 bg-zinc-400/5 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500 z-10" />
+
                         {filteredMembers.length === 0 ? (
-                            <div className="py-16 text-center text-gray-500 flex flex-col items-center justify-center">
+                            <div className="py-16 text-center text-gray-500 flex flex-col items-center justify-center relative z-10">
                                 <Users className="h-10 w-10 text-gray-300 mb-2" />
                                 <p className="text-sm font-medium">No team members match the filter criteria</p>
                             </div>
                         ) : (
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full divide-y divide-gray-200">
-                                    <thead className="bg-gray-50/70">
+                            <div className="overflow-x-auto relative z-10">
+                                <table className="min-w-full divide-y divide-dashed divide-zinc-200">
+                                    <thead className="bg-zinc-50/50">
                                         <tr>
-                                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Member</th>
-                                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</th>
-                                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Role</th>
-                                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Availability</th>
-                                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Active Chats</th>
-                                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Last Active</th>
-                                            <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Active Time Today</th>
-                                            {isAdmin && <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>}
+                                            <th className="px-6 py-3.5 text-left text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-widest">Member</th>
+                                            <th className="px-6 py-3.5 text-left text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-widest">Email</th>
+                                            <th className="px-6 py-3.5 text-left text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-widest">Role</th>
+                                            <th className="px-6 py-3.5 text-left text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-widest">Availability</th>
+                                            <th className="px-6 py-3.5 text-left text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-widest">Active Chats</th>
+                                            <th className="px-6 py-3.5 text-left text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-widest">Last Active</th>
+                                            <th className="px-6 py-3.5 text-right text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-widest">Active Time Today</th>
+                                            {isAdmin && <th className="px-6 py-3.5 text-right text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-widest">Actions</th>}
                                         </tr>
                                     </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
+                                    <tbody className="bg-white divide-y divide-dashed divide-zinc-200">
                                         {filteredMembers.map((member) => {
                                             const inviteStatus = getInviteStatus(member)
                                             return (
                                                 <tr
                                                     key={member.id}
                                                     onClick={() => setSelectedMember(member)}
-                                                    className="hover:bg-gray-50/60 cursor-pointer transition-colors"
+                                                    className="hover:bg-gray-50/60 cursor-pointer transition-colors group"
                                                 >
-                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                    <td className="px-6 py-4 whitespace-nowrap relative">
+                                                        {/* Left hover accent line indicator */}
+                                                        <div className={`absolute left-0 top-0 bottom-0 w-[3.5px] opacity-0 group-hover:opacity-100 transition-opacity duration-150 ${member.is_online ? 'bg-green-500' : 'bg-zinc-400'}`} />
                                                         <div className="flex items-center">
                                                             <div className="relative flex-shrink-0">
                                                                 <div className="h-10 w-10 rounded-full flex items-center justify-center text-white font-bold overflow-hidden"
@@ -448,7 +464,7 @@ export default function TeamMembers() {
                                                                 {member.is_online ? 'Online' : 'Offline'}
                                                             </span>
                                                         ) : (
-                                                            <span className="text-gray-400 text-xs">—</span>
+                                                            <span className="text-zinc-400 text-xs">-</span>
                                                         )}
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-semibold">
@@ -464,18 +480,18 @@ export default function TeamMembers() {
                                                                     type="button"
                                                                     onClick={(ev) => resendInvite(ev, member)}
                                                                     disabled={resendingMemberId === member.id}
-                                                                    className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+                                                                    className="inline-flex items-center gap-1.5 rounded-none border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-700 hover:border-zinc-350 hover:bg-zinc-50 active:scale-[0.98] transition-all shadow-sm cursor-pointer"
                                                                 >
-                                                                    {resendingMemberId === member.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                                                                    {resendingMemberId === member.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5 text-zinc-400" />}
                                                                     Resend
                                                                 </button>
                                                             ) : ['agent', 'admin', 'owner'].includes(member.role) ? (
-                                                                <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 border border-emerald-100/50">
+                                                                <span className="inline-flex items-center gap-1.5 rounded-none bg-emerald-50/50 px-2.5 py-1 text-xs font-semibold text-emerald-800 border border-emerald-100/50">
                                                                     <Clock className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
                                                                     {formatOnlineTime(member.online_time_today)}
                                                                 </span>
                                                             ) : (
-                                                                <span className="text-gray-400 text-xs">—</span>
+                                                                <span className="text-zinc-400 text-xs">-</span>
                                                             )}
                                                         </div>
                                                     </td>
@@ -486,13 +502,13 @@ export default function TeamMembers() {
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => removeMember(member.id)}
-                                                                        className="inline-flex items-center justify-center p-1.5 text-rose-600 hover:text-white rounded-lg hover:bg-rose-600 border border-rose-200 hover:border-rose-600 transition-colors"
+                                                                        className="inline-flex items-center justify-center p-1.5 text-zinc-400 hover:text-red-650 rounded-none hover:bg-red-50 border border-zinc-200 hover:border-red-200 transition-all cursor-pointer shadow-sm"
                                                                         title="Remove Member"
                                                                     >
                                                                         <Trash2 className="h-3.5 w-3.5" />
                                                                     </button>
                                                                 ) : (
-                                                                    <span className="text-gray-400 text-xs">—</span>
+                                                                    <span className="text-zinc-400 text-xs">-</span>
                                                                 )}
                                                             </div>
                                                         </td>
@@ -520,9 +536,14 @@ export default function TeamMembers() {
                                     <div
                                         key={member.id}
                                         onClick={() => setSelectedMember(member)}
-                                        className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm flex flex-col gap-2.5 cursor-pointer hover:bg-gray-50/40 transition-colors"
+                                        className="relative overflow-hidden rounded-none border border-zinc-200 bg-gradient-to-b from-white to-zinc-50/20 p-3 shadow-sm flex flex-col gap-2.5 cursor-pointer hover:bg-zinc-50/40 hover:border-zinc-350 transition-all group"
                                     >
-                                        <div className="flex items-center justify-between">
+                                        {/* Premium Metallic Gray Top Gradient Line */}
+                                        <div className="absolute top-0 left-0 right-0 h-[2.5px] bg-gradient-to-r from-zinc-200 via-zinc-400 to-zinc-300 opacity-80 group-hover:opacity-100 transition-opacity duration-300 z-10" />
+                                        {/* Soft top-left corner glow */}
+                                        <div className="absolute -top-12 -left-12 w-24 h-24 bg-zinc-400/5 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500 z-10" />
+
+                                        <div className="flex items-center justify-between relative z-10">
                                             <div className="flex items-center min-w-0">
                                                 <div className="relative flex-shrink-0">
                                                     <div className="h-9 w-9 rounded-full flex items-center justify-center text-white font-bold overflow-hidden"
@@ -540,7 +561,7 @@ export default function TeamMembers() {
                                                 <div className="ml-2.5 min-w-0">
                                                     <div className="flex items-center gap-1.5">
                                                         <span className="text-xs font-semibold text-gray-900 truncate">{member.name}</span>
-                                                        <span className="inline-flex items-center rounded-md bg-indigo-50 px-1.5 py-0.2 text-[9px] font-medium text-indigo-700 ring-1 ring-inset ring-indigo-600/10 shrink-0">
+                                                        <span className="inline-flex items-center rounded-none bg-indigo-50 px-1.5 py-0.2 text-[9px] font-medium text-indigo-700 ring-1 ring-inset ring-indigo-600/10 shrink-0">
                                                             {member.role ? member.role.charAt(0).toUpperCase() + member.role.slice(1) : 'Agent'}
                                                         </span>
                                                     </div>
@@ -549,7 +570,7 @@ export default function TeamMembers() {
                                             </div>
                                         </div>
 
-                                        <div className="grid grid-cols-3 gap-2 border-t border-gray-100 pt-2.5 text-xs">
+                                        <div className="grid grid-cols-3 gap-2 border-dashed border-zinc-200 pt-2.5 text-xs relative z-10">
                                             <div>
                                                 <span className="text-[9px] text-gray-400 font-semibold uppercase tracking-wider block">Availability</span>
                                                 {['agent', 'admin', 'owner'].includes(member.role) ? (
@@ -558,7 +579,7 @@ export default function TeamMembers() {
                                                         {member.is_online ? 'Online' : 'Offline'}
                                                     </span>
                                                 ) : (
-                                                    <span className="text-gray-400 text-[11px]">—</span>
+                                                    <span className="text-zinc-400 text-[11px]">-</span>
                                                 )}
                                             </div>
                                             <div>
@@ -584,7 +605,7 @@ export default function TeamMembers() {
                                                             {formatOnlineTime(member.online_time_today)}
                                                         </span>
                                                     ) : (
-                                                        <span className="text-gray-400 text-[11px]">—</span>
+                                                        <span className="text-zinc-400 text-[11px]">-</span>
                                                     )}
 
                                                     {isAdmin && member.role !== 'owner' && member.user_id !== user?.id && (
@@ -616,7 +637,7 @@ export default function TeamMembers() {
                         className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
                         onClick={() => setSelectedMember(null)}
                     />
-                    
+
                     {/* Panel */}
                     <div className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col z-10 animate-in slide-in-from-right duration-200">
                         {/* Drawer Header */}
@@ -626,7 +647,7 @@ export default function TeamMembers() {
                                 <X className="h-5 w-5" />
                             </button>
                         </div>
-                        
+
                         {/* Drawer Body */}
                         <div className="flex-1 overflow-y-auto p-6 space-y-6">
                             {/* Member Meta */}
@@ -649,9 +670,9 @@ export default function TeamMembers() {
                                     <p className="text-sm text-gray-500">{selectedMember.email}</p>
                                 </div>
                             </div>
-                            
+
                             {/* Stats/Properties List */}
-                            <div className="border-t border-gray-100 pt-6 space-y-4">
+                            <div className=" border-gray-100 pt-6 space-y-4">
                                 <div className="flex justify-between items-center">
                                     <span className="text-sm text-gray-500 font-medium">Role</span>
                                     {isAdmin && selectedMember.role !== 'owner' ? (
@@ -669,7 +690,7 @@ export default function TeamMembers() {
                                         </span>
                                     )}
                                 </div>
-                                
+
                                 {selectedMember.role === 'agent' && (
                                     <>
                                         <div className="flex justify-between items-center">
@@ -688,7 +709,7 @@ export default function TeamMembers() {
                                         </div>
                                     </>
                                 )}
-                                
+
                                 <div className="flex justify-between items-center">
                                     <span className="text-sm text-gray-500 font-medium">Active Chats</span>
                                     <span className="text-sm font-semibold text-gray-900 bg-gray-50 px-2.5 py-0.5 rounded border border-gray-100">
@@ -712,24 +733,23 @@ export default function TeamMembers() {
                                     </span>
                                 </div>
                             </div>
-                            
+
                             {/* Drawer Action Panel */}
                             <div className="border-t border-gray-100 pt-6 space-y-3">
                                 {user?.id === selectedMember.user_id && selectedMember.role === 'agent' && (
                                     <button
                                         type="button"
                                         onClick={() => toggleOnlineStatus(selectedMember.is_online)}
-                                        className={`w-full flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold shadow-sm transition-colors ${
-                                            selectedMember.is_online
-                                                ? 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'
-                                                : 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100'
-                                        }`}
+                                        className={`w-full flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold shadow-sm transition-colors ${selectedMember.is_online
+                                            ? 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'
+                                            : 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100'
+                                            }`}
                                     >
                                         <Activity className="h-4 w-4" />
                                         {selectedMember.is_online ? 'Go Offline' : 'Go Online'}
                                     </button>
                                 )}
-                                
+
                                 {isAdmin && selectedMember.role !== 'owner' && (
                                     <button
                                         type="button"
@@ -818,16 +838,15 @@ export default function TeamMembers() {
     )
 }
 
-function SummaryCard({ icon: IconComponent, title, value, color }) {
+function SummaryCard({ icon: IconComponent, title, value, helper }) {
     return (
-        <div className="rounded-2xl border border-gray-200 bg-white p-2 sm:p-5 shadow-sm transition-all duration-300 hover:shadow-md flex items-center gap-1.5 sm:gap-4">
-            <div className={`p-1.5 sm:p-3 rounded-lg sm:rounded-xl ${color} shrink-0`}>
-                <IconComponent className="h-3.5 w-3.5 sm:h-5 sm:w-5" />
+        <div className="stat-card-item rounded-none bg-white p-5 hover:bg-zinc-50/50 transition-colors">
+            <div className="flex items-center justify-between">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">{title}</span>
+                <IconComponent size={18} className="text-zinc-400" />
             </div>
-            <div className="min-w-0">
-                <p className="text-[10px] sm:text-xs font-medium text-gray-500 truncate">{title}</p>
-                <p className="text-sm sm:text-xl font-bold text-gray-900 mt-0 sm:mt-1">{value}</p>
-            </div>
+            <div className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950">{value}</div>
+            {helper ? <div className="mt-1 text-xs text-zinc-500 leading-normal">{helper}</div> : null}
         </div>
     )
 }

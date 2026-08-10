@@ -1,3 +1,4 @@
+import fs from 'fs';
 import { Response } from 'express';
 import { supabase } from '../config/supabase.js';
 import { storeMessage, upsertConversation } from '../services/messages.service.js';
@@ -7,6 +8,8 @@ import { sessions } from '../services/whatsapp.service.js';
 import { io } from '../socket.js';
 import { triggerHandoffWebhook } from '../services/n8n.service.js';
 import dotenv from "dotenv";
+import { uploadMediaToStorage } from '../services/broadcast.service.js';
+import { decryptToken } from '../utils/crypto.js';
 dotenv.config({ path: "./.env" });
 
 const N8N_HANDOFF_WEBHOOK_URL = process.env.N8N_HANDOFF_WEBHOOK_URL;
@@ -574,5 +577,240 @@ export async function markAsRead(req: any, res: Response) {
     } catch (err: any) {
         console.error("Error marking read:", err);
         res.status(500).json({ error: err.message });
+    }
+}
+
+export async function sendMediaMessage(req: any, res: Response) {
+    const { conversationId } = req.params;
+    const orgId = req.organization_id;
+    const caption = String(req.body?.caption || "").trim();
+    const session_id = String(req.body?.session_id || "");
+    const duration_seconds_raw = req.body?.duration_seconds;
+    const duration_seconds =
+        duration_seconds_raw != null && duration_seconds_raw !== ""
+            ? Number(duration_seconds_raw)
+            : null;
+    const file = req.file;
+
+    if (!file) return res.status(400).json({ error: "file required" });
+
+    try {
+        const { data: conv, error: convErr } = await supabase
+            .from("w_conversations")
+            .select(`
+                id,
+                organization_id,
+                wa_account_id,
+                contact:w_contacts(id, wa_id, name, phone),
+                account:w_wa_accounts(id, phone_number_id, display_phone_number, access_token_encrypted)
+            `)
+            .eq("id", conversationId)
+            .eq("organization_id", orgId)
+            .single();
+
+        if (convErr) throw convErr;
+        if (!conv?.contact?.wa_id) throw new Error("Conversation contact missing wa_id");
+        if (!conv?.account?.phone_number_id) throw new Error("Conversation account missing phone_number_id");
+
+        if (!orgId) throw new Error("Organization not configured");
+
+        const mimeType = file.mimetype || "application/octet-stream";
+        const fileName = file.originalname || "file";
+
+        // Store media in Supabase Storage or local fallback
+        const uploaded = await uploadMediaToStorage({
+            organization_id: orgId,
+            conversation_id: conv.id,
+            fileName,
+            mimeType,
+            buffer: file.buffer,
+        });
+
+        let msgType: "image" | "video" | "audio" | "document" = "document";
+        if (mimeType.startsWith("image/")) msgType = "image";
+        else if (mimeType.startsWith("video/")) msgType = "video";
+        else if (mimeType.startsWith("audio/")) msgType = "audio";
+
+        const preview =
+            caption ||
+            (msgType === "image"
+                ? "[Image]"
+                : msgType === "video"
+                    ? "[Video]"
+                    : msgType === "audio"
+                        ? "[Audio]"
+                        : "[Document]");
+
+        let wa_message_id: string | null = null;
+        let sendRaw: any = null;
+        let sentViaCloud = false;
+
+        if (conv.account.access_token_encrypted) {
+            try {
+                const toMeta = normalizeWaIdToPhone(conv.contact.wa_id);
+                if (!toMeta) throw new Error("Meta send requires a numeric recipient phone number");
+
+                const token = decryptToken(conv.account.access_token_encrypted);
+                const sent = await sendMediaMessageMeta({
+                    phone_number_id: String(conv.account.phone_number_id),
+                    to: toMeta,
+                    token,
+                    buffer: file.buffer,
+                    mimeType,
+                    fileName,
+                    type: msgType,
+                    caption: caption || undefined,
+                });
+                wa_message_id = sent.wa_message_id;
+                sendRaw = sent.raw;
+                sentViaCloud = true;
+            } catch (cloudErr: any) {
+                console.warn(`[Cloud API] Media send failed, attempting Baileys fallback:`, cloudErr.message);
+            }
+        }
+
+        if (!sentViaCloud) {
+            const accountPhoneOrId = String(conv.account.phone_number_id);
+            const sock = session_id ? sessions.get(session_id) : null;
+            let resolvedSock = sock;
+            if (!resolvedSock) {
+                const accountDisplayPhone = String(conv.account.display_phone_number || '').replace(/\D+/g, '');
+                for (const s of sessions.values()) {
+                    const connectedJid = s?.user?.id || "";
+                    const connectedPhone = connectedJid ? connectedJid.split(":")[0] : "";
+                    if (connectedPhone && (connectedPhone === accountPhoneOrId || connectedPhone === accountDisplayPhone)) {
+                        resolvedSock = s;
+                        break;
+                    }
+                }
+                if (!resolvedSock && sessions.size > 0) {
+                    resolvedSock = Array.from(sessions.values()).find(s => s?.user?.id) || null;
+                }
+            }
+            if (!resolvedSock) {
+                throw new Error("No active WhatsApp session found. Reconnect via QR.");
+            }
+
+            const jid = conv.contact.wa_id.includes("@")
+                ? conv.contact.wa_id
+                : `${conv.contact.wa_id}@s.whatsapp.net`;
+            let result: any = null;
+            if (msgType === "image")
+                result = await resolvedSock.sendMessage(jid, {
+                    image: file.buffer,
+                    caption: caption || undefined,
+                });
+            else if (msgType === "video")
+                result = await resolvedSock.sendMessage(jid, {
+                    video: file.buffer,
+                    caption: caption || undefined,
+                });
+            else if (msgType === "audio")
+                result = await resolvedSock.sendMessage(jid, {
+                    audio: file.buffer,
+                    mimetype: mimeType,
+                });
+            else
+                result = await resolvedSock.sendMessage(jid, {
+                    document: file.buffer,
+                    fileName,
+                    mimetype: mimeType,
+                    caption: caption || undefined,
+                });
+
+            wa_message_id = result?.key?.id || null;
+            sendRaw = result;
+        }
+
+        const stored = await storeMessage({
+            organization_id: orgId,
+            contact_id: conv.contact.id,
+            conversation_id: conv.id,
+            wa_message_id,
+            direction: "outbound",
+            type: msgType,
+            content: {
+                text: caption || null,
+                media_url: uploaded.publicUrl,
+                mime_type: mimeType,
+                file_name: fileName,
+                size: file.size,
+                duration_seconds:
+                    msgType === "audio" && duration_seconds !== null && Number.isFinite(duration_seconds)
+                        ? Math.max(0, Math.round(duration_seconds))
+                        : null,
+                raw_send: sendRaw,
+            },
+            status: "sent",
+            sender_type: "human_agent",
+            sender_user_id: (req as any).user?.id || null,
+            automation_source: "manual",
+        } as any);
+
+        await upsertConversation(orgId, conv.wa_account_id, conv.contact.id, {
+            direction: "outbound",
+            preview,
+        });
+
+        io.emit("new_message", {
+            from: conv.contact.wa_id,
+            text: caption || preview,
+            sender: "agent",
+            conversation_id: conv.id,
+            contact_id: conv.contact.id,
+            message_id: stored?.id || null,
+            wa_message_id,
+            created_at: stored?.created_at || new Date().toISOString(),
+            type: msgType,
+            media_url: uploaded.publicUrl,
+            mime_type: mimeType,
+            file_name: fileName,
+            duration_seconds:
+                msgType === "audio" && duration_seconds !== null && Number.isFinite(duration_seconds)
+                    ? Math.max(0, Math.round(duration_seconds))
+                    : undefined,
+            status: "sent",
+            content: {
+                text: caption || null,
+                media_url: uploaded.publicUrl,
+                mime_type: mimeType,
+                file_name: fileName,
+                size: file.size,
+                duration_seconds:
+                    msgType === "audio" && duration_seconds !== null && Number.isFinite(duration_seconds)
+                        ? Math.max(0, Math.round(duration_seconds))
+                        : null,
+            }
+        });
+
+        res.json({
+            success: true,
+            wa_message_id,
+            media_url: uploaded.publicUrl,
+            message: {
+                id: stored?.id || null,
+                wa_message_id,
+                created_at: stored?.created_at || null,
+                conversation_id: conv.id,
+                contact_id: conv.contact.id,
+                direction: "outbound",
+                type: msgType,
+                content: {
+                    text: caption || null,
+                    media_url: uploaded.publicUrl,
+                    mime_type: mimeType,
+                    file_name: fileName,
+                    size: file.size,
+                    duration_seconds:
+                        msgType === "audio" && duration_seconds !== null && Number.isFinite(duration_seconds)
+                            ? Math.max(0, Math.round(duration_seconds))
+                            : null,
+                },
+                status: "sent",
+            },
+        });
+    } catch (err: any) {
+        console.error("Error sending media:", err);
+        res.status(500).json({ error: err.message || "Failed to send media" });
     }
 }

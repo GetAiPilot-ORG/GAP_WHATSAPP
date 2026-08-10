@@ -1,16 +1,28 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { io } from 'socket.io-client'
 import { Plus, Search, Filter, MoreHorizontal, FileText, CheckCircle, Clock, XCircle, Image as ImageIcon, Video, Trash2, Link as LinkIcon, Phone, AlertCircle, RefreshCw, UploadCloud, Type, MessageSquareText, MousePointerClick, ChevronDown, Loader2, Check, CheckCheck, MessageSquare, Image, ExternalLink, ArrowRight, ShieldCheck, HelpCircle, Tag, Building2, Target, Sparkles, LockKeyhole, CalendarDays } from 'lucide-react'
 import Modal from '../components/Modal'
 import { useAuth } from '../context/AuthContext'
 import { useDialog } from '../context/DialogContext'
+import { notify } from '../services/notificationService'
 import { META_TEMPLATES_LIBRARY } from '../data/metaTemplates'
 import MetaTemplateLibrary from '../components/MetaTemplateLibrary'
 import { getPendingReviewInfo } from '../utils/templateReview'
 import { placeholderCopy, suggestTemplateCategory } from '../utils/templateApproval'
+import { gsap } from 'gsap'
+import { useGSAP } from '@gsap/react'
+
+gsap.registerPlugin(useGSAP)
 
 const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+const BACKEND_BASE = API_URL.replace(/\/api$/, '');
+const socket = io(BACKEND_BASE, {
+    withCredentials: true,
+    transports: ['websocket', 'polling'],
+    autoConnect: true,
+})
 
 const formatDateToIST = (dateStr) => {
     if (!dateStr) return 'recently';
@@ -84,6 +96,7 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
     const navigate = useNavigate();
     const { session, apiCall } = useAuth();
     const { alertDialog, confirmDialog } = useDialog();
+    const queryClient = useQueryClient();
     const [viewMode, setViewMode] = useState(defaultView);
     const [iscreateOpen, setIsCreateOpen] = useState(false)
     const [selectedTemplate, setSelectedTemplate] = useState(null)
@@ -91,6 +104,8 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
     const [activeStatus, setActiveStatus] = useState('APPROVED') // APPROVED, PENDING, DRAFT
     const [showCategoryDropdown, setShowCategoryDropdown] = useState(false)
     const [templateSearch, setTemplateSearch] = useState('')
+    const containerRef = useRef(null)
+
 
     const { data: templates = [], isLoading: loading, isFetching, error: queryError, refetch } = useQuery({
         queryKey: ['whatsapp-templates'],
@@ -154,6 +169,32 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
         setViewMode(defaultView);
     }, [defaultView]);
 
+    useEffect(() => {
+        const handleTemplateDeleted = (payload) => {
+            if (!payload?.name && !payload?.template_id) return;
+            const deletedName = String(payload?.name || '').trim().toLowerCase();
+            const deletedTemplateId = String(payload?.template_id || '').trim();
+            queryClient.setQueryData(['whatsapp-templates'], (old) => {
+                if (!Array.isArray(old)) return old;
+                return old.filter(t => {
+                    const matchesName = deletedName
+                        ? String(t.name || '').trim().toLowerCase() === deletedName
+                        : false;
+                    const matchesTemplateId = deletedTemplateId
+                        ? String(t.id || t.template_id || '').trim() === deletedTemplateId
+                        : false;
+                    return !matchesName && !matchesTemplateId;
+                });
+            });
+            queryClient.invalidateQueries({ queryKey: ['whatsapp-templates'] });
+        };
+
+        socket.on('template_deleted', handleTemplateDeleted);
+        return () => {
+            socket.off('template_deleted', handleTemplateDeleted);
+        };
+    }, [queryClient]);
+
     // Compute unified templates list
     const allTemplatesList = useMemo(() => {
         return templates;
@@ -193,6 +234,26 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
         });
     }, [allTemplatesList, activeTab, activeStatus, templateSearch]);
 
+    useGSAP(() => {
+        if (!containerRef.current) return
+        const cards = containerRef.current.querySelectorAll('.template-card-anim')
+        if (cards.length > 0) {
+            gsap.killTweensOf(cards)
+            gsap.fromTo(cards,
+                { opacity: 0, y: 15, scale: 0.98 },
+                {
+                    opacity: 1,
+                    y: 0,
+                    scale: 1,
+                    duration: 0.4,
+                    stagger: 0.04,
+                    ease: 'power2.out',
+                    clearProps: 'all'
+                }
+            )
+        }
+    }, { dependencies: [filteredTemplates], scope: containerRef })
+
     const fetchData = async () => {
         refetch()
     }
@@ -229,9 +290,18 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                 method: 'DELETE'
             });
             if (res.ok) {
-                fetchData();
+                notify.success(`Template "${name}" deleted successfully`)
+                // Optimistically remove the deleted template from the cache immediately
+                // so the UI updates even before Meta propagates the deletion
+                queryClient.setQueryData(['whatsapp-templates'], (old) => {
+                    if (!Array.isArray(old)) return old;
+                    const deletedName = String(name || '').trim().toLowerCase();
+                    return old.filter(t => String(t.name || '').trim().toLowerCase() !== deletedName);
+                });
+                queryClient.invalidateQueries({ queryKey: ['whatsapp-templates'] });
             } else {
                 const data = await res.json();
+                notify.error(data.error || 'Failed to delete template')
                 alertDialog(data.error || 'Failed to delete template', { title: 'Delete failed', tone: 'danger' });
             }
         } catch (error) {
@@ -387,16 +457,15 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                                     )}
                                 </div>
                             </div>
-                            
+
                             <div className="col-span-1 sm:hidden">
                                 <button
                                     type="button"
                                     onClick={() => setShowMobileFilters(!showMobileFilters)}
-                                    className={`h-10 w-full flex items-center justify-center rounded-xl border transition-all ${
-                                        showMobileFilters 
-                                            ? 'bg-blue-50 border-blue-500 text-blue-600' 
-                                            : 'bg-white border-gray-300 text-gray-500'
-                                    }`}
+                                    className={`h-10 w-full flex items-center justify-center rounded-xl border transition-all ${showMobileFilters
+                                        ? 'bg-blue-50 border-blue-500 text-blue-600'
+                                        : 'bg-white border-gray-300 text-gray-500'
+                                        }`}
                                     style={{ borderRadius: '10px' }}
                                     title="Toggle Filters"
                                 >
@@ -608,88 +677,88 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                         />
                     </div>
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    {/* Category Dropdown */}
-                    <div className="relative w-full md:w-auto">
+                        {/* Category Dropdown */}
+                        <div className="relative w-full md:w-auto">
+                            <button
+                                onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
+                                className="inline-flex h-9 w-full items-center justify-between gap-2 rounded-md border border-[#ccd4de] bg-white px-3 text-[12px] font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-[#0b74c9] md:w-auto md:justify-start"
+                            >
+                                <span className="flex items-center gap-2">
+                                    <Filter className="h-4 w-4 text-gray-400" />
+                                    {activeTab === 'ALL' ? 'All Templates' : activeTab.charAt(0) + activeTab.slice(1).toLowerCase()}
+                                </span>
+                                <ChevronDown className="h-4 w-4 text-gray-400 ml-1" />
+                            </button>
+
+                            {showCategoryDropdown && (
+                                <>
+                                    <div className="fixed inset-0 z-10" onClick={() => setShowCategoryDropdown(false)} />
+                                    <div className="absolute left-0 mt-1.5 w-full md:w-48 rounded-xl border border-gray-200 bg-white shadow-lg z-20 py-1.5 animate-in fade-in slide-in-from-top-1 duration-100">
+                                        {[
+                                            { val: 'ALL', label: 'All Templates' },
+                                            { val: 'MARKETING', label: 'Marketing' },
+                                            { val: 'UTILITY', label: 'Utility' },
+                                            { val: 'AUTHENTICATION', label: 'Authentication' }
+                                        ].map((opt) => (
+                                            <button
+                                                key={opt.val}
+                                                onClick={() => {
+                                                    setActiveTab(opt.val);
+                                                    setShowCategoryDropdown(false);
+                                                }}
+                                                className={`w-full text-left px-4 py-2 text-sm transition-colors ${activeTab === opt.val
+                                                    ? 'bg-green-50 text-green-700 font-semibold'
+                                                    : 'text-gray-700 hover:bg-gray-50'
+                                                    }`}
+                                            >
+                                                {opt.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
+                        {/* Divider */}
+                        <div className="hidden md:block h-6 w-px bg-gray-200" />
+
+                        {/* Status Tabs */}
+                        <div className="flex h-9 w-full rounded-md border border-[#d8dee6] bg-[#f5f6f8] p-0.5 md:w-auto">
+                            {[
+                                { status: 'APPROVED', label: 'Approved', count: approvedCount, icon: CheckCircle, activeColor: 'text-emerald-500', dotColor: 'bg-emerald-500' },
+                                { status: 'PENDING', label: 'Pending', count: pendingCount, icon: Clock, activeColor: 'text-amber-500', dotColor: 'bg-amber-500' },
+                                { status: 'DRAFT', label: 'Draft', count: draftCount, icon: FileText, activeColor: 'text-gray-500', dotColor: 'bg-gray-400' }
+                            ].map((btn) => {
+                                const isSelected = activeStatus === btn.status;
+                                const Icon = btn.icon;
+                                return (
+                                    <button
+                                        key={btn.status}
+                                        onClick={() => setActiveStatus(btn.status)}
+                                        className={`flex flex-1 items-center justify-center gap-1.5 rounded px-2.5 text-[10px] font-semibold transition-all whitespace-nowrap md:flex-initial md:px-3 ${isSelected
+                                            ? 'bg-white text-slate-900 shadow-sm ring-1 ring-[#d8dee6]'
+                                            : 'text-gray-500 hover:text-gray-900'
+                                            }`}
+                                    >
+                                        <Icon className={`h-3.5 w-3.5 ${isSelected ? btn.activeColor : 'text-gray-400'}`} />
+                                        <span className="hidden xs:inline">{btn.label}</span>
+                                        <span className={`px-1 py-0.2 rounded-md text-[9px] font-bold ${isSelected ? 'bg-gray-100 text-gray-700' : 'bg-gray-200/60 text-gray-450'
+                                            }`}>
+                                            {btn.count}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
                         <button
-                            onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
-                            className="inline-flex h-9 w-full items-center justify-between gap-2 rounded-md border border-[#ccd4de] bg-white px-3 text-[12px] font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-[#0b74c9] md:w-auto md:justify-start"
+                            onClick={fetchData}
+                            disabled={isFetching}
+                            className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-[#ccd4de] bg-white px-3 text-[12px] font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-[#0b74c9] disabled:opacity-50 md:w-auto"
                         >
-                            <span className="flex items-center gap-2">
-                                <Filter className="h-4 w-4 text-gray-400" />
-                                {activeTab === 'ALL' ? 'All Templates' : activeTab.charAt(0) + activeTab.slice(1).toLowerCase()}
-                            </span>
-                            <ChevronDown className="h-4 w-4 text-gray-400 ml-1" />
+                            <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+                            Sync Status
                         </button>
-
-                        {showCategoryDropdown && (
-                            <>
-                                <div className="fixed inset-0 z-10" onClick={() => setShowCategoryDropdown(false)} />
-                                <div className="absolute left-0 mt-1.5 w-full md:w-48 rounded-xl border border-gray-200 bg-white shadow-lg z-20 py-1.5 animate-in fade-in slide-in-from-top-1 duration-100">
-                                    {[
-                                        { val: 'ALL', label: 'All Templates' },
-                                        { val: 'MARKETING', label: 'Marketing' },
-                                        { val: 'UTILITY', label: 'Utility' },
-                                        { val: 'AUTHENTICATION', label: 'Authentication' }
-                                    ].map((opt) => (
-                                        <button
-                                            key={opt.val}
-                                            onClick={() => {
-                                                setActiveTab(opt.val);
-                                                setShowCategoryDropdown(false);
-                                            }}
-                                            className={`w-full text-left px-4 py-2 text-sm transition-colors ${activeTab === opt.val
-                                                ? 'bg-green-50 text-green-700 font-semibold'
-                                                : 'text-gray-700 hover:bg-gray-50'
-                                                }`}
-                                        >
-                                            {opt.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </>
-                        )}
-                    </div>
-
-                    {/* Divider */}
-                    <div className="hidden md:block h-6 w-px bg-gray-200" />
-
-                    {/* Status Tabs */}
-                    <div className="flex h-9 w-full rounded-md border border-[#d8dee6] bg-[#f5f6f8] p-0.5 md:w-auto">
-                        {[
-                            { status: 'APPROVED', label: 'Approved', count: approvedCount, icon: CheckCircle, activeColor: 'text-emerald-500', dotColor: 'bg-emerald-500' },
-                            { status: 'PENDING', label: 'Pending', count: pendingCount, icon: Clock, activeColor: 'text-amber-500', dotColor: 'bg-amber-500' },
-                            { status: 'DRAFT', label: 'Draft', count: draftCount, icon: FileText, activeColor: 'text-gray-500', dotColor: 'bg-gray-400' }
-                        ].map((btn) => {
-                            const isSelected = activeStatus === btn.status;
-                            const Icon = btn.icon;
-                            return (
-                                <button
-                                    key={btn.status}
-                                    onClick={() => setActiveStatus(btn.status)}
-                                    className={`flex flex-1 items-center justify-center gap-1 rounded px-2.5 text-[10px] font-semibold transition-all whitespace-nowrap md:flex-initial md:px-3 ${isSelected
-                                        ? 'bg-white text-slate-900 shadow-sm ring-1 ring-[#d8dee6]'
-                                        : 'text-gray-500 hover:text-gray-900'
-                                        }`}
-                                >
-                                    <Icon className={`h-3.5 w-3.5 ${isSelected ? btn.activeColor : 'text-gray-400'}`} />
-                                    <span className="hidden xs:inline">{btn.label}</span>
-                                    <span className={`px-1 py-0.2 rounded-md text-[9px] font-bold ${isSelected ? 'bg-gray-100 text-gray-700' : 'bg-gray-200/60 text-gray-400'
-                                        }`}>
-                                        {btn.count}
-                                    </span>
-                                </button>
-                            );
-                        })}
-                    </div>
-
-                    <button
-                        onClick={fetchData}
-                        disabled={isFetching}
-                        className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-[#ccd4de] bg-white px-3 text-[12px] font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-[#0b74c9] disabled:opacity-50 md:w-auto"
-                    >
-                        <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
-                        Sync Status
-                    </button>
                     </div>
                 </div>
             </div>
@@ -741,109 +810,44 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                 </details>
             )}
 
-            {!loading && (
-                <section className="hidden overflow-hidden rounded-md border border-[#d8dee6] bg-white md:block">
-                    <div className="overflow-x-auto">
-                        <table className="w-full min-w-[920px] border-collapse text-left">
-                            <thead>
-                                <tr className="h-11 border-b border-[#d8dee6] bg-white text-[10.5px] font-semibold text-slate-800">
-                                    <th className="w-[27%] px-4 py-2.5">Template name ↕</th>
-                                    <th className="w-[13%] px-4 py-2.5">Category ↕</th>
-                                    <th className="w-[30%] px-4 py-2.5">Language ↕</th>
-                                    <th className="w-[14%] px-4 py-2.5">Status ↕</th>
-                                    <th className="w-[12%] px-4 py-2.5">Last edited ↓</th>
-                                    <th className="px-4 py-2.5 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {filteredTemplates.length === 0 && (
-                                    <tr>
-                                        <td colSpan={6} className="px-6 py-16 text-center">
-                                            <FileText className="mx-auto h-7 w-7 text-slate-300" />
-                                            <p className="mt-3 text-sm font-semibold text-slate-800">No matching templates</p>
-                                            <p className="mt-1 text-xs text-slate-500">Change the search, category, or status filter.</p>
-                                        </td>
-                                    </tr>
-                                )}
-                                {filteredTemplates.map(template => {
-                                    const body = template.components?.find(component => component.type === 'BODY')?.text || 'No message preview'
-                                    const pendingInfo = template.status === 'PENDING' ? getPendingReviewInfo(template) : null
-                                    const updatedAt = template.approved_at || template.rejected_at || template.submitted_at || template.last_updated
-                                    return (
-                                        <tr key={template.id || `${template.name}-${template.language}`} onClick={() => setSelectedTemplate(template)} className="h-[58px] cursor-pointer border-b border-[#d8dee6] text-[11px] transition last:border-0 hover:bg-[#f4f5f6]">
-                                            <td className="px-4 py-2.5 align-middle">
-                                                <p className="truncate font-medium text-slate-900">{template.name}</p>
-                                            </td>
-                                            <td className="px-4 py-2.5 align-middle">
-                                                <span className="capitalize text-slate-800">{String(template.category || '').toLowerCase()}</span>
-                                            </td>
-                                            <td className="px-4 py-2.5 align-middle">
-                                                <p className="font-medium text-slate-800">{formatTemplateLanguage(template.language)}</p>
-                                                <p className="mt-0.5 max-w-md truncate text-[9.5px] text-slate-500">{body}</p>
-                                            </td>
-                                            <td className="px-4 py-2.5 align-middle">
-                                                <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-medium ${template.status === 'APPROVED' ? 'border-[#a7dfba] bg-[#eaf8ef] text-[#087a3e]' : template.status === 'PENDING' ? 'border-[#c8d0da] bg-[#f3f5f7] text-slate-800' : template.status === 'REJECTED' ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>
-                                                    {template.status === 'APPROVED' ? <CheckCircle className="h-3 w-3" /> : template.status === 'PENDING' ? <Clock className="h-3 w-3" /> : template.status === 'REJECTED' ? <XCircle className="h-3 w-3" /> : <FileText className="h-3 w-3" />}
-                                                    {template.status === 'PENDING' ? 'IN REVIEW' : template.status}
-                                                </span>
-                                                {pendingInfo && <p className="mt-1 text-[8.5px] text-slate-500">{pendingInfo.hours}h in review</p>}
-                                            </td>
-                                            <td className="px-4 py-2.5 align-middle text-[10px] text-slate-600">{formatDateToIST(updatedAt)}</td>
-                                            <td className="px-4 py-2.5 align-middle">
-                                                <div className="flex justify-end gap-1">
-                                                    <button onClick={event => { event.stopPropagation(); setSelectedTemplate(template) }} className="rounded p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600" title="View template"><ExternalLink className="h-3.5 w-3.5" /></button>
-                                                    <button onClick={event => { event.stopPropagation(); handleDelete(template.name) }} className="rounded p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600" title="Delete template"><Trash2 className="h-3.5 w-3.5" /></button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    )
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                    <div className="flex h-9 items-center justify-between border-t border-[#d8dee6] bg-white px-4 text-[9px] text-slate-600">
-                        <span>{filteredTemplates.length} template{filteredTemplates.length === 1 ? '' : 's'} shown · {allTemplatesList.length} total synced</span>
-                        <span>Live from Meta</span>
-                    </div>
-                </section>
-            )}
-
+            {/* Loader / Skeletons */}
             {loading && (
-                <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white md:block">
-                    {[0, 1, 2, 3].map(row => <div key={row} className="flex h-20 animate-pulse items-center gap-6 border-b border-slate-100 px-5 last:border-0"><span className="h-9 w-9 rounded-lg bg-slate-100" /><span className="h-3 w-40 rounded bg-slate-100" /><span className="h-3 w-24 rounded bg-slate-100" /><span className="h-3 flex-1 rounded bg-slate-100" /></div>)}
-                </div>
-            )}
-
-            {loading && (
-                <div data-tour="templates-list" className="grid grid-cols-1 gap-4 md:hidden">
-                    {[0, 1, 2].map(i => (
-                        <div key={i} className="h-[340px] animate-pulse rounded-xl border border-gray-200 bg-white p-5">
-                            <div className="h-10 w-10 rounded-lg bg-gray-100" />
-                            <div className="mt-5 h-4 w-36 rounded bg-gray-100" />
-                            <div className="mt-3 h-16 rounded bg-gray-100" />
-                            <div className="mt-5 h-3 w-full rounded bg-gray-100" />
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {[0, 1, 2, 3, 4, 5].map(i => (
+                        <div key={i} className="h-[340px] animate-pulse rounded-2xl border border-slate-150 bg-white p-5 flex flex-col justify-between">
+                            <div>
+                                <div className="flex items-center gap-3">
+                                    <div className="h-11 w-11 rounded-xl bg-slate-100" />
+                                    <div className="space-y-2 flex-1">
+                                        <div className="h-4 w-28 rounded bg-slate-100" />
+                                        <div className="h-3 w-16 rounded bg-slate-100" />
+                                    </div>
+                                </div>
+                                <div className="mt-5 h-[178px] rounded-xl bg-slate-50 border border-slate-100" />
+                            </div>
+                            <div className="h-8 rounded bg-slate-50 mt-4" />
                         </div>
                     ))}
                 </div>
             )}
 
-            {/* Grid */}
+            {/* Grid Layout */}
             {!loading && (
-                <div className="grid grid-cols-1 gap-4 md:hidden">
+                <div ref={containerRef} className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {filteredTemplates.length === 0 ? (
-                        <div className="col-span-full py-16 px-6 flex flex-col items-center justify-center text-center bg-white border border-dashed border-neutral-250 rounded-3xl max-w-md mx-auto w-full shadow-[0_8px_30px_rgb(0,0,0,0.015)] my-6">
-                            <div className="h-12 w-12 rounded-full bg-neutral-50 flex items-center justify-center border border-neutral-100 mb-4 text-neutral-400 shadow-[inset_0_1px_2px_rgba(0,0,0,0.02)]">
+                        <div className="col-span-full py-16 px-6 flex flex-col items-center justify-center text-center bg-white border border-dashed border-slate-205 rounded-3xl max-w-md mx-auto w-full shadow-2xs my-6">
+                            <div className="h-12 w-12 rounded-full bg-slate-50 flex items-center justify-center border border-slate-100 mb-4 text-slate-405 shadow-[inset_0_1px_2px_rgba(0,0,0,0.02)]">
                                 <FileText className="h-5 w-5 stroke-[1.5]" />
                             </div>
-                            <h3 className="text-sm font-semibold text-neutral-950 tracking-tight">No templates found</h3>
-                            <p className="text-[13px] text-neutral-500 mt-2 max-w-[280px] leading-relaxed font-normal">
+                            <h3 className="text-sm font-semibold text-slate-950 tracking-tight">No templates found</h3>
+                            <p className="text-[12px] text-slate-505 mt-2 max-w-[280px] leading-relaxed font-normal">
                                 {activeStatus === 'APPROVED' && "Templates approved by Meta for marketing, utility, or authentication will appear here."}
                                 {activeStatus === 'PENDING' && "Newly created message templates currently undergoing Meta verification will appear here."}
                                 {activeStatus === 'DRAFT' && "Locally saved drafts and templates rejected by Meta will appear here."}
                             </p>
                             <button
                                 onClick={() => navigate('/templates/new')}
-                                className="mt-6 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98] transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                                className="mt-6 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98] transition-all shadow-sm"
                             >
                                 <Plus className="h-3.5 w-3.5" />
                                 Create template
@@ -856,110 +860,99 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                             const headerComp = template.components?.find(c => c.type === 'HEADER');
                             const footerComp = template.components?.find(c => c.type === 'FOOTER');
                             const pendingInfo = template.status === 'PENDING' ? getPendingReviewInfo(template) : null;
+                            const categoryName = String(template.category || '').toUpperCase();
 
                             return (
                                 <div
                                     key={template.id || template.name}
                                     onClick={() => setSelectedTemplate(template)}
-                                    className="group meta-template-card relative flex cursor-pointer flex-col justify-between overflow-hidden"
+                                    className="template-card-anim group relative flex cursor-pointer flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_2px_4px_rgba(15,23,42,0.015)] hover:shadow-[0_16px_32px_rgba(15,23,42,0.07)] hover:border-blue-300 hover:-translate-y-1 transition-all duration-300 ease-out"
                                 >
                                     <div className="flex flex-1 flex-col p-4 sm:p-5">
-                                        {/* Header row: icon + name + status + delete */}
-                                        <div className="mb-3 flex items-start justify-between gap-3">
+                                        {/* Header row: icon + name + details */}
+                                        <div className="mb-3.5 flex items-start justify-between gap-3">
                                             <div className="flex items-center gap-3 min-w-0">
-                                                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-100 bg-blue-50 text-blue-600">
+                                                <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${categoryName === 'MARKETING' ? 'bg-indigo-50 border-indigo-100 text-indigo-650' :
+                                                    categoryName === 'UTILITY' ? 'bg-emerald-50 border-emerald-100 text-emerald-650' :
+                                                        categoryName === 'AUTHENTICATION' ? 'bg-purple-50 border-purple-100 text-purple-650' :
+                                                            'bg-blue-50 border-blue-100 text-blue-655'
+                                                    }`}>
                                                     <MessageSquareText className="h-5 w-5" strokeWidth={1.8} />
                                                 </div>
                                                 <div className="min-w-0">
-                                                    <h3 className="max-w-[150px] truncate text-sm font-semibold leading-tight text-slate-900 transition-colors group-hover:text-blue-600">{template.name}</h3>
-                                                    <p className="mt-1 flex items-center gap-1.5 text-[10px] font-medium text-slate-400">
-                                                        <span>{template.language}</span>
-                                                        <span className="h-1 w-1 rounded-full bg-slate-300" />
+                                                    <h3 className="truncate text-sm font-bold leading-tight text-slate-800 transition-colors group-hover:text-blue-600" title={template.name}>
+                                                        {template.name}
+                                                    </h3>
+                                                    <p className="mt-1 flex flex-wrap items-center gap-1 text-[10px] font-semibold text-slate-400">
                                                         <span className="capitalize">{String(template.category || '').toLowerCase()}</span>
+                                                        <span className="h-1 w-1 rounded-full bg-slate-300" />
+                                                        <span>{formatTemplateLanguage(template.language)}</span>
                                                     </p>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-1.5 shrink-0">
-                                                <span className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[9px] font-semibold uppercase tracking-wide ${template.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                                                    template.status === 'PENDING' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                                                        template.status === 'DRAFT' ? 'bg-gray-50 text-gray-600 border-gray-200' :
-                                                            'bg-rose-50 text-rose-700 border-rose-100'
-                                                    }`}>
-                                                    {template.status === 'APPROVED' && <CheckCircle className="h-3 w-3 shrink-0 text-emerald-600" />}
-                                                    {template.status === 'PENDING' && (
-                                                        <Clock className="h-3 w-3" />
-                                                    )}
-                                                    {template.status === 'DRAFT' && <FileText className="h-3 w-3 shrink-0" />}
-                                                    {template.status === 'REJECTED' && <XCircle className="h-3 w-3 shrink-0 text-rose-600" />}
-                                                    <span>{template.status}</span>
-                                                </span>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); handleDelete(template.name); }}
-                                                    className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 transition hover:bg-red-50 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-200"
-                                                    title="Delete template"
-                                                    aria-label={`Delete ${template.name}`}
-                                                >
-                                                    <Trash2 className="h-4 w-4 shrink-0" />
-                                                </button>
-                                            </div>
                                         </div>
 
+                                        {/* Review Warning if Pending */}
                                         {pendingInfo && (
                                             <div
                                                 title={pendingInfo.hint}
-                                                className={`mb-3 flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-[10px] ${pendingInfo.overdue ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700'}`}
+                                                className={`mb-3.5 flex items-center justify-between gap-3 rounded-xl px-3.5 py-2 text-[10px] ${pendingInfo.overdue ? 'bg-rose-50 text-rose-700 border border-rose-100' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}
                                             >
-                                                <span className="flex min-w-0 items-center gap-2 font-medium">
+                                                <span className="flex min-w-0 items-center gap-2 font-semibold">
                                                     <span className="relative flex h-2 w-2 shrink-0">
                                                         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-60" />
-                                                        <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
+                                                        <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-505" />
                                                     </span>
                                                     <span className="truncate">{pendingInfo.overdue ? 'Review delayed' : 'Meta review in progress'}</span>
                                                 </span>
-                                                <span className="shrink-0 font-semibold">{pendingInfo.hours}h</span>
+                                                <span className="shrink-0 font-bold">{pendingInfo.hours}h</span>
                                             </div>
                                         )}
 
                                         {/* WhatsApp Mock Chat Bubble Preview */}
-                                        <div className="wa-template-canvas relative mb-0 flex min-h-[190px] flex-1 flex-col justify-between overflow-hidden rounded-xl border border-[#ded8cf] p-3 shadow-inner">
-                                            <div className="absolute inset-0 opacity-[0.08] bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] pointer-events-none" />
+                                        <div
+                                            className="relative mb-0 flex min-h-[196px] flex-1 flex-col justify-center overflow-hidden rounded-xl border border-[#d2c9bd] p-3.5 shadow-inner"
+                                            style={{
+                                                backgroundColor: '#efebe4',
+                                                backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.4) 8%, transparent 8%), radial-gradient(rgba(255, 255, 255, 0.4) 8%, transparent 8%)',
+                                                backgroundSize: '36px 36px',
+                                                backgroundPosition: '0 0, 18px 18px'
+                                            }}
+                                        >
+                                            {/* Chat Sent Bubble - White Card */}
+                                            <div className="relative z-10 w-full rounded-2xl bg-white p-3.5 pb-2 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-[#e4ded5] flex flex-col justify-between">
+                                                <div>
+                                                    {headerComp?.format === 'TEXT' && (
+                                                        <p className="text-[10px] font-bold text-gray-900 mb-1.5 leading-tight border-b border-gray-100 pb-1">{headerComp.text}</p>
+                                                    )}
+                                                    {(headerComp?.format === 'IMAGE' || headerComp?.format === 'VIDEO') && (
+                                                        <div className="mb-2 h-16 w-full rounded bg-gray-50 flex items-center justify-center text-gray-400 border border-gray-100">
+                                                            {headerComp?.format === 'IMAGE' ? <ImageIcon className="h-4.5 w-4.5 text-gray-400" /> : <Video className="h-4.5 w-4.5 text-gray-400" />}
+                                                        </div>
+                                                    )}
 
-                                            <div className="relative z-10 max-w-[94%] self-start rounded-[8px_8px_8px_2px] bg-white p-3 pb-1.5 shadow-[0_1px_2px_rgba(15,23,42,0.12)]">
-                                                {headerComp?.format === 'TEXT' && (
-                                                    <p className="text-[10px] font-extrabold text-gray-900 mb-1 leading-tight border-b border-gray-100 pb-0.5">{headerComp.text}</p>
-                                                )}
-                                                {headerComp?.format === 'IMAGE' && (
-                                                    <div className="mb-1.5 h-16 w-full rounded bg-gray-50 flex items-center justify-center text-gray-400 border border-gray-100" style={{ borderRadius: '4px' }}>
-                                                        <ImageIcon className="h-4 w-4 text-gray-455" />
-                                                    </div>
-                                                )}
-                                                {headerComp?.format === 'VIDEO' && (
-                                                    <div className="mb-1.5 h-16 w-full rounded bg-gray-50 flex items-center justify-center text-gray-400 border border-gray-100" style={{ borderRadius: '4px' }}>
-                                                        <Video className="h-4 w-4 text-gray-455" />
-                                                    </div>
-                                                )}
+                                                    <p className="whitespace-pre-line text-[11px] font-medium leading-[1.55] text-slate-800">
+                                                        {renderTemplateText(bodyComp?.text || 'No preview available')}
+                                                    </p>
 
-                                                <p className="whitespace-pre-line text-[11px] font-medium leading-[1.55] text-slate-800">
-                                                    {renderTemplateText(bodyComp?.text || 'No preview available')}
-                                                </p>
+                                                    {footerComp?.text && (
+                                                        <p className="mt-1.5 text-[8.5px] font-medium text-slate-400 leading-none">{footerComp.text}</p>
+                                                    )}
+                                                </div>
 
-                                                {footerComp?.text && (
-                                                    <p className="mt-1.5 text-[8px] font-medium text-slate-400">{footerComp.text}</p>
-                                                )}
-
-                                                <div className="flex items-center justify-end mt-1 gap-0.5 leading-none">
-                                                    <span className="text-[7.5px] text-gray-450 font-medium">
+                                                <div className="flex items-center justify-end mt-2 gap-1 leading-none self-end">
+                                                    <span className="text-[7.5px] text-gray-400 font-semibold">
                                                         {formatTimeToIST(template.approved_at || template.submitted_at || template.last_updated)}
                                                     </span>
-                                                    <CheckCheck className={`h-3 w-3 ${template.status === 'APPROVED' ? 'text-sky-500' : 'text-slate-400'}`} />
+                                                    <CheckCheck className={`h-3.5 w-3.5 ${template.status === 'APPROVED' ? 'text-sky-500' : 'text-slate-450'}`} />
                                                 </div>
                                             </div>
 
                                             {/* Chat Buttons Mock */}
                                             {buttonsComp?.buttons?.length > 0 && (
-                                                <div className="mt-2 space-y-1 w-[95%] self-start relative z-10">
+                                                <div className="mt-2.5 space-y-1.5 w-full relative z-10">
                                                     {buttonsComp.buttons.slice(0, 2).map((btn, i) => (
-                                                        <div key={i} className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-100 bg-white py-1.5 text-[9px] font-semibold text-blue-600 shadow-sm">
+                                                        <div key={i} className="flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white py-2 text-[9.5px] font-bold text-blue-600 shadow-3xs transition-all hover:bg-slate-50">
                                                             {btn.type === 'URL' ? <ExternalLink className="h-3 w-3 shrink-0" /> : btn.type === 'PHONE_NUMBER' ? <Phone className="h-3 w-3 shrink-0" /> : <MessageSquare className="h-3 w-3 shrink-0" />}
                                                             <span className="truncate">{btn.text}</span>
                                                         </div>
@@ -969,29 +962,65 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                                         </div>
                                     </div>
 
-                                    {/* Footer — always at bottom */}
-                                    <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/70 px-4 py-3 text-[10px] sm:px-5">
-                                        <span className="flex min-w-0 items-center gap-1.5 text-slate-500">
-                                            <CalendarDays className="h-3.5 w-3.5 shrink-0" />
-                                            <span className="truncate">
-                                            {template.status === 'APPROVED' 
-                                                ? `Approved ${formatDateToIST(template.approved_at || template.last_updated)}` 
-                                                : template.status === 'PENDING' 
-                                                ? `Sent ${formatDateToIST(template.submitted_at || template.last_updated)}`
-                                                : template.status === 'REJECTED'
-                                                ? `Rejected ${formatDateToIST(template.rejected_at || template.last_updated)}`
-                                                : `Updated ${formatDateToIST(template.last_updated)}`
-                                            }
+                                    {/* Card Footer action bar */}
+                                    <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/50 px-4 py-3.5 text-[10px] sm:px-5">
+                                        <span className="flex min-w-0 items-center gap-1.5 text-slate-500 font-medium">
+                                            <CalendarDays className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                            <span className="truncate text-[10px]">
+                                                {template.status === 'APPROVED'
+                                                    ? `Approved ${formatDateToIST(template.approved_at || template.last_updated)}`
+                                                    : template.status === 'PENDING'
+                                                        ? `Sent ${formatDateToIST(template.submitted_at || template.last_updated)}`
+                                                        : template.status === 'REJECTED'
+                                                            ? `Rejected ${formatDateToIST(template.rejected_at || template.last_updated)}`
+                                                            : `Updated ${formatDateToIST(template.last_updated)}`
+                                                }
                                             </span>
                                         </span>
-                                        <span className="flex shrink-0 items-center gap-1 font-semibold text-blue-600 opacity-0 transition-opacity group-hover:opacity-100">
-                                            View <ArrowRight className="h-3.5 w-3.5" />
-                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            {/* Status Badge */}
+                                            <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${template.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                                template.status === 'PENDING' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                                    template.status === 'DRAFT' ? 'bg-gray-50 text-gray-650 border-gray-250' :
+                                                        'bg-rose-50 text-rose-700 border-rose-100'
+                                                }`}>
+                                                {template.status === 'APPROVED' && <CheckCircle className="h-3 w-3 shrink-0 text-emerald-600" />}
+                                                {template.status === 'PENDING' && <Clock className="h-3 w-3 shrink-0 text-amber-600" />}
+                                                {template.status === 'DRAFT' && <FileText className="h-3 w-3 shrink-0 text-gray-505" />}
+                                                {template.status === 'REJECTED' && <XCircle className="h-3 w-3 shrink-0 text-rose-600" />}
+                                                <span>{template.status === 'PENDING' ? 'IN REVIEW' : template.status}</span>
+                                            </span>
+
+                                            {/* Action group */}
+                                            <div className="flex items-center gap-1">
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleDelete(template.name); }}
+                                                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 hover:text-red-600 hover:bg-red-50/50 hover:border-red-200 transition-colors"
+                                                    title="Delete template"
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             );
                         })
                     )}
+                </div>
+            )}
+
+            {/* Footer sync stats */}
+            {!loading && filteredTemplates.length > 0 && (
+                <div className="mt-6 flex h-10 items-center justify-between border-t border-slate-200 bg-slate-50/50 rounded-xl px-5 text-[10px] font-semibold text-slate-500 shadow-2xs border">
+                    <span>{filteredTemplates.length} template{filteredTemplates.length === 1 ? '' : 's'} shown · {allTemplatesList.length} total synced</span>
+                    <span className="flex items-center gap-1.5">
+                        <span className="relative flex h-2 w-2 shrink-0">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-450 opacity-60" />
+                            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                        </span>
+                        <span>Live from Meta</span>
+                    </span>
                 </div>
             )}
 
@@ -1239,7 +1268,7 @@ function CreateTemplateModal({ isOpen, onClose, onSuccess, apiCall, initialData 
         return button.type !== 'PHONE_NUMBER' || /^\+[1-9]\d{7,14}$/.test(button.phone_number)
     })
     const libraryInputsComplete = libraryButtonInputs.every(input => input.type !== 'URL' || /^https?:\/\/.+/i.test(input.url?.base_url || ''))
-    const canSubmit = normalizedName && /^[a-z0-9_]+$/.test(normalizedName) && (isOfficialLibrary ? libraryInputsComplete : (data.bodyText.trim() && !hasPlaceholderCopy && bodyLength <= 1024 && samplesComplete && buttonsComplete && !(data.headerType === 'TEXT' && !data.headerText.trim()) && !((data.headerType === 'IMAGE' || data.headerType === 'VIDEO') && !file)))
+    const canSubmit = normalizedName && /^[a-z0-9_]+$/.test(normalizedName) && (isOfficialLibrary ? libraryInputsComplete : (data.bodyText.trim() && !hasPlaceholderCopy && bodyLength <= 1024 && data.headerText.length <= 60 && data.footerText.length <= 60 && data.buttons.every(b => (b.text || '').length <= 25) && samplesComplete && buttonsComplete && !(data.headerType === 'TEXT' && !data.headerText.trim()) && !((data.headerType === 'IMAGE' || data.headerType === 'VIDEO') && !file)))
 
     useEffect(() => {
         if (initialData && isOpen) {
@@ -1581,14 +1610,19 @@ function CreateTemplateModal({ isOpen, onClose, onSuccess, apiCall, initialData 
 
                             {data.headerType === 'TEXT' ? (
                                 <>
-                                    <input
-                                        type="text"
-                                        disabled={isPreApproved}
-                                        className={`${fieldClass} mt-3 ${isPreApproved ? 'opacity-60 bg-gray-50' : ''}`}
-                                        placeholder="Short headline for the message"
-                                        value={data.headerText}
-                                        onChange={e => setData({ ...data, headerText: e.target.value })}
-                                    />
+                                    <div className="relative mt-3">
+                                        <input
+                                            type="text"
+                                            disabled={isPreApproved}
+                                            className={`${fieldClass} pr-14 ${isPreApproved ? 'opacity-60 bg-gray-50' : ''} ${data.headerText.length > 60 ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20' : ''}`}
+                                            placeholder="Short headline for the message"
+                                            value={data.headerText}
+                                            onChange={e => setData({ ...data, headerText: e.target.value })}
+                                        />
+                                        <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono select-none ${data.headerText.length > 60 ? 'text-red-600 font-semibold' : 'text-gray-400'}`}>
+                                            {data.headerText.length}/60
+                                        </span>
+                                    </div>
                                     {headerVariables.length > 0 && (
                                         <input className={`${fieldClass} mt-2`} placeholder="Real header sample, e.g. Order 10834" value={headerSample} onChange={e => setHeaderSample(e.target.value)} />
                                     )}
@@ -1636,7 +1670,7 @@ function CreateTemplateModal({ isOpen, onClose, onSuccess, apiCall, initialData 
                                 rows={5}
                                 placeholder="Hello {{1}}, your order is ready!"
                                 value={data.bodyText}
-                                maxLength={1100}
+                                maxLength={1024}
                                 onChange={e => setData({ ...data, bodyText: e.target.value })}
                             />
                             {hasPlaceholderCopy && (
@@ -1669,8 +1703,19 @@ function CreateTemplateModal({ isOpen, onClose, onSuccess, apiCall, initialData 
 
                         <section className="space-y-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
                             <div>
-                                <label className="mb-1.5 block text-sm font-semibold text-gray-800">Footer <span className="font-normal text-gray-400">Optional</span></label>
-                                <input disabled={isPreApproved} className={`${fieldClass} ${isPreApproved ? 'opacity-60 bg-gray-50' : ''}`} placeholder="Reply STOP to unsubscribe" value={data.footerText} onChange={e => setData({ ...data, footerText: e.target.value })} />
+                                <label className="mb-1.5 block text-sm font-semibold text-gray-800">Footer <span className="font-normal text-gray-400">· Optional</span></label>
+                                <div className="relative">
+                                    <input
+                                        disabled={isPreApproved}
+                                        className={`${fieldClass} pr-14 ${isPreApproved ? 'opacity-60 bg-gray-50' : ''} ${data.footerText.length > 60 ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20' : ''}`}
+                                        placeholder="Reply STOP to unsubscribe"
+                                        value={data.footerText}
+                                        onChange={e => setData({ ...data, footerText: e.target.value })}
+                                    />
+                                    <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono select-none ${data.footerText.length > 60 ? 'text-red-600 font-semibold' : 'text-gray-400'}`}>
+                                        {data.footerText.length}/60
+                                    </span>
+                                </div>
                             </div>
 
                             <div>
@@ -1696,7 +1741,18 @@ function CreateTemplateModal({ isOpen, onClose, onSuccess, apiCall, initialData 
                                                     className="py-2"
                                                     disabled={isPreApproved}
                                                 />
-                                                <input disabled={isPreApproved} className={`${fieldClass} py-2 ${isPreApproved ? 'opacity-60 bg-gray-50' : ''}`} placeholder="Button text" value={btn.text} onChange={e => updateButton(i, { text: e.target.value })} />
+                                                <div className="relative">
+                                                    <input
+                                                        disabled={isPreApproved}
+                                                        className={`${fieldClass} py-2 pr-12 ${isPreApproved ? 'opacity-60 bg-gray-50' : ''} ${(btn.text || '').length > 25 ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20' : ''}`}
+                                                        placeholder="Button text"
+                                                        value={btn.text}
+                                                        onChange={e => updateButton(i, { text: e.target.value })}
+                                                    />
+                                                    <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono select-none ${(btn.text || '').length > 25 ? 'text-red-600 font-semibold' : 'text-gray-400'}`}>
+                                                        {(btn.text || '').length}/25
+                                                    </span>
+                                                </div>
                                                 <button type="button" disabled={isPreApproved} onClick={() => setData(prev => ({ ...prev, buttons: prev.buttons.filter((_, idx) => idx !== i) }))} className="flex h-10 w-10 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 disabled:cursor-not-allowed">
                                                     <Trash2 className="h-4 w-4" />
                                                 </button>
@@ -1850,21 +1906,21 @@ function CreateTemplateModal({ isOpen, onClose, onSuccess, apiCall, initialData 
             <div className="sticky bottom-0 z-10 -mx-1 flex flex-col-reverse gap-3 bg-white/95 px-1 pt-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
                 <p className="hidden text-xs text-gray-500 sm:block">Meta usually reviews submitted templates within 24 hours.</p>
                 <div className="flex flex-col-reverse gap-2 sm:flex-row">
-                <button
-                    onClick={closeModal}
-                    disabled={isSubmitting}
-                    className="h-10 rounded-full border border-gray-300 bg-white px-5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                >
-                    Cancel
-                </button>
-                <button
-                    disabled={isSubmitting || !canSubmit}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#0070d1] px-5 text-sm font-semibold text-white shadow-sm hover:bg-[#0064b7] disabled:cursor-not-allowed disabled:opacity-50"
-                    onClick={handleSubmit}
-                >
-                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                    {isSubmitting ? 'Submitting...' : 'Submit for review'}
-                </button>
+                    <button
+                        onClick={closeModal}
+                        disabled={isSubmitting}
+                        className="h-10 rounded-full border border-gray-300 bg-white px-5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        disabled={isSubmitting || !canSubmit}
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#0070d1] px-5 text-sm font-semibold text-white shadow-sm hover:bg-[#0064b7] disabled:cursor-not-allowed disabled:opacity-50"
+                        onClick={handleSubmit}
+                    >
+                        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                        {isSubmitting ? 'Submitting...' : 'Submit for review'}
+                    </button>
                 </div>
             </div>
         </Modal>

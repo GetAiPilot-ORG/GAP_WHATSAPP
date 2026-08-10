@@ -2,6 +2,7 @@ import { X, Save } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { FLOW_TEMPLATES } from './flowTemplates';
+import { notify } from '../../services/notificationService';
 
 export default function NodeConfigPanel({ node, onClose, onSave }) {
     const [config, setConfig] = useState(node?.data?.config || {});
@@ -1071,37 +1072,200 @@ function WhatsAppFlowConfig({ config, updateConfig }) {
 }
 
 function AppointmentConfig({ config, updateConfig }) {
+    const getApiUrl = () => {
+        if (import.meta.env.VITE_BACKEND_URL) return import.meta.env.VITE_BACKEND_URL;
+        if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+            return 'http://localhost:3001';
+        }
+        return 'https://wb.getaipilot.in';
+    };
+    const API_URL = getApiUrl();
+    const auth = useAuth() || {};
+    const [googleStatus, setGoogleStatus] = useState({ connected: false, connectedEmail: '' });
+    const [loadingGoogle, setLoadingGoogle] = useState(false);
+
+    const getOrgId = () => {
+        return auth.memberProfile?.organization_id || auth.user?.organization_id || auth.user?.id || localStorage.getItem('organization_id') || localStorage.getItem('org_id') || '';
+    };
+
+    useEffect(() => {
+        const checkGoogleStatus = async () => {
+            try {
+                const orgId = getOrgId();
+                const res = await fetch(`${API_URL}/api/integrations/google/status?organization_id=${orgId}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setGoogleStatus(data);
+                }
+            } catch (e) {
+                console.error('Failed to check Google status:', e);
+            }
+        };
+
+        checkGoogleStatus();
+
+        const handleMessage = (event) => {
+            if (event.data?.type === 'GOOGLE_AUTH_SUCCESS') {
+                setGoogleStatus({
+                    connected: true,
+                    connectedEmail: event.data.connectedEmail || 'Google Account'
+                });
+            }
+        };
+
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
+    }, [auth.memberProfile, auth.user]);
+
+    const handleConnectGoogle = async () => {
+        try {
+            setLoadingGoogle(true);
+            const orgId = getOrgId();
+            const res = await fetch(`${API_URL}/api/integrations/google/auth-url?organization_id=${orgId}`);
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || 'Failed to get auth URL');
+            }
+            const { url } = await res.json();
+
+            const width = 500;
+            const height = 650;
+            const left = window.screenX + (window.outerWidth - width) / 2;
+            const top = window.screenY + (window.outerHeight - height) / 2;
+
+            window.open(
+                url,
+                'GoogleAuthPopup',
+                `width=${width},height=${height},left=${left},top=${top},status=no,toolbar=no,menubar=no`
+            );
+        } catch (e) {
+            console.error('Failed to launch Google auth popup:', e);
+            notify.error(e.message || 'Failed to launch Google Calendar connection. Ensure server environment variables are set.');
+        } finally {
+            setLoadingGoogle(false);
+        }
+    };
+
     return (
-        <div className="space-y-4">
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Appointment Type</label>
-                <input
-                    type="text"
-                    value={config.type || ''}
-                    onChange={(e) => updateConfig('type', e.target.value)}
-                    placeholder="Demo call"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
+        <div className="space-y-6">
+            {/* Section 1: Invitation Message */}
+            <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-100 space-y-3">
+                <h3 className="text-xs font-bold text-blue-800 uppercase tracking-wider">Section 1: Invitation Message</h3>
+                <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1.5">Message Text</label>
+                    <textarea
+                        value={config.message || ''}
+                        onChange={(e) => updateConfig('message', e.target.value)}
+                        placeholder="Please select a date for your appointment from the options below:"
+                        rows={3}
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                    />
+                    <p className="mt-1 text-[10px] text-gray-500">This text initiates the booking process and accompanies the list of available dates.</p>
+                </div>
             </div>
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Available Slots</label>
-                <textarea
-                    value={config.slots || ''}
-                    onChange={(e) => updateConfig('slots', e.target.value)}
-                    placeholder="Mon-Fri, 10 AM - 6 PM"
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
+
+            {/* Section 2: Input Settings */}
+            <div className="p-4 bg-gray-50/70 rounded-xl border border-gray-200 space-y-4">
+                <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider">Section 2: Booking Settings</h3>
+                <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1.5">Appointment Type</label>
+                    <input
+                        type="text"
+                        value={config.type || ''}
+                        onChange={(e) => updateConfig('type', e.target.value)}
+                        placeholder="Demo call"
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                    />
+                </div>
+                <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1.5">Available Slots</label>
+                    <textarea
+                        value={config.slots || ''}
+                        onChange={(e) => updateConfig('slots', e.target.value)}
+                        placeholder="Mon-Fri, 10 AM - 6 PM"
+                        rows={2}
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                    />
+                    <p className="mt-1 text-[10px] text-gray-500">Specify days and time range (e.g. Mon-Fri, 10 AM - 6 PM).</p>
+                </div>
+
+                {/* Google Calendar Sync Section */}
+                <div className="pt-3 border-t border-gray-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                            <span>🗓️ Google Calendar Sync</span>
+                        </label>
+                        <input
+                            type="checkbox"
+                            checked={!!config.googleSyncEnabled}
+                            onChange={(e) => updateConfig('googleSyncEnabled', e.target.checked)}
+                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        />
+                    </div>
+
+                    {config.googleSyncEnabled && (
+                        <div className="space-y-3 p-3 bg-white rounded-lg border border-purple-200 text-xs">
+                            {googleStatus.connected ? (
+                                <div className="flex items-center justify-between bg-emerald-50 text-emerald-800 p-2.5 rounded-md border border-emerald-200">
+                                    <div className="flex items-center gap-2 truncate">
+                                        <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0 animate-pulse" />
+                                        <span className="font-medium truncate">{googleStatus.connectedEmail}</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleConnectGoogle}
+                                        className="text-[10px] text-emerald-700 underline font-semibold shrink-0"
+                                    >
+                                        Change
+                                    </button>
+                                </div>
+                            ) : (
+                                <div>
+                                    <button
+                                        type="button"
+                                        onClick={handleConnectGoogle}
+                                        disabled={loadingGoogle}
+                                        className="w-full flex items-center justify-center gap-2 px-3 py-2 font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg shadow-sm transition-all cursor-pointer"
+                                    >
+                                        <span>🔗</span>
+                                        <span>{loadingGoogle ? 'Connecting...' : 'Connect Google Calendar'}</span>
+                                    </button>
+                                    <p className="mt-1 text-[10px] text-gray-500 text-center">Opens a secure Google OAuth popup window.</p>
+                                </div>
+                            )}
+
+                            <div>
+                                <label className="block text-[11px] font-medium text-gray-700 mb-1">Buffer Padding</label>
+                                <select
+                                    value={config.googleBufferMinutes || '30'}
+                                    onChange={(e) => updateConfig('googleBufferMinutes', e.target.value)}
+                                    className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 bg-white"
+                                >
+                                    <option value="15">15 Minutes Buffer</option>
+                                    <option value="30">30 Minutes Buffer</option>
+                                    <option value="60">60 Minutes Buffer</option>
+                                </select>
+                                <p className="mt-1 text-[10px] text-gray-500">Filters out any slots within this buffer window of existing events.</p>
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Confirmation Message</label>
-                <textarea
-                    value={config.confirmationMessage || ''}
-                    onChange={(e) => updateConfig('confirmationMessage', e.target.value)}
-                    placeholder="Thanks {{name}}. Our team will confirm your appointment shortly."
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
+
+            {/* Section 3: Confirmation Message */}
+            <div className="p-4 bg-teal-50/50 rounded-xl border border-teal-100 space-y-3">
+                <h3 className="text-xs font-bold text-teal-800 uppercase tracking-wider">Section 3: Confirmation Message</h3>
+                <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1.5">Confirmation Text</label>
+                    <textarea
+                        value={config.confirmationMessage || ''}
+                        onChange={(e) => updateConfig('confirmationMessage', e.target.value)}
+                        placeholder="Thanks {{name}}. Your {{type}} is scheduled for {{appointment_datetime}}."
+                        rows={3}
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                    />
+                    <p className="mt-1 text-[10px] text-gray-500">Sent after a valid date and time slot is selected. You can use variables like `{"{{appointment_datetime}}"}`.</p>
+                </div>
             </div>
         </div>
     );

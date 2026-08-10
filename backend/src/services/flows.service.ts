@@ -1,7 +1,9 @@
+import fs from 'fs';
 import { supabase } from '../config/supabase.js';
 import { isUuid } from '../utils/format.js';
 import { getBotAgentReply } from './ai.service.js';
 import { encryptFormToken } from '../utils/crypto.js';
+import { fetchGoogleBusySlots, createGoogleCalendarEvent, deleteGoogleCalendarEvent, getValidAccessToken } from './googleCalendar.service.js';
 import crypto from 'crypto';
 
 function extractFormSlug(urlStr: string): string {
@@ -67,7 +69,7 @@ function processButtonConfig(
         issued_at: new Date().toISOString(),
         expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
       };
-      
+
       const token = encryptFormToken(JSON.stringify(payload));
       btnUrl = appendFormToken(b.url || '', token);
       btnType = 'url';
@@ -100,13 +102,16 @@ export type FlowEngineResult = {
     fileName?: string | null;
   }>;
   interactive?: {
-    type: 'button' | 'cta_url';
+    type: 'button' | 'cta_url' | 'list';
     body: string;
     footer?: string;
-    buttons: Array<{ id: string; text: string; type?: 'reply' | 'url' | 'phone'; url?: string; phone?: string }>;
+    buttons?: Array<{ id: string; text: string; type?: 'reply' | 'url' | 'phone'; url?: string; phone?: string }>;
+    buttonText?: string;
+    sections?: any[];
   };
   handoff?: boolean;
   flow_id?: string | null;
+  flow_name?: string | null;
   flow_version_id?: string | null;
   flow_session_id?: string | null;
   flow_run_id?: string | null;
@@ -362,6 +367,191 @@ export function validateFlowDefinition(flow: any) {
   return { valid: errors.length === 0, errors };
 }
 
+function generateDateSections(slotsConfigStr: string = "") {
+  const sections = [];
+  const rows = [];
+  const slotsConfig = String(slotsConfigStr).toLowerCase();
+  const excludeWeekends = slotsConfig.includes("mon-fri") || slotsConfig.includes("weekday");
+
+  let count = 0;
+  let dayOffset = 0;
+
+  while (count < 7 && dayOffset < 15) {
+    const d = new Date();
+    d.setDate(d.getDate() + dayOffset);
+    const dayOfWeek = d.getDay(); // 0 is Sunday, 6 is Saturday
+
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    if (excludeWeekends && isWeekend) {
+      dayOffset++;
+      continue;
+    }
+
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const dateStr = `${yyyy}-${mm}-${dd}`;
+
+    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const dayName = days[dayOfWeek];
+    const monthName = months[d.getMonth()];
+
+    rows.push({
+      id: `date_${dateStr}`,
+      title: `${dayName.slice(0, 3)}, ${monthName} ${d.getDate()}`,
+      description: `Select ${dayName}`,
+    });
+
+    count++;
+    dayOffset++;
+  }
+
+  sections.push({
+    title: "Available Dates",
+    rows,
+  });
+
+  return sections;
+}
+
+async function generateTimeSections(
+  dateStr: string,
+  slotsConfigStr: string = "",
+  organizationId?: string,
+  nodeConfig?: any
+) {
+  const rows = [];
+  const slotsConfig = String(slotsConfigStr).toLowerCase();
+
+  let startHour = 10;
+  let endHour = 18;
+
+  const timeRegex = /(\d+)\s*(am|pm)\s*-\s*(\d+)\s*(am|pm)/i;
+  const match = slotsConfig.match(timeRegex);
+  if (match) {
+    let sH = parseInt(match[1]);
+    const sM = match[2].toLowerCase();
+    let eH = parseInt(match[3]);
+    const eM = match[4].toLowerCase();
+
+    if (sM === "pm" && sH < 12) sH += 12;
+    if (sM === "am" && sH === 12) sH = 0;
+    if (eM === "pm" && eH < 12) eH += 12;
+    if (eM === "am" && eH === 12) eH = 0;
+
+    startHour = sH;
+    endHour = eH;
+  }
+
+  // Fetch Database Booked Slots for this Organization on dateStr
+  const bookedSlotIds = new Set<string>();
+  if (organizationId) {
+    const { data: existingSessions } = await supabase
+      .from("w_flow_sessions")
+      .select("state_data")
+      .eq("organization_id", organizationId);
+
+    if (existingSessions) {
+      for (const sessionRecord of existingSessions) {
+        const sData = sessionRecord.state_data || {};
+        if (
+          sData.appointment_date === dateStr &&
+          (sData.appointment_time || sData.selected_time_raw) &&
+          sData.appointment_status !== "cancelled"
+        ) {
+          bookedSlotIds.add(sData.appointment_time || sData.selected_time_raw);
+        }
+      }
+    }
+  }
+
+  // Fetch Google Busy Slots if enabled
+  let busySlots: { start: string; end: string }[] = [];
+  if (organizationId && (nodeConfig?.googleSyncEnabled === true || String(nodeConfig?.googleSyncEnabled) === "true")) {
+    const timeMin = `${dateStr}T00:00:00Z`;
+    const timeMax = `${dateStr}T23:59:59Z`;
+    busySlots = await fetchGoogleBusySlots(organizationId, timeMin, timeMax);
+  }
+
+  const selectedDate = new Date(dateStr + "T00:00:00");
+  const today = new Date();
+  const isToday = selectedDate.toDateString() === today.toDateString();
+
+  // Dynamic Slot Step & Buffer Padding from Flow Node Configuration
+  const stepMins = parseInt(String(nodeConfig?.slotDurationMinutes || nodeConfig?.googleSlotDurationMinutes || 60), 10) || 60;
+  const bufferMins = parseInt(String(nodeConfig?.googleBufferMinutes || nodeConfig?.bufferMinutes || 30), 10) || 0;
+  const bufferMs = bufferMins * 60 * 1000;
+
+  const totalMinStart = startHour * 60;
+  const totalMinEnd = endHour * 60;
+
+  for (let currentMin = totalMinStart; currentMin < totalMinEnd; currentMin += stepMins) {
+    const hr = Math.floor(currentMin / 60);
+    const min = currentMin % 60;
+    const idStr = `${String(hr).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+
+    // 1. Exclude if already booked by another user in Database
+    if (bookedSlotIds.has(idStr)) {
+      continue;
+    }
+
+    // Dynamic slot start and end timestamp in milliseconds
+    const slotStartTime = new Date(`${dateStr}T${idStr}:00Z`).getTime();
+    const slotEndTime = slotStartTime + stepMins * 60 * 1000;
+
+    if (isToday) {
+      const slotTimeLocal = new Date(`${dateStr}T${idStr}:00`);
+      const minAllowed = new Date(today.getTime() + 15 * 60 * 1000);
+      if (slotTimeLocal < minAllowed) {
+        continue;
+      }
+    }
+
+    // 2. Exclude if Google Busy Conflict (using dynamic buffer padding from flow node config)
+    if (busySlots.length > 0) {
+      const hasConflict = busySlots.some((b) => {
+        const bStart = new Date(b.start).getTime() - bufferMs;
+        const bEnd = new Date(b.end).getTime() + bufferMs;
+        return slotStartTime < bEnd && slotEndTime > bStart;
+      });
+
+      if (hasConflict) {
+        continue;
+      }
+    }
+
+    const displayHr = hr > 12 ? hr - 12 : hr === 0 ? 12 : hr;
+    const ampm = hr >= 12 ? "PM" : "AM";
+    const minStr = String(min).padStart(2, "0");
+    const timeStr = `${String(displayHr).padStart(2, "0")}:${minStr} ${ampm}`;
+
+    const endCurrentMin = currentMin + stepMins;
+    const endHr = Math.floor(endCurrentMin / 60);
+    const endMin = endCurrentMin % 60;
+    const displayEndHr = endHr > 12 ? endHr - 12 : endHr === 0 ? 12 : endHr;
+    const endAmpm = endHr >= 12 ? "PM" : "AM";
+    const endMinStr = String(endMin).padStart(2, "0");
+    const endTimeStr = `${String(displayEndHr).padStart(2, "0")}:${endMinStr} ${endAmpm}`;
+
+    const labelDuration = stepMins >= 60 ? `${stepMins / 60} hr` : `${stepMins} min`;
+
+    rows.push({
+      id: `time_${idStr}`,
+      title: timeStr,
+      description: `${labelDuration} slot (${timeStr} - ${endTimeStr})`,
+    });
+  }
+
+  // Cap at 10 rows maximum to comply with WhatsApp Cloud API interactive list limits
+  const limitedRows = rows.slice(0, 10);
+
+  return [{
+    title: "Available Time Slots",
+    rows: limitedRows,
+  }];
+}
+
 export async function processFlowEngine(
   organization_id: string,
   contact_id: string,
@@ -381,12 +571,71 @@ export async function processFlowEngine(
   const assigned_bot_id = convData?.assigned_bot_id || null;
 
 
-  // Flow Builder has priority and is independent from the per-chat AI-agent toggle.
+  // Pre-fetch active flows to check for Exact Match trigger overrides before resuming an active session
+  const { data: activeFlows } = await supabase
+    .from("w_flows")
+    .select("*")
+    .eq("organization_id", organization_id)
+    .eq("status", "active");
+
+  const accountEligibleFlows = (activeFlows || []).filter((flow: any) =>
+    flowAppliesToAccount(flow, incomingWaAccountId),
+  );
+
+  // Hydrate all eligible flow versions
+  const hydratedFlows: Array<{ flow: any; version: any; nodes: any[]; startNode: any; matchType: string; triggers: string[] }> = [];
+  for (const flow of accountEligibleFlows) {
+    let version = null;
+    if (flow.current_version_id) {
+      const { data } = await supabase
+        .from("w_flow_versions")
+        .select("*")
+        .eq("id", flow.current_version_id)
+        .maybeSingle();
+      version = data;
+    }
+    const nodes = version?.nodes || flow.nodes || [];
+    const startNode = nodes.find((n: any) => n?.type === 'startBotFlow');
+    const matchType = String(
+      startNode?.data?.config?.matchType ||
+      startNode?.data?.matchType ||
+      startNode?.config?.matchType ||
+      version?.match_type ||
+      flow?.match_type ||
+      'string'
+    ).toLowerCase().trim();
+    const triggers = getFlowTriggerKeywords(version || flow, nodes);
+    hydratedFlows.push({ flow, version, nodes, startNode, matchType, triggers });
+  }
+
+  // Phase 1: Check for Exact Match flow triggers (highest priority, overrides active sessions)
+  let matchedFlow: any = null;
+  let matchedVersion: any = null;
+
+  for (const item of hydratedFlows) {
+    // fs.appendFileSync('debug.log', `\n[Phase 1] Checking ${item.flow.name}, matchType: ${item.matchType}`);
+    if (item.matchType === 'exact') {
+      const isMatch = item.triggers.some((t: string) => {
+        const keyword = t.toLowerCase().trim();
+        const matches = keyword && normalized === keyword;
+        // fs.appendFileSync('debug.log', `\n  -> trigger: ${keyword}, exact match? ${matches}`);
+        return matches;
+      });
+      if (isMatch) {
+        // fs.appendFileSync('debug.log', `\n[Phase 1] MATCHED ${item.flow.name}!`);
+        matchedFlow = item.flow;
+        matchedVersion = item.version;
+        break;
+      }
+    } else {
+       // fs.appendFileSync('debug.log', `\n[Phase 1] Skipped ${item.flow.name} (not exact)`);
+    }
+  }
 
   // 1. Check for active session by contact_id
   const { data: session } = await supabase
     .from("w_flow_sessions")
-    .select("*, w_flows(status)")
+    .select("*, w_flows(name, status)")
     .eq("organization_id", organization_id)
     .eq("contact_id", contact_id)
     .in("status", ["active", "waiting"])
@@ -399,53 +648,52 @@ export async function processFlowEngine(
   let run_id: string | null = null;
   let isResuming = false;
 
-  if (session) {
-    if (session.conversation_id !== conversation_id) {
-      // The session is tied to a different conversation (e.g. deleted/recreated).
-      // Discard/abandon it to allow new sessions to be created for this contact.
+  if (matchedFlow) {
+    // Exact Match trigger hit! Abandon any existing active session and start fresh
+    if (session) {
       await supabase
         .from("w_flow_sessions")
-        .update({
-          status: "completed",
-          completed_at: new Date().toISOString(),
-        })
+        .update({ status: "completed", completed_at: new Date().toISOString() })
         .eq("id", session.id);
-
       if (session.active_run_id) {
         await supabase
           .from("w_flow_runs")
-          .update({
-            status: "completed",
-            ended_at: new Date().toISOString(),
-          })
+          .update({ status: "completed", ended_at: new Date().toISOString() })
           .eq("id", session.active_run_id);
       }
-      console.log(`[Flow] Abandoned orphaned session ${session.id} for contact ${contact_id} due to conversation mismatch (old: ${session.conversation_id}, new: ${conversation_id})`);
+      console.log(`[Flow] Exact trigger "${normalized}" matched flow ${matchedFlow.name}; completed old session ${session.id}`);
+    }
+  } else if (session) {
+    if (session.conversation_id !== conversation_id) {
+      // Discard/abandon orphaned session
+      await supabase
+        .from("w_flow_sessions")
+        .update({ status: "completed", completed_at: new Date().toISOString() })
+        .eq("id", session.id);
+      if (session.active_run_id) {
+        await supabase
+          .from("w_flow_runs")
+          .update({ status: "completed", ended_at: new Date().toISOString() })
+          .eq("id", session.active_run_id);
+      }
+      console.log(`[Flow] Abandoned orphaned session ${session.id} for contact ${contact_id}`);
     } else {
       const flowObj = (session as any).w_flows;
       const flowStatus = Array.isArray(flowObj) ? flowObj[0]?.status : flowObj?.status;
 
       if (!flowStatus || flowStatus !== "active") {
-        // Flow is archived, draft, or deleted; ignore/abandon the stale session
         await supabase
           .from("w_flow_sessions")
-          .update({
-            status: "completed",
-            completed_at: new Date().toISOString(),
-          })
+          .update({ status: "completed", completed_at: new Date().toISOString() })
           .eq("id", session.id);
-
         if (session.active_run_id) {
           await supabase
             .from("w_flow_runs")
-            .update({
-              status: "completed",
-              ended_at: new Date().toISOString(),
-            })
+            .update({ status: "completed", ended_at: new Date().toISOString() })
             .eq("id", session.active_run_id);
         }
-        console.log(`[Flow] Abandoned stale session ${session.id} for inactive flow ${session.flow_id} (status: ${flowStatus || "deleted"})`);
       } else {
+        // fs.appendFileSync('debug.log', `\n[Resuming] Resuming session ${session.id} for flow ${session.flow_id}`);
         currentFlowId = session.flow_id;
         currentFlowVersionId = session.flow_version_id || null;
         currentNodeId = session.current_node_id;
@@ -456,68 +704,50 @@ export async function processFlowEngine(
     }
   }
 
+  if (!isResuming && !matchedFlow) {
+    // Phase 2: Check String Match flows if no exact match flow triggered and no active session
+    for (const item of hydratedFlows) {
+      // fs.appendFileSync('debug.log', `\n[Phase 2] Checking ${item.flow.name}, matchType: ${item.matchType}`);
+      if (item.matchType !== 'exact') {
+        const isMatch = item.triggers.some((t: string) => {
+          const keyword = t.toLowerCase().trim();
+          const matches = keyword && normalized.includes(keyword);
+          // fs.appendFileSync('debug.log', `\n  -> trigger: ${keyword}, includes? ${matches}`);
+          return matches;
+        });
+        if (isMatch) {
+          // fs.appendFileSync('debug.log', `\n[Phase 2] MATCHED ${item.flow.name}!`);
+          matchedFlow = item.flow;
+          matchedVersion = item.version;
+          break;
+        }
+      } else {
+         // fs.appendFileSync('debug.log', `\n[Phase 2] Skipped ${item.flow.name} (is exact)`);
+      }
+    }
+  }
+
+  if (!isResuming && !matchedFlow) {
+    console.log("[Flow] No active flow matched; AI fallback may run", {
+      organization_id,
+      conversation_id,
+      text: normalized,
+      active_flow_count: activeFlows?.length || 0,
+      account_eligible_flow_count: accountEligibleFlows.length,
+      incoming_wa_account_id: incomingWaAccountId || null,
+      triggers: accountEligibleFlows.map((flow: any) => ({
+        id: flow.id,
+        name: flow.name,
+        trigger_keywords: flow.trigger_keywords,
+        triggers: flow.triggers,
+        wa_account_scope: flow.wa_account_scope || "all",
+        wa_account_ids: flow.wa_account_ids || [],
+      })),
+    });
+    return { consumed: false, output: null };
+  }
+
   if (!isResuming) {
-    // 2. Check for trigger matches in active flows
-    const { data: activeFlows } = await supabase
-      .from("w_flows")
-      .select("*")
-      .eq("organization_id", organization_id)
-      .eq("status", "active");
-
-    const accountEligibleFlows = (activeFlows || []).filter((flow: any) =>
-      flowAppliesToAccount(flow, incomingWaAccountId),
-    );
-
-    let matchedFlow = null;
-    let matchedVersion = null;
-    for (const flow of accountEligibleFlows) {
-      let version = null;
-      if (flow.current_version_id) {
-        const { data } = await supabase
-          .from("w_flow_versions")
-          .select("*")
-          .eq("id", flow.current_version_id)
-          .maybeSingle();
-        version = data;
-      }
-      const nodes = version?.nodes || flow.nodes || [];
-      const allTriggers = getFlowTriggerKeywords(version || flow, nodes);
-
-      const isMatch = allTriggers.some((t: string) => {
-        const keyword = t.toLowerCase().trim();
-        if (!keyword) return false;
-        const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(`\\b${escaped}\\b`, 'i');
-        return regex.test(normalized);
-      });
-
-      if (isMatch) {
-        matchedFlow = flow;
-        matchedVersion = version;
-        break;
-      }
-    }
-
-    if (!matchedFlow) {
-      console.log("[Flow] No active flow matched; AI fallback may run", {
-        organization_id,
-        conversation_id,
-        text: normalized,
-        active_flow_count: activeFlows?.length || 0,
-        account_eligible_flow_count: accountEligibleFlows.length,
-        incoming_wa_account_id: incomingWaAccountId || null,
-        triggers: accountEligibleFlows.map((flow: any) => ({
-          id: flow.id,
-          name: flow.name,
-          trigger_keywords: flow.trigger_keywords,
-          triggers: flow.triggers,
-          wa_account_scope: flow.wa_account_scope || "all",
-          wa_account_ids: flow.wa_account_ids || [],
-        })),
-      });
-      return { consumed: false, output: null };
-    }
-
     console.log("[Flow] Matched active flow", {
       organization_id,
       conversation_id,
@@ -532,8 +762,8 @@ export async function processFlowEngine(
     currentFlowVersionId =
       matchedVersion?.id || matchedFlow.current_version_id || null;
     // Find start node
-    const nodes = matchedVersion?.nodes || matchedFlow.nodes || [];
-    const startNode = nodes.find((n: any) => n.type === "startBotFlow");
+    const targetNodes = matchedVersion?.nodes || matchedFlow.nodes || [];
+    const startNode = targetNodes.find((n: any) => n.type === "startBotFlow");
     if (!startNode) return { consumed: false, output: null };
 
     currentNodeId = startNode.id;
@@ -641,21 +871,275 @@ export async function processFlowEngine(
     .eq("id", session_id)
     .maybeSingle();
   let flowState = latestSessionState?.state_data || session?.state_data || {};
+  
+  const flowObj = session ? (session as any).w_flows : null;
+  const sessionFlowName = flowObj ? (Array.isArray(flowObj) ? flowObj[0]?.name : flowObj?.name) : null;
+  
   const flowMeta = {
     flow_id: currentFlowId,
+    flow_name: matchedFlow?.name || sessionFlowName || "Flow",
     flow_version_id: currentFlowVersionId,
     flow_session_id: session_id,
     flow_run_id: run_id,
   };
 
-  // ----------------------------------------------------------------
-  // RESUMING: User ne button click kiya ya kuch type kiya
-  // Pehle current node ke edges check karo aur next node pe jao
-  // ----------------------------------------------------------------
+  let activeNode = nodes.find((n: any) => n.id === currentNodeId);
+  const outputText: string[] = [];
+  const mediaOutput: NonNullable<FlowEngineResult["media"]> = [];
+  let steps = 0;
+
   if (isResuming) {
     const currentNode = nodes.find((n: any) => n.id === currentNodeId);
 
-    if (currentNode?.type === "button" || currentNode?.type === "userInput") {
+    if (currentNode?.type === "appointment") {
+      let listReplyId = "";
+      if (triggerMessageId) {
+        const { data: triggerMsg } = await supabase
+          .from("w_messages")
+          .select("content")
+          .eq("id", triggerMessageId)
+          .maybeSingle();
+        listReplyId = triggerMsg?.content?.raw?.interactive?.list_reply?.id || "";
+      }
+
+      const appointmentStep = String(flowState?.appointment_step || "select_date");
+      const config = currentNode.data?.config || {};
+
+      if (appointmentStep === "select_date") {
+        if (!listReplyId || !listReplyId.startsWith("date_")) {
+          const sections = generateDateSections(config.slots);
+          const body = renderFlowTemplate(config.message || "Please select a date for your appointment:", flowState);
+          return {
+            consumed: true,
+            output: null,
+            ...flowMeta,
+            flow_node_id: currentNode.id,
+            interactive: {
+              type: "list",
+              body,
+              buttonText: "Select Date",
+              sections,
+            },
+          };
+        }
+
+        const selectedDate = listReplyId.replace("date_", "");
+        const nextState = {
+          ...flowState,
+          appointment_date: selectedDate,
+          appointment_step: "select_time",
+        };
+
+        await supabase
+          .from("w_flow_sessions")
+          .update({ state_data: nextState })
+          .eq("id", session_id);
+        flowState = nextState;
+
+        const timeSections = await generateTimeSections(selectedDate, config.slots, organization_id, config);
+        if (timeSections.length === 0 || timeSections[0].rows.length === 0) {
+          const resetState = {
+            ...nextState,
+            appointment_step: "select_date",
+          };
+          await supabase
+            .from("w_flow_sessions")
+            .update({ state_data: resetState })
+            .eq("id", session_id);
+          flowState = resetState;
+
+          const dateSections = generateDateSections(config.slots);
+          return {
+            consumed: true,
+            output: "No time slots are available for today. Please pick another date.",
+            ...flowMeta,
+            flow_node_id: currentNode.id,
+            interactive: {
+              type: "list",
+              body: renderFlowTemplate(config.message || "Please select a date for your appointment:", flowState),
+              buttonText: "Select Date",
+              sections: dateSections,
+            },
+          };
+        }
+
+        return {
+          consumed: true,
+          output: null,
+          ...flowMeta,
+          flow_node_id: currentNode.id,
+          interactive: {
+            type: "list",
+            body: `Choose a time slot for ${selectedDate}:`,
+            buttonText: "Select Time",
+            sections: timeSections,
+          },
+        };
+      }
+
+      else if (appointmentStep === "select_time") {
+        if (!listReplyId || !listReplyId.startsWith("time_")) {
+          const timeSections = await generateTimeSections(flowState.appointment_date, config.slots, organization_id, config);
+          return {
+            consumed: true,
+            output: null,
+            ...flowMeta,
+            flow_node_id: currentNode.id,
+            interactive: {
+              type: "list",
+              body: `Choose a time slot for ${flowState.appointment_date}:`,
+              buttonText: "Select Time",
+              sections: timeSections,
+            },
+          };
+        }
+
+        const selectedTimeRaw = listReplyId.replace("time_", "");
+        const [hoursStr, minutesStr] = selectedTimeRaw.split(":");
+        let hr = parseInt(hoursStr);
+        const ampm = hr >= 12 ? "PM" : "AM";
+        const displayHr = hr > 12 ? hr - 12 : hr === 0 ? 12 : hr;
+        const displayTime = `${displayHr}:${minutesStr} ${ampm}`;
+
+        const friendlyDateTime = `${flowState.appointment_date} at ${displayTime}`;
+        const nextState = {
+          ...flowState,
+          selected_time_raw: selectedTimeRaw,
+          appointment_time: displayTime,
+          appointment_datetime: friendlyDateTime,
+          appointment_step: null,
+        };
+
+        // Check Max 2 Slots limit per contact across organization using w_flow_sessions
+        if (organization_id && contact_id) {
+          const { data: existingSessions } = await supabase
+            .from("w_flow_sessions")
+            .select("id, state_data, created_at")
+            .eq("organization_id", organization_id)
+            .eq("contact_id", contact_id)
+            .order("created_at", { ascending: true });
+
+          const confirmedSessions = (existingSessions || []).filter((s: any) => {
+            const sd = s.state_data || {};
+            return sd.appointment_date && (sd.appointment_time || sd.selected_time_raw) && sd.appointment_status !== "cancelled";
+          });
+
+          if (confirmedSessions.length >= 2) {
+            const oldestSession = confirmedSessions[0];
+            const oldState = oldestSession.state_data || {};
+            const oldGEventId = oldState.google_event_id;
+
+            await supabase
+              .from("w_flow_sessions")
+              .update({
+                state_data: { ...oldState, appointment_status: "cancelled" },
+              })
+              .eq("id", oldestSession.id);
+
+            if (oldGEventId && organization_id) {
+              deleteGoogleCalendarEvent(organization_id, oldGEventId).catch((err: any) =>
+                console.error("Error deleting old Google Calendar event:", err)
+              );
+            }
+            console.log(`🗑️ Max 2 slots limit reached for contact ${contact_id}. Cancelled oldest flow session ${oldestSession.id}`);
+          }
+        }
+
+        // Create Google Calendar Event if enabled (15-minute slot)
+        let googleEventId: string | null = null;
+        const validGToken = await getValidAccessToken(organization_id).catch(() => null);
+        const isGoogleSyncOn = !!validGToken || config.googleSyncEnabled === true || String(config.googleSyncEnabled) === "true";
+        if (isGoogleSyncOn && organization_id) {
+          // 15-minute slot end time calculation
+          const totalMin = parseInt(hoursStr) * 60 + parseInt(minutesStr) + 15;
+          const endH = Math.floor(totalMin / 60) % 24;
+          const endM = totalMin % 60;
+          const endRaw = `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
+
+          const startISO = `${flowState.appointment_date}T${selectedTimeRaw}:00`;
+          const endISO = `${flowState.appointment_date}T${endRaw}:00`;
+
+          // Fetch contact name/phone if available
+          let cName = flowState.name || "";
+          let cPhone = flowState.phone || "";
+          if (contact_id && (!cName || !cPhone)) {
+            const { data: contactRow } = await supabase
+              .from("w_contacts")
+              .select("name, custom_name, phone, wa_id")
+              .eq("id", contact_id)
+              .maybeSingle();
+            if (contactRow) {
+              cName = cName || contactRow.custom_name || contactRow.name || "";
+              cPhone = cPhone || contactRow.phone || contactRow.wa_id || "";
+            }
+          }
+
+          const clientTitle = cName ? `${cName} (${cPhone})` : cPhone || "WhatsApp Client";
+
+          const gRes = await createGoogleCalendarEvent(organization_id, {
+            summary: `Appointment: ${clientTitle}`,
+            description: `WhatsApp Booking Flow\nClient: ${clientTitle}\nDate: ${flowState.appointment_date}\nTime: ${displayTime}`,
+            startDateTimeISO: startISO,
+            endDateTimeISO: endISO,
+          }).catch((err: any) => {
+            console.error("Google Calendar event creation error:", err);
+            return { success: false, eventId: undefined };
+          });
+
+          if (gRes && gRes.success && gRes.eventId) {
+            googleEventId = gRes.eventId;
+            console.log(`🗓️ Google Calendar Event created with ID: ${googleEventId}`);
+          }
+        }
+
+        nextState.google_event_id = googleEventId || null;
+        nextState.appointment_status = "confirmed";
+
+        await supabase
+          .from("w_flow_sessions")
+          .update({ state_data: nextState })
+          .eq("id", session_id);
+
+        flowState = nextState;
+
+        const confirmationText = renderFlowTemplate(
+          config.confirmationMessage || "Thanks {{name}}. Your appointment for {{appointment_datetime}} has been confirmed.",
+          flowState
+        );
+        outputText.push(confirmationText);
+
+        const outEdges = edges.filter((e: any) => e.source === currentNodeId);
+        const nextEdge = outEdges[0];
+        if (nextEdge) {
+          currentNodeId = nextEdge.target;
+          await supabase
+            .from("w_flow_sessions")
+            .update({ current_node_id: currentNodeId })
+            .eq("id", session_id);
+
+          activeNode = nodes.find((n: any) => n.id === currentNodeId);
+          isResuming = false;
+          console.log(`➡️ Advancing to next node after appointment confirmation: ${currentNodeId}`);
+        } else {
+          await supabase
+            .from("w_flow_sessions")
+            .update({ status: "completed", completed_at: new Date().toISOString() })
+            .eq("id", session_id);
+          if (run_id) {
+            await supabase
+              .from("w_flow_runs")
+              .update({ status: "completed", ended_at: new Date().toISOString() })
+              .eq("id", run_id);
+          }
+          return {
+            consumed: true,
+            output: outputText.join("\n\n"),
+            ...flowMeta,
+            flow_node_id: currentNode.id,
+          };
+        }
+      }
+    } else if (currentNode?.type === "button" || currentNode?.type === "userInput") {
       if (currentNode.type === "userInput") {
         const saveToField = normalizeFlowVariableKey(
           currentNode.data?.config?.saveToField,
@@ -776,10 +1260,7 @@ export async function processFlowEngine(
   // ----------------------------------------------------------------
   // Node execution loop — current node se chalo
   // ----------------------------------------------------------------
-  let activeNode = nodes.find((n: any) => n.id === currentNodeId);
-  const outputText: string[] = [];
-  const mediaOutput: NonNullable<FlowEngineResult["media"]> = [];
-  let steps = 0;
+  activeNode = nodes.find((n: any) => n.id === currentNodeId);
 
   while (activeNode && steps < 15) {
     steps++;
@@ -999,7 +1480,24 @@ export async function processFlowEngine(
         config.label ||
         activeNode.data?.label ||
         "";
-      if (botResult?.reply) outputText.push(botResult.reply);
+      if (botResult?.reply) {
+        let replyText = botResult.reply;
+        try {
+          const trimmed = replyText.trim();
+          const firstBrace = trimmed.indexOf("{");
+          const lastBrace = trimmed.lastIndexOf("}");
+          if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            const jsonCandidate = trimmed.substring(firstBrace, lastBrace + 1);
+            const parsed = JSON.parse(jsonCandidate);
+            if (parsed && typeof parsed === "object" && typeof parsed.text === "string") {
+              replyText = parsed.text;
+            }
+          }
+        } catch (e) {
+          // Keep original
+        }
+        outputText.push(replyText);
+      }
       else if (config.fallbackMessage)
         outputText.push(renderFlowTemplate(config.fallbackMessage, flowState));
       else if (prompt) outputText.push(renderFlowTemplate(prompt, flowState));
@@ -1028,13 +1526,38 @@ export async function processFlowEngine(
         },
       );
     } else if (nodeType === "appointment") {
-      const message =
-        config.message ||
-        config.confirmationMessage ||
-        config.label ||
-        activeNode.data?.label ||
-        "";
-      if (message) outputText.push(renderFlowTemplate(message, flowState));
+      const inviteMsg = renderFlowTemplate(
+        config.message || "Please select a date for your appointment from the options below:",
+        flowState
+      );
+      const sections = generateDateSections(config.slots);
+
+      const nextState = {
+        ...flowState,
+        appointment_step: "select_date",
+      };
+
+      await supabase
+        .from("w_flow_sessions")
+        .update({
+          current_node_id: activeNode.id,
+          state_data: nextState,
+        })
+        .eq("id", session_id);
+
+      return {
+        consumed: true,
+        output: outputText.length > 0 ? outputText.join("\n\n") : null,
+        media: mediaOutput.length > 0 ? mediaOutput : undefined,
+        ...flowMeta,
+        flow_node_id: activeNode.id,
+        interactive: {
+          type: "list",
+          body: inviteMsg,
+          buttonText: "Select Date",
+          sections,
+        },
+      };
     } else if (nodeType === "product") {
       const productText =
         config.message ||

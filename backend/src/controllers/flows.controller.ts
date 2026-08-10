@@ -9,6 +9,7 @@ import {
     findFlowTriggerConflicts,
     insertFlowVersionWithSchemaFallback
 } from '../services/flows.service.js';
+import { invalidateFlowsCache } from '../services/ai.service.js';
 
 export async function getFlows(req: any, res: Response) {
     const orgId = req.organization_id;
@@ -43,6 +44,8 @@ export async function createFlow(req: any, res: Response) {
     const orgId = req.organization_id;
     try {
         const nodes = Array.isArray(req.body?.nodes) ? req.body.nodes : [];
+        const startNode = nodes.find((n: any) => n?.type === 'startBotFlow');
+        const matchType = String(req.body?.match_type || startNode?.data?.config?.matchType || startNode?.data?.matchType || 'string').toLowerCase().trim();
         const triggerKeywords = getFlowTriggerKeywords({ ...req.body, nodes }, nodes);
         const waAccountScope = normalizeFlowAccountScope(req.body?.wa_account_scope);
         const waAccountIds = waAccountScope === 'selected' ? normalizeFlowAccountIds(req.body?.wa_account_ids) : [];
@@ -53,6 +56,7 @@ export async function createFlow(req: any, res: Response) {
             trigger_type: req.body?.trigger_type || 'keyword',
             trigger_keywords: triggerKeywords,
             triggers: triggerKeywords,
+            match_type: matchType,
             wa_account_scope: waAccountScope,
             wa_account_ids: waAccountIds,
             nodes,
@@ -71,6 +75,7 @@ export async function createFlow(req: any, res: Response) {
         });
         const { data, error } = await supabase.from('w_flows').insert(payload).select().single();
         if (error) throw error;
+        invalidateFlowsCache(orgId);
         res.status(201).json(data);
     } catch (e: any) { res.status(e.statusCode || 500).json({ error: e.message, limit: e.limit }); }
 }
@@ -92,11 +97,14 @@ export async function updateFlow(req: any, res: Response) {
                 : [];
         }
         if (req.body.status !== undefined && ['draft', 'paused', 'archived'].includes(req.body.status)) updateData.status = req.body.status;
-        if (updateData.nodes !== undefined || req.body.triggers !== undefined || req.body.trigger_keywords !== undefined) {
+        if (updateData.nodes !== undefined || req.body.triggers !== undefined || req.body.trigger_keywords !== undefined || req.body.match_type !== undefined) {
             const nodes = updateData.nodes !== undefined ? updateData.nodes : req.body.nodes;
+            const startNode = (nodes || []).find((n: any) => n?.type === 'startBotFlow');
+            const matchType = String(req.body.match_type || startNode?.data?.config?.matchType || startNode?.data?.matchType || 'string').toLowerCase().trim();
             const triggerKeywords = getFlowTriggerKeywords({ ...req.body, nodes }, nodes);
             updateData.trigger_keywords = triggerKeywords;
             updateData.triggers = triggerKeywords;
+            updateData.match_type = matchType;
         }
         updateData.updated_at = new Date().toISOString();
         updateData.updated_by_user_id = req.user?.id || null;
@@ -110,6 +118,7 @@ export async function updateFlow(req: any, res: Response) {
             .maybeSingle();
         if (error) throw error;
         if (!data) return res.status(404).json({ error: 'Flow not found' });
+        invalidateFlowsCache(orgId);
         res.json(data);
     } catch (e: any) { res.status(500).json({ error: e.message }); }
 }
@@ -196,7 +205,7 @@ export async function publishFlow(req: any, res: Response) {
             .select()
             .single();
         if (updateErr) throw updateErr;
-
+        invalidateFlowsCache(orgId);
         res.json({ success: true, flow: updated, version });
     } catch (e: any) { res.status(500).json({ error: e.message }); }
 }
@@ -246,6 +255,7 @@ export async function deleteFlow(req: any, res: Response) {
             .eq('id', req.params.id)
             .eq('organization_id', req.organization_id);
         if (error) throw error;
+        invalidateFlowsCache(req.organization_id);
         res.json({ success: true });
     } catch (e: any) { res.status(500).json({ error: e.message }); }
 }

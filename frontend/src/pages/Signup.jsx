@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { Loader2, Mail, Lock, User, ArrowRight, MessageSquare } from 'lucide-react'
 
+import { notify, scrollToFirstError } from '../services/notificationService'
+
 export default function Signup() {
     const [formData, setFormData] = useState({
         email: '',
@@ -19,6 +21,8 @@ export default function Signup() {
         e.preventDefault()
 
         if (formData.password !== formData.confirmPassword) {
+            notify.error('Passwords do not match')
+            scrollToFirstError(e.target)
             return setError('Passwords do not match')
         }
 
@@ -36,9 +40,12 @@ export default function Signup() {
                 }
             })
             if (error) throw error
+            notify.success('Account created successfully! Please log in.')
             navigate('/login')
         } catch (err) {
             setError(err.message)
+            notify.error(err.message || 'Signup failed')
+            scrollToFirstError(e.target)
         } finally {
             setLoading(false)
         }
@@ -51,10 +58,10 @@ export default function Signup() {
                     <div className="w-full max-w-md rounded-[24px]">
                         <div className="mb-9 flex items-center gap-3 rounded-[24px]">
                             <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-gray-200 bg-white">
-                                <img src="/logo.png" alt="GAP FlowPilot" className="h-7 w-7 object-contain" />
+                                <img src="/logo.png" alt="GAP WhatsApp Pilot" className="h-7 w-7 object-contain" />
                             </span>
                             <div>
-                                <p className="text-sm font-bold text-gray-950">GAP FlowPilot</p>
+                                <p className="text-sm font-bold text-gray-950">GAP WhatsApp Pilot</p>
                                 <p className="text-xs text-gray-500">Create workspace access</p>
                             </div>
                         </div>
@@ -133,7 +140,7 @@ export default function Signup() {
                 <section className="relative m-3 hidden overflow-hidden rounded-[24px] bg-gray-950 lg:block">
                     <img
                         src="/login.jpg"
-                        alt="GAP FlowPilot onboarding"
+                        alt="GAP WhatsApp Pilot onboarding"
                         className="absolute inset-0 h-full w-full rounded-[24px] object-cover object-center"
                     />
                     <div className="absolute inset-0 rounded-[24px] bg-gradient-to-br from-emerald-950/75 via-gray-950/45 to-gray-950/80" />

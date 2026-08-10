@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
+import { get, set } from 'idb-keyval'
 import { Search, MoreVertical, Paperclip, Send, Smile, Phone, Tag, Check, CheckCheck, Clock, AlertCircle, Info, ChevronLeft, ChevronDown, ArrowDown, FileText, Mic, Pencil, Bot, User, ExternalLink, Reply, Forward, X, Copy, Trash2, Archive, Pin, PinOff, MailOpen, Star, StarOff, Eraser, Inbox, BellOff } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { format, isToday, isYesterday } from 'date-fns'
@@ -6,6 +7,7 @@ import { io } from "socket.io-client";
 import QRCode from 'react-qr-code'
 import { useAuth } from '../context/AuthContext'
 import { useDialog } from '../context/DialogContext'
+import { useWhatsAppAccounts } from '../context/WhatsAppAccountContext'
 import ContactProfileDrawer from '../components/ContactProfileDrawer'
 import { AudioPlayerProvider } from '../components/AudioPlayerManager'
 import AudioMessageBubble from '../components/AudioMessageBubble'
@@ -340,6 +342,22 @@ export default function LiveChat() {
 
     const fileInputRef = useRef(null)
     const [selectedFile, setSelectedFile] = useState(null)
+    const [imagePreviewUrl, setImagePreviewUrl] = useState(null)
+
+    useEffect(() => {
+        if (!selectedFile) {
+            setImagePreviewUrl(null)
+            return
+        }
+        if (selectedFile.type.startsWith('image/')) {
+            const url = URL.createObjectURL(selectedFile)
+            setImagePreviewUrl(url)
+            return () => URL.revokeObjectURL(url)
+        } else {
+            setImagePreviewUrl(null)
+        }
+    }, [selectedFile])
+
     const [pendingAudio, setPendingAudio] = useState(null) // { file: File, durationSeconds: number }
     const [isAudioPanelOpen, setIsAudioPanelOpen] = useState(false)
     const [isEmojiOpen, setIsEmojiOpen] = useState(false)
@@ -538,35 +556,23 @@ export default function LiveChat() {
         () => ['whatsapp-accounts', organizationId],
         [organizationId]
     )
+    const { accounts: sharedAccounts, isLoading: isAccountsLoading, error: accountsContextError } = useWhatsAppAccounts()
+
     const {
-        data: accountRecords,
-        error: accountsError,
-        isFetching: areAccountsFetching,
-        isFetchedAfterMount: areAccountsFetchedAfterMount,
-        isPending: areAccountsPending,
+        data: accountRecords = sharedAccounts,
+        error: accountsError = accountsContextError,
+        isFetchedAfterMount: areAccountsFetchedAfterMount = true,
+        isPending: areAccountsPending = isAccountsLoading,
+        isFetching: areAccountsFetching = false,
         refetch: refetchAccounts,
     } = useQuery({
         queryKey: accountsQueryKey,
         enabled: Boolean(session?.access_token && organizationId && !isProfileLoading),
+        initialData: sharedAccounts,
         staleTime: 5 * 60 * 1000,
         gcTime: 10 * 60 * 1000,
-        placeholderData: previousData => previousData,
-        refetchOnMount: 'always',
-        retry: 2,
-        retryDelay: attempt => Math.min(500 * (2 ** attempt), 3000),
-        queryFn: async ({ signal }) => {
-            const response = await fetch(`${API_BASE}/whatsapp/accounts`, {
-                headers: authHeaders,
-                signal,
-            })
-            if (!response.ok) {
-                const body = await response.json().catch(() => ({}))
-                throw new Error(body?.error || `Unable to load WhatsApp accounts (${response.status})`)
-            }
-            const data = await response.json()
-            if (!Array.isArray(data)) throw new Error('Invalid WhatsApp accounts response')
-            return data
-        },
+        placeholderData: previousData => previousData || sharedAccounts,
+        queryFn: async () => sharedAccounts,
     })
 
     useEffect(() => {
@@ -1068,6 +1074,22 @@ export default function LiveChat() {
                     })
                 } else {
                     setChats(formatted);
+                    // Auto-select target conversation if opened from Scheduled Meetings
+                    try {
+                        const params = new URLSearchParams(window.location.search);
+                        const targetConvId = params.get('conversationId');
+                        const targetPhone = params.get('phone');
+                        if ((targetConvId || targetPhone) && formatted.length > 0) {
+                            const found = formatted.find(c =>
+                                (targetConvId && idsEqual(c.id, targetConvId)) ||
+                                (targetPhone && (c.phone === targetPhone || c.contact?.phone === targetPhone || c.contact?.whatsapp_number === targetPhone))
+                            );
+                            if (found) {
+                                setSelectedChat(found);
+                                window.history.replaceState({}, document.title, window.location.pathname);
+                            }
+                        }
+                    } catch (e) {}
                 }
                 setNextConversationCursor(data?.next_cursor || null)
                 setChatsLoadState('success')
@@ -1788,6 +1810,18 @@ export default function LiveChat() {
         };
     }, [memberProfile?.organization_id, playNotification, refetchAccounts]);
 
+    // Update App Badge based on total unread count
+    useEffect(() => {
+        if ('setAppBadge' in navigator && 'clearAppBadge' in navigator) {
+            const totalUnread = chats.reduce((sum, chat) => sum + Number(chat.unread || 0), 0);
+            if (totalUnread > 0) {
+                navigator.setAppBadge(totalUnread).catch(console.error);
+            } else {
+                navigator.clearAppBadge().catch(console.error);
+            }
+        }
+    }, [chats]);
+
     useEffect(() => {
         if (!session?.access_token) return
 
@@ -1929,6 +1963,19 @@ export default function LiveChat() {
 
     const handleTextChange = (e) => {
         setMessageText(e.target.value)
+    }
+
+    const handlePaste = (e) => {
+        const files = e.clipboardData?.files
+        if (files && files.length > 0) {
+            const file = files[0]
+            if (file.type.startsWith('image/')) {
+                e.preventDefault()
+                setSelectedFile(file)
+                setPendingAudio(null)
+                setIsAudioPanelOpen(false)
+            }
+        }
     }
 
     const handleSendMessage = async (e) => {
@@ -2107,6 +2154,31 @@ export default function LiveChat() {
 
         try {
             const sessionId = localStorage.getItem('whatsapp_session_id') || 'dashboard_session'
+
+            if (!navigator.onLine) {
+                const offlineDraft = {
+                    url: `${API_BASE}/conversations/${selectedChat.id}/send`,
+                    method: 'POST',
+                    headers: {
+                        ...authHeaders,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text: textToSend, session_id: sessionId, reply_to_message_id: replyToSend?.wa_message_id || null, client_message_id: clientMessageId }),
+                    timestamp: Date.now(),
+                    clientMessageId,
+                    conversationId: selectedChat.id,
+                };
+                const queue = await get('offline_message_queue') || [];
+                queue.push(offlineDraft);
+                await set('offline_message_queue', queue);
+
+                if ('serviceWorker' in navigator && 'SyncManager' in window) {
+                    const registration = await navigator.serviceWorker.ready;
+                    await registration.sync.register('sync-messages').catch(console.error);
+                }
+                return; // Leave optimistic UI as 'sending'
+            }
+
             const res = await fetch(`${API_BASE}/conversations/${selectedChat.id}/send`, {
                 method: 'POST',
                 headers: {
@@ -2236,7 +2308,7 @@ export default function LiveChat() {
         }
 
         const resolvedUrl = msg.mediaUrl
-            ? (String(msg.mediaUrl).startsWith('http') ? msg.mediaUrl : `${BACKEND_BASE}${msg.mediaUrl}`)
+            ? (String(msg.mediaUrl).startsWith('http') || String(msg.mediaUrl).startsWith('blob:') ? msg.mediaUrl : `${BACKEND_BASE}${msg.mediaUrl}`)
             : null
 
         if (resolvedUrl) {
@@ -2348,14 +2420,14 @@ export default function LiveChat() {
                     </div>
                     {numButtons > 0 && (
                         <div className={`flex bg-white rounded-b-[7.5px] overflow-hidden ${numButtons <= 2 ? 'flex-row' : 'flex-col'}`}>
-                            {interactive.buttons?.map((btn, idx) => (
+                            {(interactive.buttons || []).filter(Boolean).map((btn, idx) => (
                                 <div
-                                    key={btn.id}
+                                    key={btn?.id || idx}
                                     className={`flex-1 px-2 py-[11px] text-[15px] tracking-wide text-[#00a884] flex items-center justify-center cursor-default text-center border-t border-[#e9edef] ${
                                         numButtons <= 2 && idx > 0 ? 'border-l' : ''
                                     }`}
                                 >
-                                    {btn.text}
+                                    {btn?.text}
                                 </div>
                             ))}
                         </div>
@@ -2410,7 +2482,7 @@ export default function LiveChat() {
         let colorClass = 'text-[#6676ff]'; // Default color for You
 
         if (source === 'flow' || msg.metadata?.flow_id) {
-            label = 'Flow';
+            label = msg.metadata?.flow_name || 'Flow';
             colorClass = 'text-[#0284c7]';
         } else if (source === 'ai_agent' || msg.isBotReply || msg.botAgentId) {
             label = msg.botAgentName || getBotName(msg.botAgentId) || 'AI Agent';
@@ -4075,22 +4147,28 @@ export default function LiveChat() {
                             {/* Input Area */}
                             <div data-tour="chat-composer" className={`px-2 py-1.5 sm:px-4 sm:py-2.5 lg:px-5 ${isInternalNote ? 'border-t border-amber-200 bg-amber-50' : 'bg-[#f0f2f5]'}`}>
                                 {!botEnabled && (
-                                    <div className="mx-auto mb-2 flex w-full max-w-[1180px] items-center justify-between gap-3 rounded-xl bg-amber-50 px-4 py-2 border border-amber-200 text-xs text-amber-800 animate-in fade-in duration-200">
-                                        <div className="flex items-center gap-2">
-                                            <span className="relative flex h-2 w-2 shrink-0">
-                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                                    <div className="mx-auto mb-2 flex w-full max-w-[1180px] items-center justify-between gap-3 rounded-xl border border-amber-200/80 bg-gradient-to-r from-amber-50/90 via-amber-50/70 to-white/90 px-3.5 py-2 shadow-xs backdrop-blur-md animate-in fade-in duration-200">
+                                        <div className="flex items-center gap-2.5 min-w-0">
+                                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-800 ring-1 ring-amber-200/80">
+                                                <Bot className="h-4 w-4" />
                                             </span>
-                                            <span className="font-semibold text-amber-900">
-                                                🤖 AI Agent is paused for this conversation. You are talking directly with the customer.
-                                            </span>
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <span className="relative flex h-2 w-2 shrink-0">
+                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                                                </span>
+                                                <span className="truncate text-xs font-medium text-amber-950 sm:text-sm">
+                                                    AI Agent is paused for this conversation. You are talking directly with the customer.
+                                                </span>
+                                            </div>
                                         </div>
                                         <button
                                             type="button"
                                             onClick={() => toggleBotForConversation(true, selectedBotId || workspaceAutoReplyBot?.id || null)}
-                                            className="rounded-lg bg-white px-2.5 py-1 text-[11px] font-bold text-amber-950 shadow-sm border border-amber-200 hover:bg-amber-100 transition-colors shrink-0"
+                                            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-300/80 bg-white px-3 py-1.5 text-xs font-bold text-amber-950 shadow-xs hover:bg-amber-100/70 hover:border-amber-400 transition-all active:scale-[0.98]"
                                         >
-                                            Resume AI Bot
+                                            <Bot className="h-3.5 w-3.5 text-amber-700" />
+                                            <span>Resume AI Bot</span>
                                         </button>
                                     </div>
                                 )}
@@ -4175,14 +4253,30 @@ export default function LiveChat() {
                                             />
 
                                             {selectedFile && !isCustomerWindowExpired && (
-                                                <div className="flex items-center justify-between gap-2 border-b border-gray-100 bg-gray-50 px-3 py-2">
-                                                    <div className="text-xs text-gray-700 truncate">
-                                                        Attached: <span className="font-medium">{selectedFile.name}</span>
+                                                <div className="flex items-center justify-between gap-3 border-b border-gray-100 bg-gray-50 px-3 py-2">
+                                                    <div className="flex items-center gap-2.5 min-w-0">
+                                                        {imagePreviewUrl ? (
+                                                            <div className="relative h-10 w-10 shrink-0 border border-zinc-200 bg-white rounded-none overflow-hidden">
+                                                                <img
+                                                                    src={imagePreviewUrl}
+                                                                    alt="Preview"
+                                                                    className="h-full w-full object-cover"
+                                                                />
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none border border-zinc-200 bg-white text-zinc-400">
+                                                                <FileText className="h-5 w-5" />
+                                                            </div>
+                                                        )}
+                                                        <div className="text-xs text-gray-700 truncate">
+                                                            Attached: <span className="font-semibold">{selectedFile.name}</span>
+                                                            <span className="ml-1.5 text-[10px] text-gray-400">({(selectedFile.size / 1024).toFixed(1)} KB)</span>
+                                                        </div>
                                                     </div>
                                                     <button
                                                         type="button"
                                                         onClick={() => setSelectedFile(null)}
-                                                        className="text-xs text-gray-500 hover:text-gray-700"
+                                                        className="text-xs font-semibold text-gray-500 hover:text-gray-700"
                                                     >
                                                         Remove
                                                     </button>
@@ -4222,6 +4316,7 @@ export default function LiveChat() {
                                                 ref={messageInputRef}
                                                 value={messageText}
                                                 onChange={handleTextChange}
+                                                onPaste={handlePaste}
                                                 placeholder={isInternalNote ? "Type an internal note..." : "Type a message..."}
                                                 rows={1}
                                                 className="max-h-42 min-h-[36px] sm:min-h-[42px] w-full resize-none border-0 bg-transparent px-2 sm:px-4 py-[7px] sm:py-[11px] text-sm sm:text-[15px] leading-5 text-[#111b21] outline-none placeholder:text-[#8696a0] focus:border-transparent focus:outline-none focus:ring-0"

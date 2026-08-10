@@ -1,5 +1,6 @@
 import { supabase } from '../config/supabase.js';
 import { decryptToken } from '../utils/crypto.js';
+import { fetchWithMetaBackoff } from './meta.service.js';
 import { FlowEngineResult } from './flows.service.js';
 import dotenv from "dotenv";
 dotenv.config({ path: "./.env" });
@@ -130,10 +131,11 @@ export async function sendFlowMediaMessageMeta(params: {
 }
 
 export async function sendTextMessage(to: string, body: string, phone_number_id: string | null = null, contextMessageId: string | null = null) {
-    let token = ACCESS_TOKEN;
-    let fromId = PHONE_NUMBER_ID;
+    let token: string | undefined = ACCESS_TOKEN;
+    let fromId: string | null | undefined = PHONE_NUMBER_ID;
 
     if (phone_number_id && supabase) {
+        fromId = phone_number_id;
         const { data: accounts } = await supabase
             .from('w_wa_accounts')
             .select('access_token_encrypted')
@@ -143,7 +145,8 @@ export async function sendTextMessage(to: string, body: string, phone_number_id:
         const data = accounts?.[0];
         if (data?.access_token_encrypted) {
             token = decryptToken(data.access_token_encrypted);
-            fromId = phone_number_id;
+        } else {
+            token = undefined;
         }
     }
 
@@ -172,6 +175,7 @@ export async function sendTextMessage(to: string, body: string, phone_number_id:
 
     const data = await r.json();
     if (!r.ok) {
+        console.error(`[Send Failure Debug] phone_number_id=${fromId}, tokenPrefix=${token ? token.slice(0, 15) : 'NONE'}... Meta error:`, JSON.stringify(data));
         throw new Error(`Send failed: ${JSON.stringify(data)}`);
     }
     return data;
@@ -287,10 +291,11 @@ export async function sendInteractiveButtons(
   footer: string = "",
   phone_number_id: string | null = null,
 ) {
-  let token = ACCESS_TOKEN;
-  let fromId = PHONE_NUMBER_ID;
+  let token: string | undefined = ACCESS_TOKEN;
+  let fromId: string | null | undefined = PHONE_NUMBER_ID;
 
   if (phone_number_id && supabase) {
+    fromId = phone_number_id;
     const { data: accounts } = await supabase
       .from("w_wa_accounts")
       .select("access_token_encrypted")
@@ -300,7 +305,8 @@ export async function sendInteractiveButtons(
     const data = accounts?.[0];
     if (data?.access_token_encrypted) {
       token = decryptToken(data.access_token_encrypted);
-      fromId = phone_number_id;
+    } else {
+      token = undefined;
     }
   }
 
@@ -388,3 +394,135 @@ export async function sendInteractiveButtons(
   }
   return data;
 }
+
+export async function sendInteractiveList(
+  to: string,
+  body: string,
+  buttonText: string,
+  sections: any[],
+  footer: string = "",
+  phone_number_id: string | null = null,
+) {
+  let token: string | undefined = ACCESS_TOKEN;
+  let fromId: string | null | undefined = PHONE_NUMBER_ID;
+
+  if (phone_number_id && supabase) {
+    fromId = phone_number_id;
+    const { data: accounts } = await supabase
+      .from("w_wa_accounts")
+      .select("access_token_encrypted")
+      .eq("phone_number_id", phone_number_id)
+      .order("status", { ascending: true })
+      .limit(1);
+    const data = accounts?.[0];
+    if (data?.access_token_encrypted) {
+      token = decryptToken(data.access_token_encrypted);
+    } else {
+      token = undefined;
+    }
+  }
+
+  if (!fromId || !token) throw new Error("Missing WA creds for list send");
+
+  const url = `https://graph.facebook.com/v21.0/${fromId}/messages`;
+
+  const payload = {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to,
+    type: "interactive",
+    interactive: {
+      type: "list",
+      body: { text: body },
+      ...(footer ? { footer: { text: footer } } : {}),
+      action: {
+        button: buttonText.slice(0, 20),
+        sections
+      }
+    }
+  };
+
+  const r = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await r.json();
+  if (!r.ok) {
+    throw new Error(`Interactive list send failed: ${JSON.stringify(data)}`);
+  }
+  return data;
+}
+
+export async function sendTypingIndicator(params: {
+  phone_number_id: string;
+  message_id: string;
+  to?: string;
+  token?: string;
+}): Promise<any> {
+  const { phone_number_id, message_id, to } = params;
+  if (!phone_number_id || !message_id) return null;
+
+  try {
+    let token = params.token;
+    if (!token && supabase) {
+      const { data: accounts } = await supabase
+        .from('w_wa_accounts')
+        .select('access_token_encrypted')
+        .eq('phone_number_id', phone_number_id)
+        .order('status', { ascending: true })
+        .limit(1);
+      const data = accounts?.[0];
+      if (data?.access_token_encrypted) {
+        token = decryptToken(data.access_token_encrypted);
+      }
+    }
+    if (!token) {
+      token = process.env.WA_ACCESS_TOKEN;
+    }
+    if (!token) {
+      console.warn(`[TypingIndicator] Skipped: No access token found for phone_number_id ${phone_number_id}`);
+      return null;
+    }
+
+    const graphVersion = process.env.META_GRAPH_VERSION || 'v21.0';
+    const url = `https://graph.facebook.com/${graphVersion}/${phone_number_id}/messages`;
+    const payload: any = {
+      messaging_product: "whatsapp",
+      status: "read",
+      message_id: message_id,
+      typing_indicator: {
+        type: "text"
+      }
+    };
+    if (to) {
+      payload.recipient_type = "individual";
+      payload.to = to;
+    }
+
+    const res = await fetchWithMetaBackoff(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const json: any = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      console.warn(`[TypingIndicator] Meta returned status ${res.status} for message ${message_id}:`, JSON.stringify(json));
+    } else {
+      console.log(`💬 [TypingIndicator] Sent typing indicator & marked message ${message_id} as read (to: ${to || 'unspecified'})`);
+    }
+    return json;
+  } catch (err: any) {
+    console.warn(`[TypingIndicator] Non-blocking exception for message ${message_id}:`, err?.message || err);
+    return null;
+  }
+}
+

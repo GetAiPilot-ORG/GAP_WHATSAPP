@@ -6,9 +6,23 @@ import * as fs from "fs";
 
 const PORT = Number(process.env.PORT || 3001);
 
-const corsOrigins = process.env.CORS_ORIGINS 
-    ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
-    : ["http://localhost:5173", "http://localhost:5174", "https://wb.getaipilot.in"];
+const corsOrigins = (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    if (!origin) return callback(null, true);
+    const allowedStatic = [
+        "http://localhost:5173", "http://localhost:5174", "http://localhost:3000",
+        "https://wb.getaipilot.in", "https://w.getaipilot.in", "https://mail.getaipilot.in"
+    ];
+    if (
+        allowedStatic.includes(origin) ||
+        origin.startsWith("http://localhost:") ||
+        origin.startsWith("https://localhost:") ||
+        origin.endsWith(".ngrok-free.dev") ||
+        origin.endsWith(".vercel.app")
+    ) {
+        return callback(null, true);
+    }
+    return callback(null, true);
+};
     
 const corsAllowedHeaders = [
     "Content-Type", "Authorization", "ngrok-skip-browser-warning", "bypass-tunnel-reminder"

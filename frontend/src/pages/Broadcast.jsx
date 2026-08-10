@@ -1,11 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react'
-import { useLocation } from 'react-router-dom'
-import { Send, Users, FileText, Calendar, Check, ArrowRight, LayoutGrid, Loader2, Clock, Trash2, ChevronDown, ChevronUp, Upload, Link as LinkIcon, Info, Wallet, Pause, Play, Phone, MessageSquare, ShieldCheck, TrendingUp, Search, X } from 'lucide-react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { Send, Users, FileText, Calendar, Check, ArrowRight, LayoutGrid, Loader2, RotateCw, Clock, Trash2, ChevronDown, ChevronUp, Upload, Link as LinkIcon, Info, Wallet, Pause, Play, Phone, MessageSquare, ShieldCheck, TrendingUp, Search, X, Megaphone } from 'lucide-react'
 import { format } from 'date-fns'
 import { useAuth } from '../context/AuthContext'
 import { useDialog } from '../context/DialogContext'
+import { useWhatsAppAccounts } from '../context/WhatsAppAccountContext'
 import { formatINRFromPaise } from '../config/whatsappPricing'
 import { MESSAGING_TIERS, getMessagingTierLabel } from '../utils/messagingLimits'
+import DateTimePicker from '../components/DateTimePicker'
+import Modal from '../components/Modal'
 
 const STEPS = [
     { id: 1, name: 'Setup', icon: LayoutGrid },
@@ -113,11 +116,12 @@ function validateDynamicUrlButtonValue(button, value) {
     }
 }
 
-export default function Broadcast() {
+export default function Broadcast({ defaultTab = 'new' }) {
     const { session, apiCall } = useAuth()
     const { alertDialog, confirmDialog } = useDialog()
     const token = session?.access_token
     const location = useLocation()
+    const navigate = useNavigate()
 
     const getPreviewText = () => {
         if (!selectedTemplate) return '';
@@ -160,7 +164,11 @@ export default function Broadcast() {
     };
 
 
-    const [activeTab, setActiveTab] = useState('new') // 'new' | 'history'
+    const [activeTab, setActiveTab] = useState(defaultTab) // 'new' | 'history'
+
+    useEffect(() => {
+        setActiveTab(defaultTab)
+    }, [defaultTab])
     const [campaignsList, setCampaignsList] = useState([])
     const [historySearch, setHistorySearch] = useState('')
     const [historyStatus, setHistoryStatus] = useState('all')
@@ -185,26 +193,37 @@ export default function Broadcast() {
     const [csvData, setCsvData] = useState(null)
     const [csvFileName, setCsvFileName] = useState('')
 
-    const [waAccounts, setWaAccounts] = useState([])
+    const { accounts: waAccounts, isLoading: isAccountsLoading } = useWhatsAppAccounts()
     const [messagingLimits, setMessagingLimits] = useState(null)
     const [messagingLimitsState, setMessagingLimitsState] = useState('idle')
     const [tags, setTags] = useState([])
     const [contacts, setContacts] = useState([])
     const [templates, setTemplates] = useState([])
 
-    const [isLoading, setIsLoading] = useState({ accounts: true, tags: true, templates: true, contacts: false })
+    const [isLoading, setIsLoading] = useState({ accounts: isAccountsLoading, tags: true, templates: true, contacts: false })
     const [isSending, setIsSending] = useState(false)
     const [sendResult, setSendResult] = useState(null)
     const [billingEstimate, setBillingEstimate] = useState(null)
     const [isEstimating, setIsEstimating] = useState(false)
     const [estimateError, setEstimateError] = useState('')
     const [isMobilePreviewOpen, setIsMobilePreviewOpen] = useState(false)
+    const [broadcastAgainCamp, setBroadcastAgainCamp] = useState(null)
     const visibleCampaigns = campaignsList.filter(item => {
         const matchesSearch = !historySearch.trim() ||
             String(item.name || '').toLowerCase().includes(historySearch.trim().toLowerCase()) ||
             String(item.template_name || '').toLowerCase().includes(historySearch.trim().toLowerCase())
         return matchesSearch && (historyStatus === 'all' || item.status === historyStatus)
     })
+
+    const templateUsageCounts = useMemo(() => {
+        const counts = {};
+        campaignsList.forEach(c => {
+            if (c.template_name) {
+                counts[c.template_name] = (counts[c.template_name] || 0) + 1;
+            }
+        });
+        return counts;
+    }, [campaignsList]);
 
     const selectedTemplate = templates.find(t => t.name === campaign.template_name && t.language === campaign.template_language)
         || templates.find(t => t.name === campaign.template_name)
@@ -221,6 +240,44 @@ export default function Broadcast() {
     const needsHeaderMedia = ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(selectedHeaderFormat)
     const [headerMediaUrl, setHeaderMediaUrl] = useState('')
     const [isHeaderUploading, setIsHeaderUploading] = useState(false)
+    const [wabaProfile, setWabaProfile] = useState(null)
+
+    useEffect(() => {
+        if (!campaign.wa_account_id || !token) {
+            setWabaProfile(null)
+            return
+        }
+        let active = true
+        apiCall(`${API_URL}/api/whatsapp/accounts/${campaign.wa_account_id}/business-profile`)
+            .then(res => res.json())
+            .then(data => {
+                if (active && data?.profile) {
+                    setWabaProfile(data.profile)
+                }
+            })
+            .catch(err => {
+                console.error("Error fetching WABA business profile:", err)
+            })
+        return () => { active = false }
+    }, [campaign.wa_account_id, token])
+
+    // Auto-select first template when entering Step 3
+    useEffect(() => {
+        if (currentStep === 3 && !campaign.template_name && templates.length > 0) {
+            const approved = templates.filter(t => t.status === 'APPROVED')
+            if (approved.length > 0) {
+                const first = approved[0]
+                setHeaderMediaUrl('')
+                setCustomTexts({})
+                setCampaign(prev => ({
+                    ...prev,
+                    template_name: first.name,
+                    template_language: first.language,
+                    variable_mapping: {}
+                }))
+            }
+        }
+    }, [currentStep, templates, campaign.template_name])
 
     // Popup custom selection states
     const [isContactsPopupOpen, setIsContactsPopupOpen] = useState(false)
@@ -228,6 +285,8 @@ export default function Broadcast() {
     const [tempSelectedKeys, setTempSelectedKeys] = useState(new Set())
     const [popupSearch, setPopupSearch] = useState('')
     const [popupFilter, setPopupFilter] = useState('all') // 'all' | 'sent' | 'unsent'
+    const [templateCategoryFilter, setTemplateCategoryFilter] = useState('ALL')
+    const [templateSearchQuery, setTemplateSearchQuery] = useState('')
 
     useEffect(() => {
         setSelectedContactKeys(null);
@@ -271,27 +330,42 @@ export default function Broadcast() {
 
     const selectedTemplateCategory = selectedTemplate?.category || campaign.variable_mapping?._template_category || 'MARKETING'
 
+    const filteredApprovedTemplates = useMemo(() => {
+        return templates.filter(t => {
+            if (t.status !== 'APPROVED') return false;
+            
+            // Category filter
+            if (templateCategoryFilter !== 'ALL') {
+                if (!t.category || t.category.toUpperCase() !== templateCategoryFilter) {
+                    return false;
+                }
+            }
+            
+            // Search filter
+            if (templateSearchQuery.trim()) {
+                const query = templateSearchQuery.toLowerCase();
+                const bodyText = t.components?.find(c => c.type === 'BODY')?.text || '';
+                const nameMatches = String(t.name || '').toLowerCase().includes(query);
+                const bodyMatches = bodyText.toLowerCase().includes(query);
+                return nameMatches || bodyMatches;
+            }
+            
+            return true;
+        });
+    }, [templates, templateCategoryFilter, templateSearchQuery]);
+
     useEffect(() => {
         if (!token) return;
 
-        apiCall(`${API_URL}/api/whatsapp/accounts`)
-            .then(res => res.json())
-            .then(data => {
-                const accounts = Array.isArray(data) ? data : [];
-                setWaAccounts(accounts);
-                setIsLoading(p => ({ ...p, accounts: false }));
-                
-                const validAccounts = accounts.filter(acc => acc.whatsapp_business_account_id);
-                if (validAccounts.length > 0) {
-                    setCampaign(prev => {
-                        if (!prev.wa_account_id) {
-                            return { ...prev, wa_account_id: validAccounts[0].id };
-                        }
-                        return prev;
-                    });
+        const validAccounts = (waAccounts || []).filter(acc => acc.whatsapp_business_account_id || acc.phone_number_id);
+        if (validAccounts.length > 0) {
+            setCampaign(prev => {
+                if (!prev.wa_account_id) {
+                    return { ...prev, wa_account_id: validAccounts[0].id };
                 }
-            })
-            .catch(() => setIsLoading(p => ({ ...p, accounts: false })));
+                return prev;
+            });
+        }
 
         apiCall(`${API_URL}/api/broadcasts/tags`)
             .then(res => res.json())
@@ -344,7 +418,8 @@ export default function Broadcast() {
     }, [campaign.wa_account_id])
 
     const fetchCampaignHistory = (silent = false) => {
-        if (!silent) {
+        const isSilent = typeof silent === 'boolean' ? silent : false;
+        if (!isSilent) {
             setIsLoadingHistory(true);
             setHistoryLoadState('loading');
         }
@@ -360,10 +435,10 @@ export default function Broadcast() {
             })
             .catch(error => {
                 console.error(error);
-                if (!silent) setHistoryLoadState('error');
+                if (!isSilent) setHistoryLoadState('error');
             })
             .finally(() => {
-                if (!silent) setIsLoadingHistory(false);
+                if (!isSilent) setIsLoadingHistory(false);
             });
     }
 
@@ -572,6 +647,61 @@ export default function Broadcast() {
         }));
     };
 
+    const validateMediaHeaderFile = (file, format) => {
+        if (!file) return { ok: false, message: 'No file selected.' }
+        const headerFormat = String(format || 'IMAGE').toUpperCase()
+        const sizeMB = file.size / (1024 * 1024)
+        const ext = file.name ? file.name.split('.').pop().toLowerCase() : ''
+        const mime = (file.type || '').toLowerCase()
+
+        if (headerFormat === 'IMAGE') {
+            if (sizeMB > 5) {
+                return {
+                    ok: false,
+                    message: `Image file is too large (${sizeMB.toFixed(1)} MB). Meta WhatsApp Cloud API limits template header images to max 5 MB.`
+                }
+            }
+            const isWebpOrGif = ext === 'webp' || ext === 'gif' || mime.includes('webp') || mime.includes('gif')
+            if (isWebpOrGif) {
+                return {
+                    ok: false,
+                    message: `Meta WhatsApp Cloud API only supports JPG and PNG image formats for template headers. WebP and GIF formats are not supported.`
+                }
+            }
+            const allowedExts = ['jpg', 'jpeg', 'png']
+            const allowedMimes = ['image/jpeg', 'image/png', 'image/jpg']
+            if (ext && !allowedExts.includes(ext) && !allowedMimes.some(m => mime.includes(m))) {
+                return {
+                    ok: false,
+                    message: `Invalid image format (.${ext || 'unknown'}). Meta WhatsApp Cloud API requires JPG or PNG images.`
+                }
+            }
+        } else if (headerFormat === 'VIDEO') {
+            if (sizeMB > 16) {
+                return {
+                    ok: false,
+                    message: `Video file is too large (${sizeMB.toFixed(1)} MB). Meta WhatsApp Cloud API limits template header videos to max 16 MB.`
+                }
+            }
+            const allowedExts = ['mp4', '3gp']
+            const allowedMimes = ['video/mp4', 'video/3gpp']
+            if (ext && !allowedExts.includes(ext) && !allowedMimes.some(m => mime.includes(m))) {
+                return {
+                    ok: false,
+                    message: `Invalid video format (.${ext || 'unknown'}). Meta WhatsApp Cloud API requires MP4 or 3GP videos.`
+                }
+            }
+        } else if (headerFormat === 'DOCUMENT') {
+            if (sizeMB > 100) {
+                return {
+                    ok: false,
+                    message: `Document file is too large (${sizeMB.toFixed(1)} MB). Meta WhatsApp Cloud API limits template header documents to max 100 MB.`
+                }
+            }
+        }
+        return { ok: true }
+    }
+
     const validateHeaderMediaUrl = async () => {
         if (!needsHeaderMedia) return true
         const url = headerMediaUrl.trim()
@@ -586,6 +716,19 @@ export default function Broadcast() {
         if (/^https?:\/\/example\.com\//i.test(url)) {
             await alertDialog('Please replace the example URL with your actual public media URL.', { title: 'Replace example URL', tone: 'warning' })
             return false
+        }
+        if (selectedHeaderFormat === 'IMAGE') {
+            const lower = url.toLowerCase()
+            if (lower.endsWith('.webp') || lower.endsWith('.gif')) {
+                await alertDialog('Meta WhatsApp API only supports JPG and PNG images for template headers. WebP and GIF URLs will cause broadcast delivery errors.', { title: 'Unsupported Image Format', tone: 'warning' })
+                return false
+            }
+        } else if (selectedHeaderFormat === 'VIDEO') {
+            const lower = url.toLowerCase()
+            if (lower.endsWith('.webm') || lower.endsWith('.avi') || lower.endsWith('.mov') || lower.endsWith('.mkv')) {
+                await alertDialog('Meta WhatsApp API requires MP4 or 3GP videos for template headers. Other video formats will cause broadcast delivery errors.', { title: 'Unsupported Video Format', tone: 'warning' })
+                return false
+            }
         }
         return true
     }
@@ -621,11 +764,16 @@ export default function Broadcast() {
 
     const handleHeaderMediaUpload = async (file) => {
         if (!file) return
+        const validation = validateMediaHeaderFile(file, selectedHeaderFormat)
+        if (!validation.ok) {
+            await alertDialog(validation.message, { title: 'Header Media Limits', tone: 'warning' })
+            return
+        }
         const formData = new FormData()
         formData.append('file', file)
         setIsHeaderUploading(true)
         try {
-            const res = await apiCall(`${API_URL}/api/broadcasts/header-media`, {
+            const res = await apiCall(`${API_URL}/api/broadcasts/header-media?media_type=${selectedHeaderFormat.toLowerCase()}`, {
                 method: 'POST',
                 body: formData
             })
@@ -775,109 +923,271 @@ export default function Broadcast() {
         });
     }
 
-    const renderLivePreview = () => {
+    const handleBroadcastAgain = (camp, audienceMode) => {
+        const newMapping = { ...(camp.variable_mapping || {}) };
+        const newCustomTexts = {};
+        
+        const predefinedSources = ['name', 'phone', 'email'];
+        
+        for (const key of Object.keys(newMapping)) {
+            if (!key.startsWith('_') && !key.startsWith('button_url_') && !key.startsWith('header_media_')) {
+                const val = newMapping[key];
+                if (!predefinedSources.includes(val) && !String(val).startsWith('field:')) {
+                    newCustomTexts[key] = val;
+                    newMapping[key] = 'custom';
+                }
+            }
+        }
+
+        const newAudienceType = audienceMode === 'same' ? camp.audience_type : 'saved';
+        const newAudienceTag = audienceMode === 'same' ? camp.audience_tag : '';
+
+        setCampaign({
+            name: `${camp.name} (Copy)`,
+            wa_account_id: camp.wa_account_id,
+            scheduled_at: '',
+            audience_type: newAudienceType,
+            audience_tag: newAudienceTag,
+            template_name: camp.template_name,
+            template_language: camp.template_language || 'en_US',
+            variable_mapping: newMapping
+        });
+        
+        setCustomTexts(newCustomTexts);
+        setHeaderMediaUrl(camp.header_media_url || newMapping._header_media_url || newMapping.header_media_url || '');
+        
+        if (audienceMode === 'same' && (camp.audience_type === 'CSV_UPLOAD' || camp.csv_data)) {
+            setCampaign(prev => ({ ...prev, audience_type: 'CSV_UPLOAD' }));
+            if (camp.csv_data) {
+                setCsvData(camp.csv_data);
+                setCsvFileName('previous_upload.csv');
+            } else {
+                setCsvData(null);
+                setCsvFileName('');
+                alertDialog('Your previous CSV data is not available. Please re-upload your CSV.', { title: 'CSV Required', tone: 'warning' });
+            }
+        } else {
+            if (audienceMode === 'other') {
+                setCsvData(null);
+                setCsvFileName('');
+            }
+        }
+        
+        setSelectedContactKeys(null);
+        setSendResult(null);
+        setCurrentStep(1);
+        setActiveTab('new');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+        
+const renderLivePreview = () => {
         if (!selectedTemplate) return null;
         return (
-            <div className="mt-6 space-y-3">
-                <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            <div className="space-y-3">
+                <style dangerouslySetInnerHTML={{__html: `
+                    .phone-chat-scroll::-webkit-scrollbar {
+                        display: none;
+                    }
+                    .phone-chat-scroll {
+                        -ms-overflow-style: none;
+                        scrollbar-width: none;
+                    }
+                `}} />
+                
+                <h3 className="text-xs font-mono font-bold tracking-widest text-zinc-400 uppercase flex items-center gap-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     Live Preview
                 </h3>
                 
-                <div className="rounded-xl border border-gray-250/80 bg-[#efeae2] p-4 relative overflow-hidden flex flex-col justify-between shadow-[inset_0_2px_4px_rgba(0,0,0,0.03)] min-h-[220px]">
-                    {/* Chat pattern background simulation */}
-                    <div className="absolute inset-0 opacity-[0.04] pointer-events-none" style={{
-                        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='%23000000' fill-opacity='1'%3E%3Cpath fill-rule='evenodd' d='M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7z'/%3E%3C/g%3E%3C/svg%3E")`
-                    }} />
+                {/* Phone mockup container */}
+                <div className="mx-auto w-full max-w-[310px] rounded-[40px] border-[8px] border-black bg-black shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] relative overflow-hidden flex flex-col select-none aspect-[9/18] ring-1 ring-zinc-900">
+                    
+                    {/* Camera / Notch */}
+                    <div className="absolute top-2.5 left-1/2 -translate-x-1/2 h-4 w-20 bg-zinc-950 rounded-full z-30 flex items-center justify-center">
+                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-800/80 mr-3" />
+                        <span className="w-1 h-1 rounded-full bg-zinc-900/50" />
+                    </div>
 
-                    {/* WhatsApp Bubble */}
-                    <div className="relative z-10 max-w-[85%] rounded-lg rounded-tl-none bg-white p-3.5 shadow-sm border border-gray-150 self-start">
-                        {/* Header text/media */}
-                        {selectedTemplate.components?.find(c => c.type === 'HEADER') && (() => {
-                            const header = selectedTemplate.components.find(c => c.type === 'HEADER');
-                            if (header.format === 'TEXT') {
-                                return <div className="font-bold text-gray-900 text-sm mb-1.5">{header.text}</div>;
-                            }
-                            if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(header.format)) {
-                                return (
-                                    <div className="mb-2 rounded-md bg-gray-100 border border-gray-200 flex items-center justify-center h-32 w-full text-gray-400 font-semibold text-xs overflow-hidden relative">
-                                        {headerMediaUrl ? (
-                                            header.format === 'IMAGE' ? (
-                                                <img src={headerMediaUrl} alt="Header media preview" className="w-full h-full object-cover" />
-                                            ) : header.format === 'VIDEO' ? (
-                                                <video src={headerMediaUrl} className="w-full h-full object-cover" />
-                                            ) : (
-                                                <div className="flex flex-col items-center gap-1.5 p-3">
-                                                    <FileText className="h-8 w-8 text-indigo-500" />
-                                                    <span className="truncate max-w-[150px] text-gray-600 font-mono text-[10px]">{headerMediaUrl.split('/').pop()}</span>
-                                                </div>
-                                            )
-                                        ) : (
-                                            <span className="flex flex-col items-center gap-1">
-                                                <span className="uppercase text-[10px] bg-gray-200 px-2 py-0.5 rounded text-gray-600 font-bold">{header.format} Header</span>
-                                                <span className="text-[10px] text-gray-400 font-normal">Pending media mapping</span>
-                                            </span>
-                                        )}
-                                    </div>
-                                );
-                            }
-                            return null;
-                        })()}
-
-                        {/* Body */}
-                        <div className="text-gray-900 text-sm break-words whitespace-pre-wrap leading-relaxed">
-                            {formatWhatsAppText(getPreviewText())}
-                        </div>
-
-                        {/* Footer */}
-                        {selectedTemplate.components?.find(c => c.type === 'FOOTER') && (
-                            <div className="text-[11px] text-gray-400 mt-1">
-                                {selectedTemplate.components.find(c => c.type === 'FOOTER').text}
-                            </div>
-                        )}
-
-                        {/* Time & status */}
-                        <div className="flex items-center justify-end gap-1 text-[9px] text-gray-400 mt-1 select-none">
-                            <span>12:00 PM</span>
-                            <span className="font-bold text-[#53bdeb]">✓✓</span>
+                    {/* iOS Status Bar */}
+                    <div className="px-5 pt-3.5 pb-2.5 bg-zinc-50 text-zinc-900 flex justify-between items-center text-[10px] font-semibold tracking-tight z-20 relative border-b border-zinc-100">
+                        <span>9:41</span>
+                        <div className="flex items-center gap-1.5">
+                            <span className="w-3.5 h-2 bg-zinc-800 rounded-sm" />
+                            <span className="w-1.5 h-1.5 bg-zinc-800 rounded-full" />
                         </div>
                     </div>
 
-                    {/* Buttons */}
-                    {selectedTemplate.components?.find(c => c.type === 'BUTTONS') && (
-                        <div className="relative z-10 mt-2 space-y-1.5 self-start w-[85%]">
-                            {selectedTemplate.components.find(c => c.type === 'BUTTONS').buttons.map((btn, idx) => (
-                                <div key={idx} className="flex items-center justify-center gap-2 rounded-lg bg-white py-2 px-3 shadow-sm border border-gray-200 text-xs font-bold text-sky-600 cursor-default hover:bg-gray-50 transition-colors">
-                                    {btn.type === 'PHONE_NUMBER' ? <Phone className="h-3.5 w-3.5" /> : btn.type === 'URL' ? <LinkIcon className="h-3.5 w-3.5" /> : <MessageSquare className="h-3.5 w-3.5" />}
-                                    <span className="truncate">{btn.text}</span>
+                    {/* WhatsApp Chat Header */}
+                    <div className="px-3 py-2 bg-zinc-50 border-b border-zinc-150 flex items-center justify-between z-25 relative">
+                        <div className="flex items-center gap-2 min-w-0">
+                            {wabaProfile?.profile_picture_url ? (
+                                <img 
+                                    src={wabaProfile.profile_picture_url} 
+                                    alt="Business account profile" 
+                                    className="w-8 h-8 rounded-full object-cover border border-zinc-200 shrink-0" 
+                                />
+                            ) : (
+                                <div className="w-8 h-8 rounded-full bg-zinc-200 border border-zinc-300 flex items-center justify-center text-zinc-650 text-xs font-bold font-mono shrink-0">
+                                    {(selectedWaAccount?.name || 'W').charAt(0).toUpperCase()}
                                 </div>
-                            ))}
+                            )}
+                            <div className="min-w-0">
+                                <div className="text-[11px] font-bold text-zinc-900 leading-tight truncate max-w-[130px]" title={selectedWaAccount?.name || 'WhatsApp Business'}>
+                                    {selectedWaAccount?.name || 'WhatsApp Business'}
+                                </div>
+                                <div className="text-[9px] text-zinc-400 font-medium leading-none mt-0.5 truncate max-w-[130px]">
+                                    {wabaProfile?.vertical ? String(wabaProfile.vertical).toLowerCase().replace(/_/g, ' ') : (selectedWaAccount?.display_phone_number || 'Business Account')}
+                                </div>
+                            </div>
                         </div>
-                    )}
+                        <div className="flex items-center gap-2.5 text-zinc-450 shrink-0">
+                            <Phone className="h-3.5 w-3.5 hover:text-zinc-600 transition-colors" />
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        </div>
+                    </div>
+
+                    {/* Chat Background / Wallpaper */}
+                    <div className="flex-1 bg-[#eae6df] relative overflow-hidden flex flex-col p-3.5 justify-end">
+                        {/* WhatsApp wallpaper pattern */}
+                        <div className="absolute inset-0 opacity-[0.04] pointer-events-none" style={{
+                            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Cg fill='none' stroke='%23000000' stroke-width='0.7' stroke-opacity='0.04' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 15 l1.5 2.5 h2.5 l-2 1.8 l0.8 2.7 l-2.8 -1.7 l-2.8 1.7 l0.8 -2.7 l-2 -1.8 h2.5 z'/%3E%3Cpath d='M45 25 h8 a2 2 0 0 1 2 2 v4 a2 2 0 0 1 -2 2 h-5 l-3 3 v-3 h-2 a2 2 0 0 1 -2 -2 v-4 a2 2 0 0 1 2 -2 z'/%3E%3Cpath d='M90 15 a2 2 0 0 1 2 2 v1 a7 7 0 0 1 -7 7 h-1 a2 2 0 0 1 -2 -2 v-1 a2 2 0 0 1 2 -2 h1 a5 5 0 0 0 5 -5'/%3E%3Ccircle cx='120' cy='20' r='5'/%3E%3Ccircle cx='118.5' cy='18.5' r='0.4' fill='%23000000' fill-opacity='0.04'/%3E%3Ccircle cx='121.5' cy='18.5' r='0.4' fill='%23000000' fill-opacity='0.04'/%3E%3Cpath d='M118 21.5 q2 1 4 0'/%3E%3Cpath d='M20 65 c-1.5 -1.5 -3.5 -1.5 -5 0 l-1 1 l-1 -1 c-1.5 -1.5 -3.5 -1.5 -5 0 c-1.5 1.5 -1.5 3.5 0 5 l6 6 l6 -6 c1.5 -1.5 1.5 -3.5 0 -5 z'/%3E%3Cpath d='M85 60 a2 2 0 0 1 2 -2 a2.5 2.5 0 0 1 4 1 a2 2 0 0 1 1.5 2 h-7.5 z'/%3E%3Cpath d='M115 65 l2 2 l4 -4 M118 65 l2 2 l4 -4'/%3E%3Cpath d='M25 110 v-12 h6 v3 h-3 v9 a2 2 0 1 1 -3 -2'/%3E%3Cpath d='M55 105 h6 a2 2 0 0 1 2 2 v3 a2 2 0 0 1 -2 2 h-6 a2 2 0 0 1 -2 -2 v-3 a2 2 0 0 1 2 -2 z M63 107 h2 a1 1 0 0 1 1 1 v1 a1 1 0 0 1 -1 1 h-2'/%3E%3Cpath d='M95 110 c-3 -3 -3 -6 0 -9 c3 -3 6 -3 9 0 l-4.5 5.5 z'/%3E%3Ccircle cx='99.5' cy='104.5' r='1'/%3E%3C/g%3E%3C/svg%3E")`,
+                            backgroundSize: '140px 140px'
+                        }} />
+
+                        {/* Messages Area */}
+                        <div className="flex flex-col space-y-3.5 z-10 w-full overflow-y-auto pr-0.5 phone-chat-scroll">
+                            {/* Message Bubble */}
+                            <div className="max-w-[85%] rounded-2xl rounded-tl-none bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.05)] border border-zinc-150 relative self-start flex flex-col">
+                                {/* Header Text/Media */}
+                                {selectedTemplate.components?.find(c => c.type === 'HEADER') && (() => {
+                                    const header = selectedTemplate.components.find(c => c.type === 'HEADER');
+                                    if (header.format === 'TEXT') {
+                                        return <div className="font-extrabold text-zinc-955 text-xs mb-1.5 leading-tight tracking-tight">{header.text}</div>;
+                                    }
+                                    if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(header.format)) {
+                                        return (
+                                            <div className="mb-2 rounded-lg bg-zinc-50/50 border border-zinc-150 flex items-center justify-center h-28 w-full text-zinc-400 font-bold text-[10px] overflow-hidden relative shadow-inner">
+                                                {headerMediaUrl ? (
+                                                    header.format === 'IMAGE' ? (
+                                                        <img src={headerMediaUrl} alt="Header media preview" className="w-full h-full object-cover" />
+                                                    ) : header.format === 'VIDEO' ? (
+                                                        <video src={headerMediaUrl} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <div className="flex flex-col items-center gap-1.5 p-3">
+                                                            <FileText className="h-6 w-6 text-zinc-500" />
+                                                            <span className="truncate max-w-[120px] text-zinc-500 font-mono text-[9px]">{headerMediaUrl.split('/').pop()}</span>
+                                                        </div>
+                                                    )
+                                                ) : (
+                                                    <span className="flex flex-col items-center gap-1 text-center px-4">
+                                                        <span className="uppercase text-[9px] bg-zinc-200/60 px-1.5 py-0.5 rounded text-zinc-650 font-mono font-bold tracking-wider">{header.format} Header</span>
+                                                        <span className="text-[9px] text-zinc-400 font-normal leading-normal">URL required for send</span>
+                                                    </span>
+                                                )}
+                                            </div>
+                                        );
+                                    }
+                                    return null;
+                                })()}
+
+                                {/* Message Body */}
+                                <div className="text-zinc-900 text-xs break-words whitespace-pre-wrap leading-relaxed">
+                                    {formatWhatsAppText(getPreviewText())}
+                                </div>
+
+                                {/* Message Footer */}
+                                {selectedTemplate.components?.find(c => c.type === 'FOOTER') && (
+                                    <div className="text-[10px] text-zinc-400 mt-1.5 border-t border-zinc-100/50 pt-1 leading-normal font-sans">
+                                        {selectedTemplate.components.find(c => c.type === 'FOOTER').text}
+                                    </div>
+                                )}
+
+                                {/* Timestamp and tick */}
+                                <div className="flex items-center justify-end gap-1 text-[8px] text-zinc-400 mt-1 select-none font-sans font-medium self-end">
+                                    <span>12:00 PM</span>
+                                    <span className="font-bold text-emerald-500">✓✓</span>
+                                </div>
+                            </div>
+
+                            {/* Buttons */}
+                            {selectedTemplate.components?.find(c => c.type === 'BUTTONS') && (
+                                <div className="space-y-1.5 w-[85%] self-start z-10">
+                                    {selectedTemplate.components.find(c => c.type === 'BUTTONS').buttons.map((btn, idx) => (
+                                        <div key={idx} className="flex items-center justify-center gap-1.5 rounded-xl bg-white/90 backdrop-blur-sm py-2 px-3 border border-zinc-200/80 text-[10px] font-bold text-zinc-800 shadow-sm cursor-default hover:bg-white active:scale-[0.98] transition-all">
+                                            {btn.type === 'PHONE_NUMBER' ? <Phone className="h-3 w-3 text-zinc-555" /> : btn.type === 'URL' ? <LinkIcon className="h-3 w-3 text-zinc-555" /> : <MessageSquare className="h-3 w-3 text-zinc-555" />}
+                                            <span className="truncate">{btn.text}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Bottom Chat Bar */}
+                    <div className="p-2.5 bg-zinc-50 border-t border-zinc-150 flex items-center gap-2 z-20">
+                        <div className="flex-1 bg-white border border-zinc-200 rounded-full h-8 px-3 flex items-center text-[10px] text-zinc-400">
+                            Type a message...
+                        </div>
+                        <div className="w-8 h-8 rounded-full bg-zinc-955 flex items-center justify-center text-white shrink-0 shadow-sm">
+                            <Send className="h-3 w-3" />
+                        </div>
+                    </div>
                 </div>
             </div>
         );
     };
 
     return (
-        <div className="mx-auto max-w-7xl space-y-6 md:space-y-8 px-4 sm:px-6 lg:px-8 pb-16">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="mx-auto w-full max-w-[1600px] space-y-6 md:space-y-8 px-4 sm:px-6 lg:px-8 pb-16">
+            <div className="flex flex-wrap gap-4 md:items-center justify-between">
                 <div>
                     <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Broadcasts</h1>
                     <p className="text-xs md:text-sm text-gray-500 mt-1 md:mt-2 max-w-lg leading-relaxed">Design, schedule, and track bulk message campaigns for your audience.</p>
                 </div>
-                <div data-tour="broadcast-tabs" className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end">
-                    <div className="hidden md:block">
+
+                
+                {activeTab === 'new' && !sendResult && (
+                    <div className="hidden lg:flex items-center justify-center shrink-0 mx-2 xl:mx-4">
+                        <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-gray-200/60 shadow-sm">
+                            {STEPS.map((step, index) => {
+                                const isActive = step.id === currentStep
+                                const isCompleted = step.id < currentStep
+                                return (
+                                    <React.Fragment key={step.id}>
+                                        <button
+                                            type="button"
+                                            className={`flex items-center shrink-0 gap-1.5 ${isCompleted ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} transition-opacity`}
+                                            onClick={() => { if (isCompleted) setCurrentStep(step.id) }}
+                                            disabled={!isCompleted && !isActive}
+                                        >
+                                            <div className={`flex shrink-0 h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${isActive ? 'bg-[#0070d1] text-white shadow-sm' : isCompleted ? 'bg-emerald-500 text-white shadow-sm' : 'bg-gray-100 text-gray-400 border border-gray-200'}`}>
+                                                {isCompleted ? <Check className="h-3 w-3 shrink-0" /> : step.id}
+                                            </div>
+                                            <span className={`text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${isActive ? 'text-[#0070d1]' : isCompleted ? 'text-emerald-600' : 'text-gray-400'}`}>
+                                                {step.name}
+                                            </span>
+                                        </button>
+                                        {index < STEPS.length - 1 && (
+                                            <div className={`h-[2px] w-3 lg:w-5 shrink-0 rounded-full transition-colors ${step.id < currentStep ? 'bg-emerald-500' : 'bg-gray-100'}`} />
+                                        )}
+                                    </React.Fragment>
+                                )
+                            })}
+                        </div>
                     </div>
+                )}
+
+                <div data-tour="broadcast-tabs" className="flex items-center shrink-0 gap-2 w-full md:w-auto justify-between md:justify-end">
                     <div className="flex bg-gray-100/80 p-1.5 rounded-xl border border-gray-200/60 shadow-sm backdrop-blur-sm w-full md:w-auto">
                         <button
-                            onClick={() => setActiveTab('new')}
+                            onClick={() => navigate('/broadcast')}
                             className={`flex-1 md:flex-initial text-center px-3 py-2 md:px-5 md:py-2.5 text-xs md:text-sm font-semibold rounded-lg transition-colors ${activeTab === 'new' ? 'bg-white shadow-sm text-[#0064b7] ring-1 ring-gray-200/50' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}`}
                         >
                             New Campaign
                         </button>
                         <button
-                            onClick={() => setActiveTab('history')}
+                            onClick={() => navigate('/broadcast/history')}
                             className={`flex-1 md:flex-initial text-center px-3 py-2 md:px-5 md:py-2.5 text-xs md:text-sm font-semibold rounded-lg transition-colors ${activeTab === 'history' ? 'bg-white shadow-sm text-[#0064b7] ring-1 ring-gray-200/50' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}`}
                         >
                             History
@@ -894,23 +1204,36 @@ export default function Broadcast() {
                             <h2 className="text-xl font-semibold text-gray-950">Campaign history</h2>
                             <p className="mt-1 text-sm text-gray-500">Monitor delivery and manage active broadcasts.</p>
                         </div>
-                        <button onClick={fetchCampaignHistory} className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-[#0064b7] transition-colors hover:bg-[#eef7ff]">
-                            <Loader2 className={`w-4 h-4 ${isLoadingHistory ? 'animate-spin' : ''}`} />
-                            Refresh
+                        <button
+                            type="button"
+                            disabled={isLoadingHistory}
+                            onClick={() => {
+                                fetchCampaignHistory(false);
+                                if (expandedCampaignId) {
+                                    fetchRecipientReport(expandedCampaignId, 1);
+                                }
+                            }}
+                            className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-[#0064b7] transition-all hover:bg-[#eef7ff] hover:border-[#b9dcfb] active:scale-95 shadow-xs disabled:opacity-75 cursor-pointer"
+                        >
+                            <RotateCw className={`w-4 h-4 ${isLoadingHistory ? 'animate-spin' : ''}`} />
+                            <span>Refresh</span>
                         </button>
                         </div>
-                        <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_180px]">
-                            <input
-                                type="search"
-                                value={historySearch}
-                                onChange={event => setHistorySearch(event.target.value)}
-                                placeholder="Search campaigns or templates"
-                                className="h-10 rounded-lg border-gray-300 bg-white text-sm"
-                            />
+                        <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px]">
+                            <div className="relative">
+                                <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                <input
+                                    type="search"
+                                    value={historySearch}
+                                    onChange={event => setHistorySearch(event.target.value)}
+                                    placeholder="Search campaigns or templates"
+                                    className="w-full h-10 pl-10 pr-4 rounded-xl border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#0064b7]/20 focus:border-[#0064b7] shadow-xs"
+                                />
+                            </div>
                             <select
                                 value={historyStatus}
                                 onChange={event => setHistoryStatus(event.target.value)}
-                                className="h-10 rounded-lg border-gray-300 bg-white text-sm"
+                                className="h-10 rounded-xl border border-gray-300 bg-white text-sm px-3 focus:outline-none focus:ring-2 focus:ring-[#0064b7]/20 focus:border-[#0064b7] shadow-xs"
                                 aria-label="Filter campaigns by status"
                             >
                                 <option value="all">All statuses</option>
@@ -942,122 +1265,221 @@ export default function Broadcast() {
                         </div>
                     ) : (
                         <>
-                        <div className="divide-y divide-gray-100 md:hidden">
+                        <div className="divide-y divide-gray-150 md:hidden bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
                             {visibleCampaigns.map(camp => (
-                                <article key={camp.id} className="space-y-3 p-4">
+                                <article key={camp.id} className="space-y-4 p-5">
                                     <div className="flex items-start justify-between gap-3">
-                                        <div className="min-w-0">
-                                            <h3 className="truncate text-sm font-semibold text-gray-950">{camp.name}</h3>
-                                            <p className="mt-1 truncate text-xs text-gray-500">{camp.template_name}</p>
+                                        <div className="min-w-0 flex-1">
+                                            <h3 className="truncate text-base font-bold text-gray-950">{camp.name}</h3>
+                                            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
+                                                <FileText className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                                <span className="truncate max-w-[150px]">{camp.template_name}</span>
+                                                {templateUsageCounts[camp.template_name] > 0 && (
+                                                    <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-semibold whitespace-nowrap">
+                                                        {templateUsageCounts[camp.template_name]} {templateUsageCounts[camp.template_name] === 1 ? 'time' : 'times'}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
-                                        <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${camp.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : camp.status === 'failed' ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'}`}>{camp.status}</span>
+                                        <span className={`px-2.5 py-1 text-[10px] font-bold rounded-lg uppercase tracking-wide inline-flex items-center gap-1 ${
+                                            camp.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60' :
+                                            camp.status === 'failed' ? 'bg-rose-50 text-rose-700 border border-rose-200/60' :
+                                            camp.status === 'cancelled' ? 'bg-gray-50 text-gray-700 border border-gray-300' :
+                                            camp.status === 'processing' ? 'bg-blue-50 text-blue-700 border border-blue-200/60' :
+                                            'bg-amber-50 text-amber-700 border border-amber-200/60'
+                                        }`}>
+                                            {camp.status === 'processing' && <Loader2 className="w-2.5 h-2.5 animate-spin" />}
+                                            {camp.status}
+                                        </span>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-3 rounded-lg bg-gray-50 p-3 text-xs">
-                                        <div><span className="block text-gray-500">Audience</span><span className="mt-1 block font-semibold text-gray-800">{camp.total_contacts || camp.prepared_count || 0} contacts</span></div>
-                                        <div><span className="block text-gray-500">Delivery</span><span className="mt-1 block font-semibold text-gray-800">{camp.accepted_count ?? camp.sent_count ?? 0} accepted</span></div>
+                                    <div className="grid grid-cols-2 gap-4 rounded-xl bg-gray-50/80 p-4 border border-gray-100 text-xs">
+                                        <div>
+                                            <span className="block text-gray-500 font-medium">Audience</span>
+                                            <span className="mt-1 font-bold text-gray-800 flex items-center gap-1">
+                                                <Users className="w-3.5 h-3.5 text-gray-400" />
+                                                {camp.total_contacts || camp.prepared_count || 0} contacts
+                                            </span>
+                                            <span className="block text-[10px] text-gray-500 mt-1 font-medium truncate max-w-[130px]" title={camp.audience_tag}>
+                                                Tag: {camp.audience_tag || (String(camp.audience_type).toLowerCase().includes('csv') || camp.csv_data ? 'CSV Upload' : camp.audience_type === 'saved' ? 'Saved Contacts' : 'All Contacts')}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span className="block text-gray-500 font-medium">Date / Scheduled</span>
+                                            <span className="mt-1 block font-semibold text-gray-750 text-[11px] leading-tight">
+                                                {camp.scheduled_at ? format(new Date(camp.scheduled_at), 'MMM dd, yyyy · hh:mm a') : format(new Date(camp.created_at), 'MMM dd, yyyy · hh:mm a')}
+                                            </span>
+                                        </div>
                                     </div>
-                                    <button type="button" onClick={() => toggleCampaignDetails(camp)} className="w-full rounded-lg border border-gray-200 py-2 text-xs font-semibold text-[#0064b7]">
-                                        {expandedCampaignId === camp.id ? 'Hide delivery report' : 'View delivery report'}
-                                    </button>
+
+                                    {(camp.schema_version >= 2 || camp.status === 'completed') && (
+                                        <div className="flex flex-wrap items-center gap-2 text-xs pt-1">
+                                            <span className="text-gray-550 font-medium">Performance:</span>
+                                            <div className="flex items-center gap-1.5 text-emerald-700 font-bold bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100/60">
+                                                <Check className="w-3 h-3" /> {camp.schema_version >= 2 ? (camp.accepted_count ?? camp.sent_count ?? 0) : (camp.results?.filter(r => ['accepted', 'sent', 'delivered', 'read'].includes(r?.status)).length || 0)}
+                                            </div>
+                                            <div className="flex items-center gap-1.5 text-rose-700 font-bold bg-rose-50 px-2 py-1 rounded-md border border-rose-100/60">
+                                                <Info className="w-3 h-3" /> {camp.schema_version >= 2 ? (camp.failed_count ?? 0) : (camp.results?.filter(r => r?.status === 'failed').length || 0)}
+                                            </div>
+                                            {camp.schema_version >= 2 && <span className="text-gray-500 font-mono text-[10px] ml-auto">{camp.prepared_count || 0}/{camp.total_contacts || 0}</span>}
+                                        </div>
+                                    )}
+
+                                    <div className="flex flex-wrap gap-2 pt-1">
+                                        {camp.schema_version >= 2 && ['queued', 'processing'].includes(camp.status) && (
+                                            <button onClick={() => updateCampaignState(camp.id, 'pause')} className="flex-1 justify-center text-amber-705 text-xs font-bold flex items-center gap-1.5 bg-amber-50 active:scale-[0.98] py-2 rounded-lg border border-amber-200 transition-all">
+                                                <Pause className="w-3.5 h-3.5" /> Pause
+                                            </button>
+                                        )}
+                                        {camp.schema_version >= 2 && camp.status === 'paused' && (
+                                            <button onClick={() => updateCampaignState(camp.id, 'resume')} className="flex-1 justify-center text-emerald-705 text-xs font-bold flex items-center gap-1.5 bg-emerald-50 active:scale-[0.98] py-2 rounded-lg border border-emerald-200 transition-all">
+                                                <Play className="w-3.5 h-3.5" /> Resume
+                                            </button>
+                                        )}
+                                        {(['preparing', 'queued', 'processing', 'paused', 'scheduled'].includes(camp.status)) && (
+                                            <button
+                                                onClick={() => cancelCampaign(camp.id)}
+                                                className="flex-1 justify-center text-rose-600 hover:text-white text-xs font-bold flex items-center gap-1.5 bg-rose-50 active:scale-[0.98] hover:bg-rose-500 py-2 rounded-lg transition-all border border-rose-200 hover:border-rose-500"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" /> Cancel
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={() => setBroadcastAgainCamp(camp)}
+                                            className="flex-1 justify-center text-[#0064b7] hover:text-white text-xs font-bold flex items-center gap-1.5 bg-[#eef7ff] active:scale-[0.98] hover:bg-[#0064b7] py-2 rounded-lg transition-all border border-[#b9dcfb] hover:border-[#0064b7]"
+                                        >
+                                            <Megaphone className="w-3.5 h-3.5" /> Broadcast Again
+                                        </button>
+                                        {((camp.schema_version >= 2 && (camp.total_contacts || camp.prepared_count)) || ((camp.status === 'completed' || camp.status === 'cancelled') && camp.results?.length > 0)) && (
+                                            <button
+                                                onClick={() => toggleCampaignDetails(camp)}
+                                                className="w-full justify-center text-[#0064b7] text-xs font-bold flex items-center gap-1.5 bg-sky-50/50 hover:bg-sky-50 active:scale-[0.98] py-2.5 rounded-lg transition-all border border-sky-100"
+                                            >
+                                                {expandedCampaignId === camp.id ? 'Hide Delivery Report' : 'View Delivery Report'}
+                                                {expandedCampaignId === camp.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                            </button>
+                                        )}
+                                    </div>
+
                                     {expandedCampaignId === camp.id && (
-                                        <div className="space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                                        <div className="space-y-2 rounded-xl border border-gray-200 bg-gray-50/60 p-3 mt-3 shadow-inner max-h-72 overflow-y-auto">
                                             {recipientReports[camp.id]?.loading ? (
                                                 <div className="flex items-center justify-center gap-2 py-4 text-xs text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading report</div>
                                             ) : recipientReports[camp.id]?.error ? (
-                                                <p className="text-xs text-red-600">{recipientReports[camp.id].error}</p>
-                                            ) : (recipientReports[camp.id]?.recipients || []).slice(0, 5).map(row => (
-                                                <div key={row.id || row.normalized_phone} className="flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2 text-xs">
-                                                    <span className="truncate font-medium text-gray-800">{row.contact_name || row.normalized_phone}</span>
-                                                    <span className="shrink-0 capitalize text-gray-500">{row.status}</span>
+                                                <p className="text-xs text-red-650">{recipientReports[camp.id].error}</p>
+                                            ) : (recipientReports[camp.id]?.recipients || []).slice(0, 15).map(row => (
+                                                <div key={row.id || row.normalized_phone} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-xs border border-gray-100 shadow-sm">
+                                                    <span className="truncate font-bold text-gray-800">{row.contact_name || row.normalized_phone}</span>
+                                                    <span className={`shrink-0 capitalize font-semibold ${['accepted', 'sent', 'delivered', 'read'].includes(row.status) ? 'text-emerald-600' : row.status === 'failed' ? 'text-rose-600' : 'text-amber-600'}`}>{row.status}</span>
                                                 </div>
                                             ))}
+                                            {camp.schema_version >= 2 && recipientReports[camp.id]?.pagination?.total > 15 && (
+                                                <div className="pt-2 text-center text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                                                    Showing first 15 recipients (View on Desktop for full report)
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </article>
                             ))}
                         </div>
                         <div className="hidden overflow-x-auto md:block">
-                            <table className="w-full text-left text-sm whitespace-nowrap">
-                                <thead className="bg-gray-50/80 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
+                            <table className="w-full text-left text-sm min-w-[900px]">
+                                <thead className="bg-gray-50/80 text-gray-500 font-semibold uppercase text-[11px] tracking-wider border-b border-gray-200 select-none">
                                     <tr>
-                                        <th className="px-8 py-5">Campaign Name</th>
-                                        <th className="px-8 py-5">Status</th>
-                                        <th className="px-8 py-5">Audience</th>
-                                        <th className="px-8 py-5">Date / Scheduled</th>
-                                        <th className="px-8 py-5">Performance</th>
-                                        <th className="px-8 py-5 text-right">Actions</th>
+                                        <th className="px-4 py-3.5 pl-6 min-w-[200px]">Campaign Name</th>
+                                        <th className="px-4 py-3.5 min-w-[110px]">Status</th>
+                                        <th className="px-4 py-3.5 min-w-[130px]">Audience</th>
+                                        <th className="px-4 py-3.5 min-w-[160px]">Date / Scheduled</th>
+                                        <th className="px-4 py-3.5 min-w-[140px]">Performance</th>
+                                        <th className="px-4 py-3.5 pr-6 text-right min-w-[210px]">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {visibleCampaigns.map(camp => (
                                         <React.Fragment key={camp.id}>
                                             <tr className="hover:bg-gray-50/60 transition-colors">
-                                                <td className="px-8 py-5">
-                                                    <div className="font-bold text-gray-900">{camp.name}</div>
+                                                <td className="px-4 py-3.5 pl-6">
+                                                    <div className="font-bold text-gray-900 truncate max-w-[220px]" title={camp.name}>{camp.name}</div>
                                                     <div className="text-xs font-medium text-gray-500 mt-1 flex items-center gap-1.5">
-                                                        <FileText className="w-3.5 h-3.5" /> {camp.template_name}
+                                                        <FileText className="w-3.5 h-3.5 text-gray-400 shrink-0" /> 
+                                                        <span className="truncate max-w-[140px]" title={camp.template_name}>{camp.template_name}</span>
+                                                        {templateUsageCounts[camp.template_name] > 0 && (
+                                                            <span className="text-[10px] bg-gray-100 text-gray-500 border border-gray-200/80 px-1.5 py-0.5 rounded-md font-semibold whitespace-nowrap shrink-0" title={`This template has been used in ${templateUsageCounts[camp.template_name]} campaigns`}>
+                                                                {templateUsageCounts[camp.template_name]} {templateUsageCounts[camp.template_name] === 1 ? 'time' : 'times'}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </td>
-                                                <td className="px-8 py-5">
-                                                    <span className={`px-3 py-1.5 text-xs font-bold rounded-lg uppercase tracking-wide flex items-center inline-flex gap-1.5 ${camp.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60' :
-                                                            camp.status === 'failed' ? 'bg-rose-50 text-rose-700 border border-rose-200/60' :
-                                                                camp.status === 'cancelled' ? 'bg-gray-50 text-gray-700 border border-gray-300' :
-                                                                    camp.status === 'processing' ? 'bg-blue-50 text-blue-700 border border-blue-200/60' :
-                                                                        'bg-amber-50 text-amber-700 border border-amber-200/60'
-                                                        }`}>
+                                                <td className="px-4 py-3.5">
+                                                    <span className={`px-2.5 py-1 text-[10px] font-bold rounded-lg uppercase tracking-wide inline-flex items-center gap-1.5 whitespace-nowrap ${
+                                                        camp.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60' :
+                                                        camp.status === 'failed' ? 'bg-rose-50 text-rose-700 border border-rose-200/60' :
+                                                        camp.status === 'cancelled' ? 'bg-gray-50 text-gray-700 border border-gray-300' :
+                                                        camp.status === 'processing' ? 'bg-blue-50 text-blue-700 border border-blue-200/60' :
+                                                        'bg-amber-50 text-amber-700 border border-amber-200/60'
+                                                    }`}>
                                                         {camp.status === 'processing' && <Loader2 className="w-3 h-3 animate-spin" />}
                                                         {camp.status}
                                                     </span>
                                                 </td>
-                                                <td className="px-8 py-5 text-gray-600 font-medium">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <Users className="w-4 h-4 text-gray-400" />
-                                                        {camp.audience_tag || (String(camp.audience_type).toLowerCase().includes('csv') || camp.csv_data ? 'CSV Upload' : camp.audience_type === 'saved' ? 'Saved Contacts' : 'All Contacts')}
+                                                <td className="px-4 py-3.5 text-gray-600 font-medium">
+                                                    <div className="flex items-center gap-1.5 text-xs truncate max-w-[150px]" title={camp.audience_tag || (String(camp.audience_type).toLowerCase().includes('csv') || camp.csv_data ? 'CSV Upload' : camp.audience_type === 'saved' ? 'Saved Contacts' : 'All Contacts')}>
+                                                        <Users className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                                        <span className="truncate">
+                                                            {camp.audience_tag || (String(camp.audience_type).toLowerCase().includes('csv') || camp.csv_data ? 'CSV Upload' : camp.audience_type === 'saved' ? 'Saved Contacts' : 'All Contacts')}
+                                                        </span>
                                                     </div>
                                                 </td>
-                                                <td className="px-8 py-5 text-gray-600 font-medium">
+                                                <td className="px-4 py-3.5 text-gray-600 font-medium text-xs whitespace-nowrap">
                                                     {camp.scheduled_at ? format(new Date(camp.scheduled_at), 'MMM dd, yyyy · hh:mm a') : format(new Date(camp.created_at), 'MMM dd, yyyy · hh:mm a')}
                                                 </td>
-                                                <td className="px-8 py-5">
+                                                <td className="px-4 py-3.5">
                                                     {camp.schema_version >= 2 || camp.status === 'completed' ? (
-                                                        <div className="flex flex-wrap gap-2 text-xs items-center">
-                                                            <div className="flex items-center gap-1.5 text-emerald-700 font-bold bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-100">
-                                                                <Check className="w-3.5 h-3.5" /> {camp.schema_version >= 2 ? (camp.accepted_count ?? camp.sent_count ?? 0) : (camp.results?.filter(r => ['accepted', 'sent', 'delivered', 'read'].includes(r?.status)).length || 0)}
+                                                        <div className="flex items-center gap-1.5 text-xs whitespace-nowrap">
+                                                            <div className="flex items-center gap-1 text-emerald-700 font-bold bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100/80" title="Accepted/Delivered">
+                                                                <Check className="w-3 h-3" /> {camp.schema_version >= 2 ? (camp.accepted_count ?? camp.sent_count ?? 0) : (camp.results?.filter(r => ['accepted', 'sent', 'delivered', 'read'].includes(r?.status)).length || 0)}
                                                             </div>
-                                                            <div className="flex items-center gap-1.5 text-rose-700 font-bold bg-rose-50 px-2.5 py-1.5 rounded-lg border border-rose-100">
-                                                                <Info className="w-3.5 h-3.5" /> {camp.schema_version >= 2 ? (camp.failed_count ?? 0) : (camp.results?.filter(r => r?.status === 'failed').length || 0)}
+                                                            <div className="flex items-center gap-1 text-rose-700 font-bold bg-rose-50 px-2 py-1 rounded-md border border-rose-100/80" title="Failed">
+                                                                <Info className="w-3 h-3" /> {camp.schema_version >= 2 ? (camp.failed_count ?? 0) : (camp.results?.filter(r => r?.status === 'failed').length || 0)}
                                                             </div>
-                                                            {camp.schema_version >= 2 && <span className="text-gray-500">{camp.prepared_count || 0}/{camp.total_contacts || 0}</span>}
+                                                            {camp.schema_version >= 2 && <span className="text-gray-400 font-mono text-[10px] ml-0.5">{camp.prepared_count || 0}/{camp.total_contacts || 0}</span>}
                                                         </div>
                                                     ) : <span className="text-gray-400 font-medium">-</span>}
                                                 </td>
-                                                <td className="px-8 py-5 text-right">
-                                                    <div className="flex justify-end gap-3 items-center">
+                                                <td className="px-4 py-3.5 pr-6 text-right whitespace-nowrap">
+                                                    <div className="flex justify-end gap-2 items-center">
                                                         {camp.schema_version >= 2 && ['queued', 'processing'].includes(camp.status) && (
-                                                            <button onClick={() => updateCampaignState(camp.id, 'pause')} className="text-amber-700 text-xs font-bold flex items-center gap-1 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200">
+                                                            <button onClick={() => updateCampaignState(camp.id, 'pause')} className="text-amber-700 text-xs font-bold flex items-center gap-1 bg-amber-50 hover:bg-amber-100 px-2.5 py-1.5 rounded-lg border border-amber-200 transition-colors">
                                                                 <Pause className="w-3.5 h-3.5" /> Pause
                                                             </button>
                                                         )}
                                                         {camp.schema_version >= 2 && camp.status === 'paused' && (
-                                                            <button onClick={() => updateCampaignState(camp.id, 'resume')} className="text-emerald-700 text-xs font-bold flex items-center gap-1 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">
+                                                            <button onClick={() => updateCampaignState(camp.id, 'resume')} className="text-emerald-700 text-xs font-bold flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1.5 rounded-lg border border-emerald-200 transition-colors">
                                                                 <Play className="w-3.5 h-3.5" /> Resume
                                                             </button>
                                                         )}
                                                         {(['preparing', 'queued', 'processing', 'paused', 'scheduled'].includes(camp.status)) && (
                                                             <button
                                                                 onClick={() => cancelCampaign(camp.id)}
-                                                                className="text-rose-600 hover:text-white text-xs font-bold flex items-center gap-1.5 bg-rose-50 hover:bg-rose-500 px-3 py-1.5 rounded-lg transition-colors border border-rose-200 hover:border-rose-500"
-                                                                title="Stop and Abandon Campaign"
+                                                                className="text-rose-600 hover:text-white text-xs font-bold flex items-center gap-1 bg-rose-50 hover:bg-rose-500 px-2.5 py-1.5 rounded-lg transition-colors border border-rose-200 hover:border-rose-500"
+                                                                title="Stop and Cancel Campaign"
                                                             >
                                                                 <Trash2 className="w-3.5 h-3.5" /> Stop & Cancel
                                                             </button>
                                                         )}
+                                                        <button
+                                                            onClick={() => setBroadcastAgainCamp(camp)}
+                                                            className="text-[#0064b7] hover:text-[#0064b7] hover:bg-[#eef7ff] text-xs font-bold flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg transition-colors border border-gray-200 shadow-2xs"
+                                                            title="Broadcast Again"
+                                                        >
+                                                            <Megaphone className="w-3.5 h-3.5" /> Broadcast Again
+                                                        </button>
                                                         {((camp.schema_version >= 2 && (camp.total_contacts || camp.prepared_count)) || ((camp.status === 'completed' || camp.status === 'cancelled') && camp.results?.length > 0)) && (
                                                             <button
                                                                 onClick={() => toggleCampaignDetails(camp)}
-                                                                className="text-indigo-600 hover:text-indigo-800 text-xs font-bold flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
+                                                                className="text-indigo-600 hover:text-indigo-800 text-xs font-bold flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1.5 rounded-lg transition-colors"
                                                             >
-                                                                {expandedCampaignId === camp.id ? 'Hide Details' : 'View Results'}
+                                                                {expandedCampaignId === camp.id ? 'Hide Results' : 'View Results'}
                                                                 {expandedCampaignId === camp.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                                                             </button>
                                                         )}
@@ -1159,46 +1581,10 @@ export default function Broadcast() {
                 </div>
             ) : (
                 <div className="space-y-5">
-                    {/* Progress Steps */}
-                    <div data-tour="broadcast-stepper" className="rounded-2xl border border-gray-200 bg-white p-3 md:p-5 shadow-sm">
-                        <div className="relative">
-                            <div className="absolute left-[12.5%] right-[12.5%] top-4 md:top-5 h-0.5 bg-gray-200"></div>
-                            <div className="absolute left-[12.5%] top-4 md:top-5 h-0.5 bg-[#0070d1] transition-all duration-500 ease-in-out" style={{ width: `calc(${((currentStep - 1) / (STEPS.length - 1)) * 100}%)` }}></div>
-                            <div className="relative z-10 grid grid-cols-4 gap-1 md:gap-2">
-                            {STEPS.map((step) => {
-                                const isActive = step.id === currentStep
-                                const isCompleted = step.id < currentStep
-                                return (
-                                    <button
-                                        type="button"
-                                        key={step.id} 
-                                        className={`flex flex-col items-center rounded-xl px-1 py-1 text-center transition-colors ${isCompleted ? 'cursor-pointer hover:bg-gray-50' : ''}`}
-                                        onClick={() => {
-                                            if (isCompleted) {
-                                                setCurrentStep(step.id)
-                                            }
-                                        }}
-                                        disabled={!isCompleted && !isActive}
-                                    >
-                                        <div className={`flex h-8 w-8 md:h-10 md:w-10 items-center justify-center rounded-full border text-sm font-bold transition-all ${
-                                                isActive ? 'border-[#0070d1] bg-[#0070d1] text-white shadow-sm' :
-                                                isCompleted ? 'border-emerald-500 bg-emerald-500 text-white' :
-                                                'border-gray-200 bg-white text-gray-400'
-                                            }`}>
-                                            {isCompleted ? <Check className="h-4 w-4" /> : step.id}
-                                        </div>
-                                        <span className={`mt-1.5 text-[8px] sm:text-[10px] md:text-xs font-bold uppercase tracking-wide transition-colors ${isActive ? 'text-[#0064b7]' : isCompleted ? 'text-emerald-600' : 'text-gray-400'} block text-center truncate w-full`}>
-                                            {step.name}
-                                        </span>
-                                    </button>
-                                )
-                            })}
-                            </div>
-                        </div>
-                    </div>
+
 
                     {/* Step Content */}
-                    <div className="rounded-2xl border border-gray-200 bg-white shadow-sm flex flex-col overflow-hidden">
+                    <div className="rounded-2xl border border-gray-200 bg-white shadow-sm flex flex-col overflow-visible">
                         <div className="flex-1">
                         {currentStep === 1 && (
                             <div className="grid gap-0 lg:grid-cols-[minmax(260px,0.8fr)_minmax(420px,1.2fr)] w-full">
@@ -1267,87 +1653,98 @@ export default function Broadcast() {
                                         )}
                                     </div>
 
-                                    {selectedWaAccount && (
-                                        <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                                            <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
-                                                <div>
-                                                    <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-950">
-                                                        Messaging limits
-                                                        <span title="Live data fetched from the connected Meta account"><Info className="h-3.5 w-3.5 text-gray-400" /></span>
-                                                    </div>
-                                                    <p className="mt-0.5 text-[10px] text-gray-500">
-                                                        {messagingLimits?.fetched_at ? `Updated ${format(new Date(messagingLimits.fetched_at), 'MMM d, h:mm a')}` : 'Loading live Meta account data'}
-                                                    </p>
+                                    <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                                        <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
+                                            <div>
+                                                <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-950">
+                                                    Messaging limits
+                                                    <span title="Live data fetched from the connected Meta account"><Info className="h-3.5 w-3.5 text-gray-400" /></span>
                                                 </div>
-                                                {messagingLimits?.quality_rating && (
-                                                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[9px] font-semibold ${messagingLimits.quality_rating === 'GREEN' ? 'bg-emerald-50 text-emerald-700' : messagingLimits.quality_rating === 'YELLOW' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'}`}>
-                                                        <ShieldCheck className="h-3 w-3" /> {messagingLimits.quality_rating} quality
-                                                    </span>
-                                                )}
+                                                <p className="mt-0.5 text-[10px] text-gray-500">
+                                                    {!selectedWaAccount ? 'Select an account to view limits' : messagingLimits?.fetched_at ? `Updated ${format(new Date(messagingLimits.fetched_at), 'MMM d, h:mm a')}` : 'Loading live Meta account data'}
+                                                </p>
                                             </div>
-
-                                            {messagingLimitsState === 'loading' && (
-                                                <div className="flex h-28 items-center justify-center gap-2 text-xs text-gray-500">
-                                                    <Loader2 className="h-4 w-4 animate-spin" /> Fetching from Meta...
-                                                </div>
+                                            {selectedWaAccount && messagingLimits?.quality_rating && (
+                                                <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[9px] font-semibold ${messagingLimits.quality_rating === 'GREEN' ? 'bg-emerald-50 text-emerald-700' : messagingLimits.quality_rating === 'YELLOW' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'}`}>
+                                                    <ShieldCheck className="h-3 w-3" /> {messagingLimits.quality_rating} quality
+                                                </span>
                                             )}
-                                            {messagingLimitsState === 'error' && (
-                                                <div className="m-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-800">
+                                        </div>
+
+                                        {!selectedWaAccount ? (
+                                            <div className="flex h-[176px] flex-col items-center justify-center gap-2 text-xs text-gray-400 bg-gray-50/30">
+                                                <Info className="h-6 w-6 opacity-30 mb-1" />
+                                                <p>Select a WhatsApp account to view its Meta messaging limits.</p>
+                                            </div>
+                                        ) : messagingLimitsState === 'loading' || !messagingLimits ? (
+                                            <div className="flex h-[176px] items-center justify-center gap-2 text-xs text-gray-500 bg-gray-50/30">
+                                                <Loader2 className="h-5 w-5 animate-spin" /> Fetching from Meta...
+                                            </div>
+                                        ) : messagingLimitsState === 'error' ? (
+                                            <div className="flex h-[176px] items-center justify-center p-4 bg-gray-50/30">
+                                                <div className="w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-800 text-center">
                                                     Live messaging limit is unavailable. Reconnect or check this account’s Meta permissions.
                                                 </div>
-                                            )}
-                                            {messagingLimitsState === 'success' && (
-                                                <div className="p-4">
-                                                    <div className="grid grid-cols-5 overflow-hidden rounded-lg border border-gray-200">
-                                                        {MESSAGING_TIERS.map((tier) => {
-                                                            const isCurrent = tier.value === messagingLimits.messaging_limit_tier
-                                                            return (
-                                                                <div key={tier.value} className={`flex min-h-16 flex-col items-center justify-center border-r border-gray-200 px-1 text-center last:border-r-0 ${isCurrent ? 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-300' : 'bg-gray-50 text-gray-400'}`}>
-                                                                    {isCurrent && <span className="mb-1 rounded-full bg-blue-600 px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-white">Current</span>}
-                                                                    <span className={`text-[9px] sm:text-[10px] ${isCurrent ? 'font-bold' : 'font-medium'}`}>{tier.label}</span>
-                                                                </div>
-                                                            )
-                                                        })}
-                                                    </div>
-                                                    <div className="mt-3 flex items-start gap-2 rounded-lg bg-gray-50 px-3 py-2.5">
-                                                        <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+                                            </div>
+                                        ) : (
+                                            <div className="p-4 min-h-[176px] flex flex-col justify-center">
+                                                <div className="grid grid-cols-5 overflow-hidden rounded-lg border border-gray-200">
+                                                    {MESSAGING_TIERS.map((tier) => {
+                                                        const isCurrent = tier.value === messagingLimits.messaging_limit_tier
+                                                        return (
+                                                            <div key={tier.value} className={`flex min-h-16 flex-col items-center justify-center border-r border-gray-200 px-1 text-center last:border-r-0 ${isCurrent ? 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-300' : 'bg-gray-50 text-gray-400'}`}>
+                                                                {isCurrent && <span className="mb-1 rounded-full bg-blue-600 px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-white">Current</span>}
+                                                                <span className={`text-[9px] sm:text-[10px] ${isCurrent ? 'font-bold' : 'font-medium'}`}>{tier.label}</span>
+                                                            </div>
+                                                        )
+                                                    })}
+                                                </div>
+                                                <div className="mt-3 flex items-start gap-2 rounded-lg bg-gray-50 px-3 py-2.5">
+                                                    <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+                                                    <div className="flex flex-col gap-1">
                                                         <p className="text-[10px] leading-4 text-gray-600">
                                                             Current limit: <strong className="text-gray-900">{getMessagingTierLabel(messagingLimits.messaging_limit_tier)}</strong> business-initiated conversations in a rolling 24-hour period.
                                                         </p>
+                                                        <p className="text-[10px] leading-4 text-gray-500">
+                                                            <strong className="font-medium text-gray-700">To increase limit:</strong> Maintain a Green quality rating and message more unique customers with high-quality content over 7 days.
+                                                        </p>
                                                     </div>
                                                 </div>
-                                            )}
-                                        </section>
-                                    )}
+                                            </div>
+                                        )}
+                                    </section>
 
                                     <div>
                                         <label className="mb-2 block text-xs md:text-sm font-semibold text-gray-800">Send timing</label>
                                         <div className="grid grid-cols-2 gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => setCampaign({ ...campaign, scheduled_at: '' })}
-                                                className={`rounded-lg border px-3 py-2.5 text-left text-sm font-semibold ${!campaign.scheduled_at ? 'border-[#0070d1] bg-[#eef7ff] text-[#0064b7] ring-1 ring-[#0070d1]' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
-                                            >
-                                                Send now
-                                                <span className="mt-0.5 block text-xs font-normal text-gray-500">Start after review</span>
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setCampaign({ ...campaign, scheduled_at: campaign.scheduled_at || new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16) })}
-                                                className={`rounded-lg border px-3 py-2.5 text-left text-sm font-semibold ${campaign.scheduled_at ? 'border-[#0070d1] bg-[#eef7ff] text-[#0064b7] ring-1 ring-[#0070d1]' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
-                                            >
-                                                Schedule
-                                                <span className="mt-0.5 block text-xs font-normal text-gray-500">Choose date and time</span>
-                                            </button>
+                                            <div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setCampaign({ ...campaign, scheduled_at: '' })}
+                                                    className={`w-full rounded-lg border px-3 py-2.5 text-left text-sm font-semibold ${!campaign.scheduled_at ? 'border-[#0070d1] bg-[#eef7ff] text-[#0064b7] ring-1 ring-[#0070d1]' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
+                                                >
+                                                    Send now
+                                                    <span className="mt-0.5 block text-xs font-normal text-gray-500">Start after review</span>
+                                                </button>
+                                            </div>
+                                            <div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setCampaign({ ...campaign, scheduled_at: campaign.scheduled_at || new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16) })}
+                                                    className={`w-full rounded-lg border px-3 py-2.5 text-left text-sm font-semibold ${campaign.scheduled_at ? 'border-[#0070d1] bg-[#eef7ff] text-[#0064b7] ring-1 ring-[#0070d1]' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
+                                                >
+                                                    Schedule
+                                                    <span className="mt-0.5 block text-xs font-normal text-gray-500">Choose date and time</span>
+                                                </button>
+                                                {campaign.scheduled_at && <div className="relative mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                                    <DateTimePicker
+                                                        value={campaign.scheduled_at}
+                                                        onChange={val => setCampaign({ ...campaign, scheduled_at: val })}
+                                                        placeholder="Choose date and time"
+                                                    />
+                                                </div>}
+                                            </div>
                                         </div>
-                                        {campaign.scheduled_at && <div className="relative mt-3">
-                                            <input
-                                                type="datetime-local"
-                                                className="h-10 md:h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-xs md:text-sm text-gray-950 outline-none transition focus:border-[#0070d1] focus:ring-2 focus:ring-[#0070d1]/10"
-                                                value={campaign.scheduled_at}
-                                                onChange={e => setCampaign({ ...campaign, scheduled_at: e.target.value })}
-                                            />
-                                        </div>}
                                     </div>
                                 </div>
 
@@ -1704,256 +2101,394 @@ export default function Broadcast() {
                             </div>
                         )}
 
-                        {currentStep === 3 && (
-                            <div data-tour="broadcast-template" className="mx-auto max-w-5xl border-b border-gray-100 p-4 sm:p-6 lg:p-8">
-                                <div className="mb-4 flex items-end justify-between gap-4">
-                                    <div>
-                                        <h2 className="text-xl font-semibold text-gray-950">Choose a message template</h2>
-                                        <p className="mt-1 text-sm text-gray-500">Only Meta-approved templates can be used for broadcasts.</p>
-                                    </div>
-                                    <span className="shrink-0 rounded-full bg-[#eef7ff] px-3 py-1 text-xs font-semibold text-[#0064b7]">
-                                        {templates.filter(t => t.status === 'APPROVED').length} available
-                                    </span>
-                                </div>
-                                <div>
-                                    {isLoading.templates ? (
-                                        <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-[#0070d1]" /></div>
-                                    ) : (
-                                        <div className="grid max-h-[280px] grid-cols-1 gap-3 overflow-y-auto pr-2 sm:grid-cols-2">
-                                            {templates.filter(t => t.status === 'APPROVED').map((tpl) => (
-                                                <button
-                                                    type="button"
-                                                    key={tpl.id || tpl.name}
-                                                    onClick={() => {
-                                                        setHeaderMediaUrl('');
-                                                        setCustomTexts({});
-                                                        setCampaign({
-                                                            ...campaign,
-                                                            template_name: tpl.name,
-                                                            template_language: tpl.language,
-                                                            variable_mapping: cleanTemplateMapping(campaign.variable_mapping)
-                                                        });
-                                                    }}
-                                                    className={`rounded-lg border p-4 text-left transition-colors ${campaign.template_name === tpl.name
-                                                        ? 'border-[#0070d1] bg-[#eef7ff] ring-1 ring-[#0070d1]'
-                                                        : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
-                                                        }`}
-                                                >
-                                                    <div className="flex items-start justify-between gap-3">
-                                                        <div className="font-semibold text-gray-900">{tpl.name}</div>
-                                                        {campaign.template_name === tpl.name && <Check className="h-4 w-4 shrink-0 text-[#0070d1]" />}
-                                                    </div>
-                                                    <div className="text-xs text-gray-500 mt-2 line-clamp-2">
-                                                        {tpl.components?.find(c => c.type === 'BODY')?.text || 'No preview'}
-                                                    </div>
-                                                    <div className="mt-3 text-[11px] font-medium text-gray-400">
-                                                        {getTemplateComponentSummary(tpl.components)}
-                                                    </div>
-                                                </button>
-                                            ))}
-                                            {templates.filter(t => t.status === 'APPROVED').length === 0 && (
-                                                <div className="text-sm text-gray-500 text-center p-4">No approved templates found.</div>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
-                        {currentStep === 3 && selectedTemplate && (
-                            <div className="mx-auto grid max-w-5xl grid-cols-1 gap-8 p-4 sm:p-6 md:grid-cols-2 lg:p-8">
-                                <div className="order-2 md:order-1 md:sticky md:top-6 md:self-start">
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsMobilePreviewOpen(open => !open)}
-                                        className="mt-4 flex w-full items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-800 md:hidden"
-                                        aria-expanded={isMobilePreviewOpen}
-                                    >
-                                        Message preview
-                                        <ChevronDown className={`h-4 w-4 transition-transform ${isMobilePreviewOpen ? 'rotate-180' : ''}`} />
-                                    </button>
-                                    <div className={`${isMobilePreviewOpen ? 'block' : 'hidden'} md:block`}>
-                                        {renderLivePreview()}
-                                    </div>
-                                </div>
-
-                                <div className="order-1 md:order-2">
-                                    <div className="mb-4 flex items-start justify-between gap-3">
-                                        <div>
-                                            <h2 className="text-lg font-semibold text-gray-900">Content setup</h2>
-                                            <p className="mt-1 text-sm text-gray-500">Map template placeholders to contact fields or fixed values.</p>
-                                        </div>
-                                        {selectedTemplate && (
-                                            <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${mappedVariableCount === variables.length ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
-                                                {variables.length ? `${mappedVariableCount}/${variables.length} mapped` : 'No variables'}
-                                            </span>
-                                        )}
-                                    </div>
-                                    {selectedTemplate ? (
-                                        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                                            <div className="border-b border-gray-200 bg-gray-50 px-5 py-4">
-                                                <div className="text-sm font-semibold text-gray-900">{selectedTemplate.name}</div>
-                                                <div className="mt-1 text-xs text-gray-500">{selectedTemplate.category || 'Template'} · {selectedTemplate.language}</div>
-                                            </div>
-                                            <div className="space-y-5 p-5">
-                                                {needsHeaderMedia && (
-                                                    <div className="rounded-lg border border-gray-200 bg-white">
-                                                        <div className="flex items-start gap-3 border-b border-gray-100 px-4 py-3">
-                                                            <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-[#eef7ff] text-[#0064b7]">
-                                                                <FileText className="h-4 w-4" />
-                                                            </div>
-                                                            <div className="min-w-0 flex-1">
-                                                                <div className="flex items-center gap-2">
-                                                                    <h3 className="text-sm font-semibold text-gray-900">Template header</h3>
-                                                                    <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold uppercase text-red-600">Required</span>
-                                                                </div>
-                                                                <p className="mt-1 text-xs text-gray-500">
-                                                                    This approved template has a {selectedHeaderFormat.toLowerCase()} header, so Meta requires one public media URL for every send.
-                                                                </p>
-                                                            </div>
+                                                                        {currentStep === 3 && (
+                            <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8 border-b border-zinc-100">
+                                <div className="grid grid-cols-1 lg:grid-cols-[40%_60%] gap-8">
+                                    {/* Left Column (40%): Live Preview */}
+                                    <div className="lg:sticky lg:top-6 lg:self-start space-y-4">
+                                        <div className="hidden md:block">
+                                            {selectedTemplate ? (
+                                                <div className="rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+                                                    {renderLivePreview()}
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-3">
+                                                    <h3 className="text-xs font-mono font-bold tracking-widest text-zinc-400 uppercase flex items-center gap-2">
+                                                        <span className="h-1.5 w-1.5 rounded-full bg-zinc-350" />
+                                                        Live Preview
+                                                    </h3>
+                                                    <div className="rounded-2xl border border-dashed border-zinc-250/80 bg-white p-8 flex flex-col items-center justify-center text-center min-h-[380px] shadow-[inset_0_2px_4px_rgba(0,0,0,0.01)]">
+                                                        <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center border border-zinc-150 text-zinc-400 mb-4 shadow-sm">
+                                                            <MessageSquare className="h-4.5 w-4.5" />
                                                         </div>
-                                                        <div className="space-y-3 p-4">
-                                                            <label className="flex min-h-20 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-4 text-center transition-colors hover:border-[#8fc5f4] hover:bg-[#eef7ff]">
-                                                                {isHeaderUploading ? (
-                                                                    <Loader2 className="h-5 w-5 animate-spin text-[#0070d1]" />
-                                                                ) : (
-                                                                    <Upload className="h-5 w-5 text-[#0070d1]" />
-                                                                )}
-                                                                <span className="mt-2 text-sm font-medium text-[#0064b7]">
-                                                                    {isHeaderUploading ? 'Uploading...' : `Upload ${selectedHeaderFormat.toLowerCase()}`}
-                                                                </span>
-                                                                <input
-                                                                    type="file"
-                                                                    className="hidden"
-                                                                    accept={selectedHeaderFormat === 'IMAGE' ? 'image/*' : selectedHeaderFormat === 'VIDEO' ? 'video/mp4,video/*' : '*/*'}
-                                                                    disabled={isHeaderUploading}
-                                                                    onChange={(e) => handleHeaderMediaUpload(e.target.files?.[0])}
-                                                                />
-                                                            </label>
-                                                            <div>
-                                                                <label className="mb-1.5 block text-xs font-medium text-gray-700">Public media URL</label>
-                                                                <div className="relative">
-                                                                    <LinkIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                                                                    <input
-                                                                        type="url"
-                                                                        required
-                                                                        placeholder="https://..."
-                                                                        className={`h-10 w-full rounded-lg pl-9 text-sm ${headerMediaUrl.trim() ? 'border-gray-300' : 'border-red-300 bg-red-50'}`}
-                                                                        value={headerMediaUrl}
-                                                                        onChange={(e) => syncHeaderMediaUrl(e.target.value)}
-                                                                    />
-                                                                </div>
-                                                                <p className="mt-1.5 flex items-start gap-1.5 text-xs text-gray-500">
-                                                                    <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-                                                                    Header placeholder text is not sent. Use an uploaded file or a public URL.
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                                {dynamicUrlButtons.map((button) => (
-                                                    <div key={`button-url-${button.index}`} className="rounded-lg border border-gray-200 bg-white p-4">
-                                                        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                                            URL button · {button.text}
-                                                        </label>
-                                                        <input
-                                                            type="text"
-                                                            required
-                                                            placeholder={`Value for "${button.text}" URL`}
-                                                            className={`h-10 w-full rounded-lg text-sm ${(campaign.variable_mapping[`_button_url_${button.index}`] || campaign.variable_mapping[`button_url_${button.index}`]) ? 'border-gray-300' : 'border-red-300 bg-red-50'}`}
-                                                            value={campaign.variable_mapping[`_button_url_${button.index}`] || campaign.variable_mapping[`button_url_${button.index}`] || ''}
-                                                            onChange={(e) => handleButtonUrlParamChange(button.index, e.target.value)}
-                                                        />
-                                                        <p className="mt-1 text-xs text-gray-500">
-                                                            Approved URL: {button.url}. Enter only the placeholder value, for example ads or ?utm_source=whatsapp.
+                                                        <h3 className="text-xs font-bold text-zinc-800 tracking-tight">No template selected</h3>
+                                                        <p className="text-[11px] text-zinc-400 mt-1 max-w-[200px] leading-relaxed font-sans">
+                                                            Choose a message template from the list on the right to preview the layout.
                                                         </p>
                                                     </div>
-                                                ))}
-                                                {variables.length > 0 && (
-                                                    <div className="border-t border-gray-100 pt-5">
-                                                        <h3 className="text-sm font-semibold text-gray-900">Body variables</h3>
-                                                        <p className="mt-1 text-xs text-gray-500">Choose where each placeholder value should come from.</p>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Mobile Toggle & Preview */}
+                                        {selectedTemplate && (
+                                            <div className="md:hidden">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsMobilePreviewOpen(open => !open)}
+                                                    className="flex w-full items-center justify-between rounded-xl border border-zinc-200 bg-white px-4 py-3 text-xs font-bold text-zinc-800 active:scale-[0.98] transition-all"
+                                                    aria-expanded={isMobilePreviewOpen}
+                                                >
+                                                    Message preview
+                                                    <ChevronDown className={`h-4 w-4 text-zinc-505 transition-transform ${isMobilePreviewOpen ? 'rotate-180' : ''}`} />
+                                                </button>
+                                                <div className={`${isMobilePreviewOpen ? 'block' : 'hidden'} mt-2`}>
+                                                    {renderLivePreview()}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Right Column (60%): Templates List + Content Setup */}
+                                    <div className="space-y-6">
+                                        {/* Template Selection Panel */}
+                                        <div data-tour="broadcast-template" className="bg-white rounded-2xl border border-zinc-200/80 p-6 shadow-[0_1px_3px_rgba(0,0,0,0.02)] space-y-5">
+                                            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-zinc-100 pb-4">
+                                                <div>
+                                                    <h2 className="text-lg font-bold tracking-tight text-zinc-900 leading-none">Choose a message template</h2>
+                                                    <p className="text-xs text-zinc-400 mt-1.5 font-sans">Select a Meta-approved campaign template.</p>
+                                                </div>
+                                                <span className="self-start sm:self-center shrink-0 rounded bg-zinc-100 px-2 py-1 text-[9px] font-mono font-bold tracking-wider text-zinc-700 border border-zinc-200/50 uppercase">
+                                                    {templates.filter(t => t.status === 'APPROVED').length} Approved
+                                                </span>
+                                            </div>
+
+                                            {/* Filters and Search */}
+                                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                                                <div className="relative flex-1">
+                                                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Search templates..."
+                                                        value={templateSearchQuery}
+                                                        onChange={(e) => setTemplateSearchQuery(e.target.value)}
+                                                        className="h-10 w-full pl-10 pr-4 text-xs rounded-lg border border-zinc-200 bg-white placeholder-zinc-405 focus:outline-none focus:border-black focus:ring-0 transition-all font-sans"
+                                                    />
+                                                </div>
+
+                                                <div className="flex bg-zinc-100 p-0.5 rounded-lg border border-zinc-200/40 shrink-0">
+                                                    {[
+                                                        { id: 'ALL', label: 'All' },
+                                                        { id: 'MARKETING', label: 'Marketing' },
+                                                        { id: 'UTILITY', label: 'Utility' }
+                                                    ].map(tab => (
+                                                        <button
+                                                            key={tab.id}
+                                                            type="button"
+                                                            onClick={() => setTemplateCategoryFilter(tab.id)}
+                                                            className={`px-3.5 py-1.5 text-[11px] font-semibold rounded-md transition-all active:scale-[0.98] ${
+                                                                templateCategoryFilter === tab.id 
+                                                                    ? 'bg-white shadow-sm text-zinc-900 font-bold' 
+                                                                    : 'text-zinc-555 hover:text-zinc-900'
+                                                            }`}
+                                                        >
+                                                            {tab.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* Grid template scroll list */}
+                                            <div>
+                                                {isLoading.templates ? (
+                                                    <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-zinc-900" /></div>
+                                                ) : templates.filter(t => t.status === 'APPROVED').length === 0 ? (
+                                                    <div className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50/50 p-6 text-center space-y-4">
+                                                        <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center border border-zinc-150 text-zinc-450 mx-auto shadow-sm">
+                                                            <FileText className="h-4.5 w-4.5" />
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <h3 className="text-sm font-bold text-zinc-900">No Approved Templates</h3>
+                                                            <p className="text-xs text-zinc-500 max-w-sm mx-auto leading-relaxed font-sans">
+                                                                Without approved message templates, you cannot launch a broadcast campaign. Message templates must first be created and submitted to Meta for verification.
+                                                            </p>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => navigate('/templates')}
+                                                            className="inline-flex items-center gap-1.5 h-9 rounded-lg bg-black text-white px-4 text-xs font-semibold shadow-sm hover:bg-zinc-800 transition-all active:scale-[0.98]"
+                                                        >
+                                                            <span>Manage Templates</span>
+                                                            <ArrowRight className="h-3.5 w-3.5" />
+                                                        </button>
                                                     </div>
-                                                )}
-                                                {variables.length > 0 ? variables.map((variable) => (
-                                                    <div key={variable.key} className={`rounded-xl border p-4 transition-colors ${isVariableMapped(variable) ? 'border-emerald-200 bg-emerald-50/30' : 'border-gray-200 bg-white'}`}>
-                                                        <div className="mb-4 flex items-center justify-between gap-3">
-                                                            <div className="flex min-w-0 items-center gap-3">
-                                                                <span className="flex h-8 min-w-8 items-center justify-center rounded-lg bg-gray-900 px-2 font-mono text-xs font-semibold text-white">
-                                                                    {variable.token}
-                                                                </span>
-                                                                <div>
-                                                                    <p className="text-sm font-semibold capitalize text-gray-900">{variable.label}</p>
-                                                                    <p className="text-xs text-gray-500">Choose the value sent to each recipient</p>
+                                                ) : (
+                                                    <div className="grid max-h-[240px] grid-cols-1 gap-3 overflow-y-auto pr-1 sm:grid-cols-2">
+                                                        {filteredApprovedTemplates.map((tpl) => (
+                                                            <button
+                                                                type="button"
+                                                                key={tpl.id || tpl.name}
+                                                                onClick={() => {
+                                                                    setHeaderMediaUrl('');
+                                                                    setCustomTexts({});
+                                                                    setCampaign({
+                                                                        ...campaign,
+                                                                        template_name: tpl.name,
+                                                                        template_language: tpl.language,
+                                                                        variable_mapping: cleanTemplateMapping(campaign.variable_mapping)
+                                                                    });
+                                                                }}
+                                                                className={`group rounded-xl border p-4 text-left transition-all relative ${
+                                                                    campaign.template_name === tpl.name
+                                                                        ? 'border-black bg-zinc-50/20 ring-1 ring-black shadow-sm'
+                                                                        : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50/30 shadow-[0_1px_2px_rgba(0,0,0,0.01)] hover:shadow-sm'
+                                                                } active:scale-[0.98]`}
+                                                            >
+                                                                <div className="flex items-center justify-between gap-2">
+                                                                    <div className="font-bold text-xs text-zinc-900 truncate" title={tpl.name}>{tpl.name}</div>
+                                                                    {campaign.template_name === tpl.name ? (
+                                                                        <span className="h-1.5 w-1.5 rounded-full bg-black shrink-0" />
+                                                                    ) : (
+                                                                        <span className="h-1.5 w-1.5 rounded-full bg-transparent group-hover:bg-zinc-300 shrink-0 transition-colors" />
+                                                                    )}
                                                                 </div>
-                                                            </div>
-                                                            {isVariableMapped(variable) ? (
-                                                                <span className="text-xs font-semibold text-emerald-700">Mapped</span>
-                                                            ) : (
-                                                                <span className="text-xs font-medium text-amber-600">Required</span>
-                                                            )}
-                                                        </div>
-
-                                                        <div className="grid grid-cols-2 gap-2">
-                                                            {[
-                                                                ['name', 'Contact name'],
-                                                                ['phone', 'Phone number'],
-                                                                ['email', 'Email address'],
-                                                                ['custom', 'Fixed text']
-                                                            ].map(([value, label]) => (
-                                                                <button
-                                                                    key={value}
-                                                                    type="button"
-                                                                    onClick={() => handleVariableMapChange(variable.key, value)}
-                                                                    className={`rounded-lg border px-3 py-2.5 text-left text-xs font-semibold transition-colors ${campaign.variable_mapping[variable.key] === value ? 'border-[#0070d1] bg-[#eef7ff] text-[#0064b7] ring-1 ring-[#0070d1]' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'}`}
-                                                                >
-                                                                    {label}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-
-                                                        {availableCustomFields.length > 0 && (
-                                                            <div className="mt-3">
-                                                                <label className="mb-1.5 block text-xs font-medium text-gray-600">Or use another contact field</label>
-                                                                <select
-                                                                    className="h-10 w-full rounded-lg border-gray-300 bg-white text-sm"
-                                                                    value={campaign.variable_mapping[variable.key]?.startsWith('field:') ? campaign.variable_mapping[variable.key] : ''}
-                                                                    onChange={e => e.target.value && handleVariableMapChange(variable.key, e.target.value)}
-                                                                >
-                                                                    <option value="">Choose contact field</option>
-                                                                    {availableCustomFields.map(field => (
-                                                                        <option key={field} value={`field:${field}`}>{field}</option>
-                                                                    ))}
-                                                                </select>
+                                                                <div className="text-[11px] text-zinc-500 mt-2 line-clamp-2 leading-relaxed font-sans">
+                                                                    {tpl.components?.find(c => c.type === 'BODY')?.text || 'No preview'}
+                                                                </div>
+                                                                <div className="mt-4 flex items-center justify-between border-t border-zinc-100 pt-2.5">
+                                                                    <span className="text-[9px] font-mono tracking-wider text-zinc-400 uppercase">
+                                                                        {getTemplateComponentSummary(tpl.components)}
+                                                                    </span>
+                                                                    <span className={`text-[9px] font-mono tracking-wider font-semibold px-2 py-0.5 rounded border uppercase ${
+                                                                        tpl.category?.toUpperCase() === 'MARKETING' 
+                                                                            ? 'bg-zinc-50 text-zinc-650 border-zinc-200/60' 
+                                                                            : 'bg-zinc-100/50 text-zinc-800 border-zinc-200/80'
+                                                                    }`}>
+                                                                        {tpl.category?.toLowerCase() || 'marketing'}
+                                                                    </span>
+                                                                </div>
+                                                            </button>
+                                                        ))}
+                                                        {filteredApprovedTemplates.length === 0 && (
+                                                            <div className="text-xs text-zinc-500 text-center py-8 col-span-2 font-mono">
+                                                                No approved templates found matching filters.
                                                             </div>
                                                         )}
-
-                                                        {campaign.variable_mapping[variable.key] === 'custom' && (
-                                                            <div className="mt-3">
-                                                                <label className="mb-1.5 block text-xs font-medium text-gray-700">Fixed value</label>
-                                                                <input
-                                                                    type="text"
-                                                                    placeholder={`Value for ${variable.token}`}
-                                                                    className={`h-10 w-full rounded-lg text-sm ${String(customTexts[variable.key] || '').trim() ? 'border-emerald-300' : 'border-amber-300 bg-amber-50/40'}`}
-                                                                    value={customTexts[variable.key] || ''}
-                                                                    onChange={e => setCustomTexts({ ...customTexts, [variable.key]: e.target.value })}
-                                                                />
-                                                                <p className="mt-1.5 text-xs text-gray-500">Every recipient will receive this same value.</p>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )) : (
-                                                    <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 py-8 text-center text-sm text-gray-500">
-                                                        This template has no variables.
                                                     </div>
                                                 )}
                                             </div>
                                         </div>
-                                    ) : (
-                                        <div className="flex h-full min-h-[200px] items-center justify-center text-sm text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
-                                            Select a template first
-                                        </div>
-                                    )}
+
+                                        {/* Content Setup Panel */}
+                                        {selectedTemplate && (
+                                            <div className="bg-white rounded-2xl border border-zinc-200/80 p-6 shadow-[0_1px_3px_rgba(0,0,0,0.02)] space-y-5">
+                                                <div className="flex items-start justify-between gap-3 border-b border-zinc-100 pb-3.5">
+                                                    <div>
+                                                        <h2 className="text-base font-bold text-zinc-950">Content setup</h2>
+                                                        <p className="text-xs text-zinc-400 mt-1 font-sans">Map template placeholders to contact fields or fixed values.</p>
+                                                    </div>
+                                                    <span className={`shrink-0 rounded px-2.5 py-0.5 text-[10px] font-mono font-bold border uppercase ${
+                                                        mappedVariableCount === variables.length 
+                                                            ? 'bg-zinc-50 text-zinc-800 border-zinc-200' 
+                                                            : 'bg-amber-50/50 text-amber-700 border-amber-100'
+                                                    }`}>
+                                                        {variables.length ? `${mappedVariableCount}/${variables.length} mapped` : 'No variables'}
+                                                    </span>
+                                                </div>
+
+                                                <div className="space-y-5">
+                                                    <div className="rounded-lg bg-zinc-50 px-4 py-3 border border-zinc-150 flex items-center justify-between text-xs font-mono">
+                                                        <span className="font-semibold text-zinc-800">{selectedTemplate.name}</span>
+                                                        <span className="text-zinc-500 lowercase tracking-wide">{selectedTemplate.category?.toLowerCase() || 'Template'} · {selectedTemplate.language}</span>
+                                                    </div>
+
+                                                    {needsHeaderMedia && (
+                                                        <div className="rounded-xl border border-zinc-150 bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.01)] space-y-4">
+                                                            <div className="flex items-start gap-3">
+                                                                <div className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded bg-zinc-50 text-zinc-800 border border-zinc-200">
+                                                                    <FileText className="h-4 w-4" />
+                                                                </div>
+                                                                <div className="min-w-0 flex-1">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <h3 className="text-xs font-bold text-zinc-900 font-sans">Template header</h3>
+                                                                        <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-mono font-bold uppercase text-amber-700 border border-amber-100">Required</span>
+                                                                    </div>
+                                                                    <p className="mt-1 text-[11px] text-zinc-400 font-sans leading-relaxed">
+                                                                        This approved template has a {selectedHeaderFormat.toLowerCase()} header. Meta requires one public media URL for every send.
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                                                                <div className="flex flex-col gap-2">
+                                                                    <label className="flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-zinc-200 bg-zinc-50/50 px-4 py-4 text-center transition-all hover:border-zinc-400 hover:bg-zinc-50 active:scale-[0.98]">
+                                                                        {isHeaderUploading ? (
+                                                                            <Loader2 className="h-5 w-5 animate-spin text-zinc-850" />
+                                                                        ) : (
+                                                                            <Upload className="h-5 w-5 text-zinc-800" />
+                                                                        )}
+                                                                        <span className="mt-2 text-xs font-semibold text-zinc-800">
+                                                                            {isHeaderUploading ? 'Uploading...' : `Upload ${selectedHeaderFormat.toLowerCase()}`}
+                                                                        </span>
+                                                                        <input
+                                                                            type="file"
+                                                                            className="hidden"
+                                                                            accept={selectedHeaderFormat === 'IMAGE' ? 'image/jpeg,image/png' : selectedHeaderFormat === 'VIDEO' ? 'video/mp4,video/3gpp' : '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip'}
+                                                                            disabled={isHeaderUploading}
+                                                                            onChange={(e) => handleHeaderMediaUpload(e.target.files?.[0])}
+                                                                        />
+                                                                    </label>
+                                                                    <p className="text-[10px] text-zinc-500 font-sans leading-tight text-center">
+                                                                        {selectedHeaderFormat === 'IMAGE' && 'Max 5 MB · JPG or PNG only (WebP & GIF not supported)'}
+                                                                        {selectedHeaderFormat === 'VIDEO' && 'Max 16 MB · MP4 or 3GP only'}
+                                                                        {selectedHeaderFormat === 'DOCUMENT' && 'Max 100 MB · PDF, DOC, XLS, PPT, TXT, ZIP'}
+                                                                    </p>
+                                                                </div>
+                                                                <div className="flex flex-col justify-start">
+                                                                    <label className="mb-1.5 block text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Public media URL</label>
+                                                                    <div className="relative">
+                                                                        <LinkIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                                                                        <input
+                                                                            type="url"
+                                                                            required
+                                                                            placeholder="https://..."
+                                                                            className={`h-10 w-full rounded-lg pl-9 text-xs border ${
+                                                                                headerMediaUrl.trim() 
+                                                                                    ? 'border-zinc-200 focus:border-black focus:ring-0' 
+                                                                                    : 'border-amber-250 bg-amber-50/20 focus:border-amber-400 focus:ring-0'
+                                                                            } transition-all`}
+                                                                            value={headerMediaUrl}
+                                                                            onChange={(e) => syncHeaderMediaUrl(e.target.value)}
+                                                                        />
+                                                                    </div>
+                                                                    <p className="mt-2 flex items-start gap-1 text-[10px] text-zinc-400 leading-normal">
+                                                                        <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-zinc-400" />
+                                                                        {selectedHeaderFormat === 'IMAGE' && 'Direct HTTPS URL ending in .jpg or .png'}
+                                                                        {selectedHeaderFormat === 'VIDEO' && 'Direct HTTPS URL ending in .mp4 or .3gp'}
+                                                                        {selectedHeaderFormat === 'DOCUMENT' && 'Direct HTTPS URL to public document'}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {dynamicUrlButtons.map((button) => (
+                                                        <div key={`button-url-${button.index}`} className="rounded-xl border border-zinc-150 bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.01)]">
+                                                            <label className="mb-2 block text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">
+                                                                URL button · {button.text}
+                                                            </label>
+                                                            <input
+                                                                type="text"
+                                                                required
+                                                                placeholder={`Value for "${button.text}" URL`}
+                                                                className={`h-10 w-full rounded-lg text-xs border ${
+                                                                    (campaign.variable_mapping[`_button_url_${button.index}`] || campaign.variable_mapping[`button_url_${button.index}`]) 
+                                                                        ? 'border-zinc-200 focus:border-black focus:ring-0' 
+                                                                        : 'border-amber-250 bg-amber-50/20 focus:border-amber-400 focus:ring-0'
+                                                                } transition-all`}
+                                                                value={campaign.variable_mapping[`_button_url_${button.index}`] || campaign.variable_mapping[`button_url_${button.index}`] || ''}
+                                                                onChange={(e) => handleButtonUrlParamChange(button.index, e.target.value)}
+                                                            />
+                                                            <p className="mt-1.5 text-[10px] text-zinc-400 font-sans leading-relaxed">
+                                                                Approved URL: <code className="font-mono bg-zinc-50 px-1 py-0.5 rounded text-zinc-600">{button.url}</code>. Enter only the placeholder value (e.g., <code className="font-mono text-zinc-650 bg-zinc-50 px-1 py-0.5 rounded">ads</code> or <code className="font-mono text-zinc-650 bg-zinc-50 px-1 py-0.5 rounded">?utm_source=whatsapp</code>).
+                                                            </p>
+                                                        </div>
+                                                    ))}
+
+                                                    {variables.length > 0 && (
+                                                        <div className="border-t border-zinc-100 pt-4">
+                                                            <h3 className="text-sm font-semibold text-zinc-900 font-sans">Body variables</h3>
+                                                            <p className="mt-1 text-xs text-zinc-550 font-sans">Choose where each placeholder value should come from.</p>
+                                                        </div>
+                                                    )}
+
+                                                    {variables.length > 0 ? variables.map((variable) => (
+                                                        <div key={variable.key} className={`rounded-xl border p-4 transition-all ${
+                                                            isVariableMapped(variable) 
+                                                                ? 'border-zinc-200 bg-zinc-50/30' 
+                                                                : 'border-zinc-100 bg-white'
+                                                        }`}>
+                                                            <div className="mb-4 flex items-center justify-between gap-3">
+                                                                <div className="flex min-w-0 items-center gap-3">
+                                                                    <span className="flex h-7 min-w-7 items-center justify-center rounded bg-zinc-900 px-2 font-mono text-[10px] font-semibold text-white">
+                                                                        {variable.token}
+                                                                    </span>
+                                                                    <div>
+                                                                        <p className="text-xs font-semibold capitalize text-zinc-905 font-sans">{variable.label}</p>
+                                                                        <p className="text-[10px] text-zinc-400 font-sans">Choose the value sent to each recipient</p>
+                                                                    </div>
+                                                                </div>
+                                                                {isVariableMapped(variable) ? (
+                                                                    <span className="text-[10px] font-mono tracking-wider font-semibold text-zinc-650 bg-zinc-100 px-2 py-0.5 rounded uppercase">Mapped</span>
+                                                                ) : (
+                                                                    <span className="text-[10px] font-mono tracking-wider font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded uppercase">Required</span>
+                                                                )}
+                                                            </div>
+
+                                                            <div className="grid grid-cols-2 gap-2">
+                                                                {[
+                                                                    ['name', 'Contact name'],
+                                                                    ['phone', 'Phone number'],
+                                                                    ['email', 'Email address'],
+                                                                    ['custom', 'Fixed text']
+                                                                ].map(([value, label]) => (
+                                                                    <button
+                                                                        key={value}
+                                                                        type="button"
+                                                                        onClick={() => handleVariableMapChange(variable.key, value)}
+                                                                        className={`rounded-lg border px-3 py-2 text-left text-xs font-medium transition-all active:scale-[0.98] ${
+                                                                            campaign.variable_mapping[variable.key] === value 
+                                                                                ? 'border-black bg-black text-white font-semibold' 
+                                                                                : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50/50'
+                                                                        }`}
+                                                                    >
+                                                                        {label}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+
+                                                            {availableCustomFields.length > 0 && (
+                                                                <div className="mt-3">
+                                                                    <label className="mb-1 block text-[10px] font-medium text-zinc-400 uppercase tracking-wider font-mono">Or use another contact field</label>
+                                                                    <select
+                                                                        className="h-9 w-full rounded-lg border-zinc-200 bg-white text-xs text-zinc-700 focus:border-black focus:ring-0 transition-all"
+                                                                        value={campaign.variable_mapping[variable.key]?.startsWith('field:') ? campaign.variable_mapping[variable.key] : ''}
+                                                                        onChange={e => e.target.value && handleVariableMapChange(variable.key, e.target.value)}
+                                                                    >
+                                                                        <option value="">Choose contact field</option>
+                                                                        {availableCustomFields.map(field => (
+                                                                            <option key={field} value={`field:${field}`}>{field}</option>
+                                                                        ))}
+                                                                    </select>
+                                                                </div>
+                                                            )}
+
+                                                            {campaign.variable_mapping[variable.key] === 'custom' && (
+                                                                <div className="mt-3">
+                                                                    <label className="mb-1 block text-[10px] font-medium text-zinc-400 uppercase tracking-wider font-mono">Fixed value</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        placeholder={`Value for ${variable.token}`}
+                                                                        className={`h-9 w-full rounded-lg text-xs border ${
+                                                                            String(customTexts[variable.key] || '').trim() 
+                                                                                ? 'border-zinc-205 focus:border-black focus:ring-0 bg-white' 
+                                                                                : 'border-amber-250 bg-amber-50/20 focus:border-amber-400 focus:ring-0'
+                                                                        } transition-all`}
+                                                                        value={customTexts[variable.key] || ''}
+                                                                        onChange={e => setCustomTexts({ ...customTexts, [variable.key]: e.target.value })}
+                                                                    />
+                                                                    <p className="mt-1 text-[10px] text-zinc-400 leading-normal">Every recipient will receive this same value.</p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )) : (
+                                                        <div className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50/50 py-8 text-center text-xs text-zinc-400 font-mono">
+                                                            This template has no variables.
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -2101,6 +2636,34 @@ export default function Broadcast() {
                     </div>
                 </div>
             )}
+            
+            <Modal isOpen={!!broadcastAgainCamp} onClose={() => setBroadcastAgainCamp(null)} title="Duplicate Campaign">
+                <div className="space-y-5 mt-2">
+                    <p className="text-sm text-gray-600 leading-relaxed">
+                        How would you like to set up the audience for this campaign? You can reuse the previous recipient list or select a new one.
+                    </p>
+                    <div className="flex gap-3 justify-end pt-2">
+                        <button
+                            onClick={() => {
+                                handleBroadcastAgain(broadcastAgainCamp, 'other');
+                                setBroadcastAgainCamp(null);
+                            }}
+                            className="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+                        >
+                            Select New Audience
+                        </button>
+                        <button
+                            onClick={() => {
+                                handleBroadcastAgain(broadcastAgainCamp, 'same');
+                                setBroadcastAgainCamp(null);
+                            }}
+                            className="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+                        >
+                            Reuse Previous Audience
+                        </button>
+                    </div>
+                </div>
+            </Modal>
         </div>
     )
 }

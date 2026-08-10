@@ -121,7 +121,7 @@ export async function getOpenAISettings(req: any, res: Response) {
 
 export async function saveOpenAISettings(req: any, res: Response) {
     const organization_id = req.organization_id;
-    const { api_key } = req.body;
+    const { api_key, model } = req.body;
 
     try {
         if (!organization_id) {
@@ -137,6 +137,7 @@ export async function saveOpenAISettings(req: any, res: Response) {
             .upsert({
                 organization_id,
                 api_key_encrypted: api_key, // TODO: Encrypt this!
+                model: model || 'gpt-4o-mini',
                 updated_at: new Date().toISOString()
             }, { onConflict: 'organization_id' })
             .select()

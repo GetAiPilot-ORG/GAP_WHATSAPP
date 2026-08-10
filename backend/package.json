@@ -8,6 +8,7 @@
         "predev": "node scripts/kill-port.mjs",
         "dev": "tsx watch server.ts",
         "start": "tsx server.ts",
+        "build": "tsc --noEmit",
         "worker:broadcast": "tsx src/workers/broadcast.worker.ts",
         "test:broadcast": "tsx --test src/services/__tests__/broadcastQueue.service.test.ts",
         "kill-port": "node scripts/kill-port.mjs"
@@ -30,7 +31,8 @@
         "pino": "^10.3.1",
         "qrcode-terminal": "^0.12.0",
         "socket.io": "^4.7.2",
-        "twilio": "^6.0.2"
+        "twilio": "^6.0.2",
+        "web-push": "^3.6.7"
     },
     "devDependencies": {
         "@types/cors": "^2.8.17",
@@ -39,6 +41,7 @@
         "@types/node": "^20.10.4",
         "@types/node-fetch": "^2.6.13",
         "@types/nodemailer": "^8.0.0",
+        "@types/web-push": "^3.6.4",
         "tsx": "^4.6.2",
         "typescript": "^5.3.3"
     }

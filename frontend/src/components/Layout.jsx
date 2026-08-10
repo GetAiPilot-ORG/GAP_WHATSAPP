@@ -27,10 +27,10 @@ export default function Layout() {
     const handleStatusToggle = async () => {
         if (!memberProfile) return
         const nextStatus = !memberProfile.is_online
-        
+
         // Optimistic UI Update
         setMemberProfile(prev => prev ? { ...prev, is_online: nextStatus } : prev)
-        
+
         try {
             await updateMyOnlineStatus(nextStatus)
         } catch (e) {
@@ -225,50 +225,33 @@ export default function Layout() {
 
     // Supabase Realtime Wallet & Campaigns Subscription
     useEffect(() => {
-        if (!user) {
-            console.log('[CAMPAIGN_NOTIFICATION_DEBUG] No logged-in user, skipping realtime setup');
-            return;
-        }
-
-        if (loading || isProfileLoading) {
-            console.log('[CAMPAIGN_NOTIFICATION_DEBUG] Profile is loading, delaying realtime setup');
-            return;
-        }
-
-        if (!memberProfile) {
-            console.log('[CAMPAIGN_NOTIFICATION_DEBUG] memberProfile is not populated yet, skipping realtime setup');
-            return;
-        }
-
-        if (!memberProfile.organization_id) {
-            console.error('[CAMPAIGN_NOTIFICATION_ERROR] ORGANIZATION_MISMATCH: memberProfile has no organization_id');
-            return;
-        }
-
-        console.log('[CAMPAIGN_NOTIFICATION_DEBUG] Initializing Realtime channels for organization:', memberProfile.organization_id);
+        if (!user || !memberProfile?.organization_id) return;
 
         const triggerCampaignNotification = (campaignId, stageInfo = 'realtime_event') => {
-            if (!campaignId) {
-                console.error('[CAMPAIGN_NOTIFICATION_ERROR] CAMPAIGN_ID_MISSING', { stageInfo });
-                return;
-            }
+            if (!campaignId) return;
 
-            // BUFFER_ADDED
             if (!transactionBufferRef.current[campaignId]) {
                 transactionBufferRef.current[campaignId] = {
                     campaignId,
-                    timeoutId: null
+                    timeoutId: null,
+                    lastFired: 0
                 };
-                console.log(`[CAMPAIGN_NOTIFICATION_DEBUG] BUFFER_ADDED: campaign_id = ${campaignId}`);
             }
 
             const buf = transactionBufferRef.current[campaignId];
+            const now = Date.now();
+            const timeSinceLastFire = now - buf.lastFired;
+
             if (buf.timeoutId) {
                 clearTimeout(buf.timeoutId);
             }
 
+            // Priority events bypass standard debounce
+            const isPriority = stageInfo.includes('wallet_transaction') || stageInfo.includes('completed') || stageInfo.includes('cancelled') || stageInfo.includes('failed');
+            const delay = isPriority ? 100 : (timeSinceLastFire > 2500 ? 200 : 2500);
+
             buf.timeoutId = setTimeout(async () => {
-                console.log(`[CAMPAIGN_NOTIFICATION_DEBUG] DEBOUNCE_FIRED: campaign_id = ${campaignId}`);
+                buf.lastFired = Date.now();
                 let campaignName = 'Campaign';
                 let totalMessages = 0;
                 let sent_count = 0;
@@ -287,24 +270,16 @@ export default function Layout() {
                         .maybeSingle();
 
                     if (campaignErr) {
-                        console.error('[CAMPAIGN_NOTIFICATION_ERROR] CAMPAIGN_FETCH_FAILED', {
-                            campaign_id: campaignId,
-                            message: campaignErr.message,
-                            details: campaignErr.details,
-                            code: campaignErr.code
-                        });
+                        console.error('Failed to fetch campaign for real-time notification:', campaignErr);
                         return;
                     }
 
                     if (!campaign) {
-                        console.warn('[CAMPAIGN_NOTIFICATION_DEBUG] No campaign row found for campaign_id:', campaignId);
                         delete transactionBufferRef.current[campaignId];
                         return;
                     }
 
                     campaignRow = campaign;
-                    console.log(`[CAMPAIGN_NOTIFICATION_DEBUG] CAMPAIGN_FETCH_SUCCESS: campaign_id = ${campaignId}`);
-
                     campaignName = campaign.name || 'Campaign';
                     status = campaign.status || 'processing';
                     if (Number(campaign.schema_version || 1) >= 2) {
@@ -322,10 +297,7 @@ export default function Layout() {
                         failed_count = results.filter(r => r?.status === 'failed').length;
                     }
                 } catch (err) {
-                    console.error('[CAMPAIGN_NOTIFICATION_ERROR] CAMPAIGN_FETCH_FAILED', {
-                        campaign_id: campaignId,
-                        message: err?.message || String(err)
-                    });
+                    console.error('Error fetching campaign details for notification:', err);
                     return;
                 }
 
@@ -341,17 +313,11 @@ export default function Layout() {
                         .filter('metadata->>campaign_id', 'eq', campaignId);
 
                     if (txsErr) {
-                        console.error('[CAMPAIGN_NOTIFICATION_ERROR] LEDGER_FETCH_FAILED', {
-                            campaign_id: campaignId,
-                            message: txsErr.message,
-                            details: txsErr.details,
-                            code: txsErr.code
-                        });
+                        console.error('Failed to fetch transactions for campaign notification:', txsErr);
                         return;
                     }
 
                     if (txs) {
-                        console.log(`[CAMPAIGN_NOTIFICATION_DEBUG] LEDGER_FETCH_SUCCESS: campaign_id = ${campaignId}`);
                         txs.forEach(tx => {
                             const val = Math.abs(tx.amount_paise || 0);
                             if (['message_debit', 'campaign_reserve'].includes(tx.type)) {
@@ -362,10 +328,7 @@ export default function Layout() {
                         });
                     }
                 } catch (err) {
-                    console.error('[CAMPAIGN_NOTIFICATION_ERROR] LEDGER_FETCH_FAILED', {
-                        campaign_id: campaignId,
-                        message: err?.message || String(err)
-                    });
+                    console.error('Error calculating campaign transaction costs:', err);
                     return;
                 }
 
@@ -382,9 +345,8 @@ export default function Layout() {
                     read_count,
                     total_charged,
                     total_refunded,
-                    updated_at: campaignRow?.created_at || null,
-                    completed_at: campaignRow?.completed_at || null,
-                    ledgerCount: Array.isArray(txs) ? txs.length : 0,
+                    updated_at: campaignRow?.updated_at || null,
+                    completed_at: campaignRow?.completed_at || null
                 });
                 const signatureChanged = notificationSignatureRef.current[campaignId] !== signature;
                 notificationSignatureRef.current[campaignId] = signature;
@@ -394,12 +356,21 @@ export default function Layout() {
                 let toastTitle = 'Campaign Started';
                 let toastDesc = `${totalMessages} messages · ${total_charged_formatted} charged`;
 
-                if (status === 'completed' || status === 'failed' || status === 'cancelled') {
+                if (status === 'processing') {
+                    toastTitle = 'Campaign Progress';
+                    toastDesc = `Sent ${sent_count}/${totalMessages} · ${failed_count} failed`;
+                } else if (status === 'completed') {
                     toastTitle = 'Campaign Completed';
                     toastDesc = `Delivered ${delivered_count}/${totalMessages} · Failed ${failed_count}\nNet Cost ${net_cost_formatted}`;
+                } else if (status === 'failed') {
+                    toastTitle = 'Campaign Failed';
+                    toastDesc = `Failed to process. Delivered ${delivered_count}/${totalMessages} · ${failed_count} failed\nNet Cost ${net_cost_formatted}`;
+                } else if (status === 'cancelled') {
+                    toastTitle = 'Campaign Cancelled';
+                    toastDesc = `Cancelled. Delivered ${delivered_count}/${totalMessages} · ${failed_count} failed\nNet Cost ${net_cost_formatted}`;
                 } else if (total_refunded > 0) {
-                    toastTitle = 'Campaign Refund Updated';
-                    toastDesc = `${failed_count} failed · ${total_refunded_formatted} refunded`;
+                    toastTitle = 'Campaign Refund Processed';
+                    toastDesc = `${failed_count} failed messages · ${total_refunded_formatted} refunded to wallet`;
                 }
 
                 let newNotif;
@@ -425,12 +396,8 @@ export default function Layout() {
                             net_cost: net_cost_formatted
                         }
                     };
-                    console.log(`[CAMPAIGN_NOTIFICATION_DEBUG] PAYLOAD_CREATED: campaign_id = ${campaignId}`, newNotif);
                 } catch (err) {
-                    console.error('[CAMPAIGN_NOTIFICATION_ERROR] PAYLOAD_BUILD_FAILED', {
-                        campaign_id: campaignId,
-                        message: err?.message || String(err)
-                    });
+                    console.error('Failed to compile notification payload:', err);
                     delete transactionBufferRef.current[campaignId];
                     return;
                 }
@@ -441,12 +408,8 @@ export default function Layout() {
                         const filtered = prev.filter(n => n.id !== notifId);
                         return [newNotif, ...filtered];
                     });
-                    console.log(`[CAMPAIGN_NOTIFICATION_DEBUG] STATE_UPDATED: campaign_id = ${campaignId}`);
                 } catch (err) {
-                    console.error('[CAMPAIGN_NOTIFICATION_ERROR] BELL_RENDER_FAILED', {
-                        campaign_id: campaignId,
-                        message: err?.message || String(err)
-                    });
+                    console.error('Failed to update bell notifications state:', err);
                 }
 
                 // Render Toast notifications state
@@ -468,17 +431,13 @@ export default function Layout() {
                             return [...filtered, toastItem];
                         });
                     }
-                    console.log(`[CAMPAIGN_NOTIFICATION_DEBUG] TOAST_RENDERED: campaign_id = ${campaignId}`);
                 } catch (err) {
-                    console.error('[CAMPAIGN_NOTIFICATION_ERROR] TOAST_RENDER_FAILED', {
-                        campaign_id: campaignId,
-                        message: err?.message || String(err)
-                    });
+                    console.error('Failed to update toast notifications state:', err);
                 }
 
                 // Delete buffer
                 delete transactionBufferRef.current[campaignId];
-            }, 3000);
+            }, delay);
         };
 
         const handleTxEvent = (newTx) => {
@@ -490,27 +449,17 @@ export default function Layout() {
 
             // Parse JSONB metadata safely in case it is serialized as string in postgres_changes payload
             let metadata = newTx.metadata;
-            console.log(`[CAMPAIGN_NOTIFICATION_DEBUG] REALTIME_EVENT_RECEIVED: raw metadata = ${JSON.stringify(metadata)}, typeof metadata = ${typeof metadata}`);
-
             if (typeof metadata === 'string') {
                 try {
                     metadata = JSON.parse(metadata);
-                    console.log('[CAMPAIGN_NOTIFICATION_DEBUG] Metadata successfully parsed from string to object');
                 } catch (err) {
-                    console.error('[CAMPAIGN_NOTIFICATION_ERROR] METADATA_PARSE_FAILED', {
-                        transaction_id: newTx.id,
-                        raw_metadata: newTx.metadata,
-                        err: String(err)
-                    });
+                    console.error('Failed to parse wallet transaction metadata:', err);
                 }
             }
 
             const campaignId = metadata?.campaign_id || null;
             if (campaignId) {
-                console.log(`[CAMPAIGN_NOTIFICATION_DEBUG] CAMPAIGN_ID_RESOLVED: campaign_id = ${campaignId}`);
                 triggerCampaignNotification(campaignId, 'wallet_transaction_insert');
-            } else {
-                console.warn('[CAMPAIGN_NOTIFICATION_DEBUG] Wallet transaction inserted without a campaign_id in metadata');
             }
         };
 
@@ -530,12 +479,8 @@ export default function Layout() {
             );
 
         txChannel.subscribe((status, err) => {
-            console.log(`[CAMPAIGN_NOTIFICATION_DEBUG] txChannel status changed: ${status}`);
             if (status === 'CHANNEL_ERROR' || err) {
-                console.error('[CAMPAIGN_NOTIFICATION_ERROR] REALTIME_SUBSCRIPTION_FAILED', {
-                    table: 'whatsapp_wallet_transactions',
-                    details: err?.message || status
-                });
+                console.error('Real-time subscription failed for wallet transactions:', err || status);
             }
         });
 
@@ -550,12 +495,9 @@ export default function Layout() {
                     filter: `organization_id=eq.${memberProfile.organization_id}`
                 },
                 (payload) => {
-                    console.log('[CAMPAIGN_NOTIFICATION_DEBUG] Received campaigns_realtime event:', payload);
                     const campaignId = payload.new?.id || null;
                     if (campaignId) {
                         triggerCampaignNotification(campaignId, `campaign_table_${payload.eventType}`);
-                    } else {
-                        console.warn('[CAMPAIGN_NOTIFICATION_DEBUG] Campaigns table event payload missing payload.new.id');
                     }
                 }
             );
@@ -574,7 +516,6 @@ export default function Layout() {
                     const campaignId = payload.new?.campaign_id || payload.old?.campaign_id || null;
                     const deliveryStatus = payload.new?.delivery_status || payload.old?.delivery_status || null;
                     const billingStatus = payload.new?.billing_status || payload.old?.billing_status || null;
-                    console.log('[CAMPAIGN_NOTIFICATION_DEBUG] Received usage_logs_realtime event:', payload);
                     if (campaignId && (deliveryStatus || billingStatus)) {
                         triggerCampaignNotification(campaignId, `usage_log_${payload.eventType}`);
                     }
@@ -582,27 +523,18 @@ export default function Layout() {
             );
 
         usageLogsChannel.subscribe((status, err) => {
-            console.log(`[CAMPAIGN_NOTIFICATION_DEBUG] usageLogsChannel status changed: ${status}`);
             if (status === 'CHANNEL_ERROR' || err) {
-                console.error('[CAMPAIGN_NOTIFICATION_ERROR] REALTIME_SUBSCRIPTION_FAILED', {
-                    table: 'whatsapp_message_usage_logs',
-                    details: err?.message || status
-                });
+                console.error('Real-time subscription failed for usage logs:', err || status);
             }
         });
 
         campaignsChannel.subscribe((status, err) => {
-            console.log(`[CAMPAIGN_NOTIFICATION_DEBUG] campaignsChannel status changed: ${status}`);
             if (status === 'CHANNEL_ERROR' || err) {
-                console.error('[CAMPAIGN_NOTIFICATION_ERROR] REALTIME_SUBSCRIPTION_FAILED', {
-                    table: 'w_campaigns',
-                    details: err?.message || status
-                });
+                console.error('Real-time subscription failed for campaigns:', err || status);
             }
         });
 
         return () => {
-            console.log('[CAMPAIGN_NOTIFICATION_DEBUG] Tearing down Realtime channels');
             supabase.removeChannel(txChannel);
             supabase.removeChannel(campaignsChannel);
             supabase.removeChannel(usageLogsChannel);
@@ -863,17 +795,15 @@ export default function Layout() {
                                 <button
                                     type="button"
                                     onClick={handleStatusToggle}
-                                    className={`relative inline-flex h-9 w-[98px] shrink-0 items-center rounded-full border p-1 transition-all duration-300 ease-out active:scale-[0.97] cursor-pointer shadow-inner ${
-                                        memberProfile.is_online
+                                    className={`relative inline-flex h-9 w-[98px] shrink-0 items-center rounded-full border p-1 transition-all duration-300 ease-out active:scale-[0.97] cursor-pointer shadow-inner ${memberProfile.is_online
                                             ? 'border-emerald-250 bg-emerald-100/50 hover:bg-emerald-100/80 text-emerald-800'
                                             : 'border-gray-200 bg-gray-100/65 hover:bg-gray-100/85 text-gray-500'
-                                    }`}
+                                        }`}
                                     title={memberProfile.is_online ? "You are online (Click to go offline)" : "You are offline (Click to go online)"}
                                 >
                                     <span
-                                        className={`absolute left-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-white border border-gray-200/80 shadow-[0_2px_5px_rgba(0,0,0,0.1)] transition-transform duration-300 ease-out ${
-                                            memberProfile.is_online ? 'translate-x-[62px]' : 'translate-x-0'
-                                        }`}
+                                        className={`absolute left-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-white border border-gray-200/80 shadow-[0_2px_5px_rgba(0,0,0,0.1)] transition-transform duration-300 ease-out ${memberProfile.is_online ? 'translate-x-[62px]' : 'translate-x-0'
+                                            }`}
                                     >
                                         <span className="relative flex h-2 w-2 shrink-0">
                                             {memberProfile.is_online && (
@@ -882,7 +812,7 @@ export default function Layout() {
                                             <span className={`relative inline-flex rounded-full h-2 w-2 ${memberProfile.is_online ? 'bg-emerald-500' : 'bg-gray-400'}`}></span>
                                         </span>
                                     </span>
-                                    
+
                                     {memberProfile.is_online ? (
                                         <span className="pl-2.5 pr-1.5 mr-auto text-[10px] font-black uppercase tracking-wider text-emerald-700 select-none">
                                             Online
@@ -1042,8 +972,7 @@ export default function Layout() {
                                                             <span className="absolute left-1.5 top-4.5 h-1.5 w-1.5 rounded-full bg-[#0070d1] animate-pulse" />
                                                         )}
                                                         {/* Status Icon Indicator */}
-                                                        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border text-xs shadow-[0_1px_2px_rgba(0,0,0,0.01)] ${
-                                                            item.type === 'campaign'
+                                                        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border text-xs shadow-[0_1px_2px_rgba(0,0,0,0.01)] ${item.type === 'campaign'
                                                                 ? item.metadata?.status === 'completed'
                                                                     ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
                                                                     : item.metadata?.status === 'failed'
@@ -1085,13 +1014,12 @@ export default function Layout() {
                                                                     <div className="text-[11px] font-medium text-neutral-500 space-y-1 bg-neutral-50 p-2.5 rounded-lg border border-neutral-100/50">
                                                                         <div className="flex justify-between items-center pb-1 border-b border-neutral-100/60">
                                                                             <span className="font-bold text-neutral-805 truncate max-w-[180px]">{item.metadata?.campaignName}</span>
-                                                                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
-                                                                                item.metadata?.status === 'completed'
+                                                                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${item.metadata?.status === 'completed'
                                                                                     ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
                                                                                     : item.metadata?.status === 'failed'
                                                                                         ? 'bg-rose-50 text-rose-700 border border-rose-100'
                                                                                         : 'bg-indigo-50 text-indigo-700 border border-indigo-100'
-                                                                            }`}>
+                                                                                }`}>
                                                                                 {item.metadata?.status}
                                                                             </span>
                                                                         </div>
@@ -1486,31 +1414,52 @@ export default function Layout() {
                         {toasts.map(toast => (
                             <div
                                 key={toast.id}
-                                className="pointer-events-auto flex items-start gap-3 rounded-2xl border border-neutral-200 bg-white/95 backdrop-blur-md p-4 shadow-[0_10px_30px_rgba(0,0,0,0.08)] transition-all duration-300 animate-slide-in"
+                                className={`pointer-events-auto flex items-start gap-3 rounded-2xl border p-4 shadow-[0_10px_30px_rgba(0,0,0,0.08)] transition-all duration-300 animate-slide-in backdrop-blur-md ${toast.type === 'refund'
+                                        ? 'bg-amber-50/95 border-amber-200/60'
+                                        : toast.type === 'completed'
+                                            ? 'bg-emerald-50/95 border-emerald-200/60'
+                                            : 'bg-white/95 border-neutral-200'
+                                    }`}
                             >
-                                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-xs ${
-                                    toast.type === 'debit'
-                                        ? 'bg-neutral-50 border-neutral-100 text-neutral-600'
-                                        : 'bg-emerald-50 border-emerald-100 text-emerald-600'
-                                }`}>
-                                    {toast.type === 'debit' ? (
+                                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-xs ${toast.type === 'refund'
+                                        ? 'bg-amber-100 border-amber-200 text-amber-700'
+                                        : toast.type === 'completed'
+                                            ? 'bg-emerald-100 border-emerald-200 text-emerald-700'
+                                            : toast.type === 'debit'
+                                                ? 'bg-neutral-50 border-neutral-100 text-neutral-600'
+                                                : 'bg-blue-50 border-blue-100 text-blue-600'
+                                    }`}>
+                                    {toast.type === 'refund' ? (
+                                        <AlertTriangle className="h-4 w-4" />
+                                    ) : toast.type === 'completed' ? (
+                                        <CheckCircle2 className="h-4 w-4" />
+                                    ) : toast.type === 'debit' ? (
                                         <img src="/images/money.png" className="h-4.5 w-4.5 object-contain" alt="Money" />
                                     ) : (
-                                        <CheckCircle2 className="h-4 w-4" />
+                                        <Megaphone className="h-4 w-4" />
                                     )}
                                 </div>
                                 <div className="flex-1 min-w-0 font-sans">
-                                    <p className="text-xs font-bold text-neutral-900 leading-tight">
-                                        {toast.title} <span className="font-extrabold text-neutral-950">{toast.amount}</span>
+                                    <p className={`text-xs font-bold leading-tight ${toast.type === 'refund' ? 'text-amber-900' : toast.type === 'completed' ? 'text-emerald-900' : 'text-neutral-900'
+                                        }`}>
+                                        {toast.title}
                                     </p>
-                                    <p className="mt-1 text-[11px] font-medium text-neutral-500 leading-normal">
+                                    {toast.campaignName && (
+                                        <p className={`text-[11px] font-semibold mt-0.5 ${toast.type === 'refund' ? 'text-amber-700' : toast.type === 'completed' ? 'text-emerald-700' : 'text-neutral-700'
+                                            }`}>
+                                            {toast.campaignName}
+                                        </p>
+                                    )}
+                                    <p className={`mt-1 text-[11px] font-medium leading-normal whitespace-pre-line ${toast.type === 'refund' ? 'text-amber-600' : toast.type === 'completed' ? 'text-emerald-600' : 'text-neutral-500'
+                                        }`}>
                                         {toast.description}
                                     </p>
                                 </div>
                                 <button
                                     type="button"
                                     onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
-                                    className="text-neutral-400 hover:text-neutral-700 p-0.5 shrink-0"
+                                    className={`p-0.5 shrink-0 ${toast.type === 'refund' ? 'text-amber-400 hover:text-amber-700' : toast.type === 'completed' ? 'text-emerald-400 hover:text-emerald-700' : 'text-neutral-400 hover:text-neutral-700'
+                                        }`}
                                 >
                                     <X className="h-3.5 w-3.5" />
                                 </button>

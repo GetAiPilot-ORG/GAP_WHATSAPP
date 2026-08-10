@@ -18,7 +18,7 @@ import makeWASocket, {
 import { upsertContact, sanitizeContactDisplayName, normalizeContactWaIdForStorage, pickBestBaileysContactName } from './contacts.service.js';
 import { getBotAgentReply } from './ai.service.js';
 import { performAutoAssignment } from './assignment.service.js';
-
+import { sendPushNotificationToOrg } from './push.service.js';
 
 const botDebounceMap = new Map<string, NodeJS.Timeout>();
 const botLockMap = new Map<string, Promise<void>>();
@@ -521,6 +521,16 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                             status: isOutbound ? 'sent' : 'delivered'
                         });
 
+                        // Trigger Push Notification for inbound messages
+                        if (!isOutbound) {
+                            sendPushNotificationToOrg(orgId, {
+                                title: `New message from ${threadName || senderName}`,
+                                body: captionText || 'New media message received',
+                                url: `/live-chat`,
+                                icon: '/pwa-192x192.png'
+                            });
+                        }
+
                         // Bot Auto-Reply for Baileys (only for inbound text messages)
                         if (!isOutbound && normalizedType === 'text' && captionText) {
                             try {
@@ -545,6 +555,7 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                             automation_source: 'flow',
                                             metadata: {
                                                 flow_id: flowResult.flow_id,
+                                                flow_name: flowResult.flow_name,
                                                 flow_version_id: flowResult.flow_version_id,
                                                 flow_session_id: flowResult.flow_session_id,
                                                 flow_run_id: flowResult.flow_run_id,
@@ -558,6 +569,7 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                             sender: 'agent', conversation_id: conv.id, contact_id: contact.id, message_id: storedBotReply?.id || null,
                                             wa_message_id: botWaMessageId, created_at: storedBotReply?.created_at || new Date().toISOString(),
                                             connectedAccount: myPhone, type: 'text', is_bot_reply: true,
+                                            metadata: storedBotReply?.metadata || { flow_name: flowResult.flow_name, flow_id: flowResult.flow_id },
                                         });
 
                                         await supabase.from('w_conversations').update({ last_message_at: new Date().toISOString(), last_message_preview: flowResult.output.substring(0, 100) }).eq('id', conv.id);
@@ -600,6 +612,7 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                                     automation_source: 'flow',
                                                     metadata: {
                                                         flow_id: flowResult.flow_id,
+                                                        flow_name: flowResult.flow_name,
                                                         flow_version_id: flowResult.flow_version_id,
                                                         flow_session_id: flowResult.flow_session_id,
                                                         flow_run_id: flowResult.flow_run_id,
@@ -624,6 +637,7 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                                     mime_type: media.mimeType || null,
                                                     file_name: media.fileName || null,
                                                     is_bot_reply: true,
+                                                    metadata: storedBotMedia?.metadata || { flow_name: flowResult.flow_name, flow_id: flowResult.flow_id },
                                                 });
 
                                                 await supabase.from('w_conversations').update({
@@ -667,9 +681,24 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
 
                                                 if (botResult?.reply) {
                                                     console.log(`🤖 Bot "${botResult.agent?.name}" replying via Baileys to: "${captionText.substring(0, 50)}..."`);
+                                                    let replyText = botResult.reply;
+                                                    try {
+                                                        const trimmed = replyText.trim();
+                                                        const firstBrace = trimmed.indexOf("{");
+                                                        const lastBrace = trimmed.lastIndexOf("}");
+                                                        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+                                                            const jsonCandidate = trimmed.substring(firstBrace, lastBrace + 1);
+                                                            const parsed = JSON.parse(jsonCandidate);
+                                                            if (parsed && typeof parsed === "object" && typeof parsed.text === "string") {
+                                                                replyText = parsed.text;
+                                                            }
+                                                        }
+                                                    } catch (e) {
+                                                        // Keep original if parsing fails
+                                                    }
 
                                                     // Send the reply via Baileys
-                                                    const botMsg = await sock.sendMessage(remoteJid, { text: botResult.reply });
+                                                    const botMsg = await sock.sendMessage(remoteJid, { text: replyText });
                                                     const botWaMessageId = botMsg?.key?.id || null;
 
                                                     // Store the bot's reply message
@@ -680,7 +709,7 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                                         wa_message_id: botWaMessageId,
                                                         direction: "outbound",
                                                         type: "text",
-                                                        content: { text: botResult.reply, bot_agent_id: botResult.agent?.id, bot_agent_name: botResult.agent?.name },
+                                                        content: { text: replyText, bot_agent_id: botResult.agent?.id, bot_agent_name: botResult.agent?.name },
                                                         status: "sent",
                                                         is_bot_reply: true,
                                                         bot_agent_id: botResult.agent?.id || null,
@@ -692,7 +721,7 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                                     io.emit("new_message", {
                                                         from: myPhone,
                                                         phone: contactWaId,
-                                                        text: botResult.reply,
+                                                        text: replyText,
                                                         sender: 'agent',
                                                         conversation_id: conv.id,
                                                         contact_id: contact.id,
@@ -710,7 +739,7 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                                         .from('w_conversations')
                                                         .update({
                                                             last_message_at: new Date().toISOString(),
-                                                            last_message_preview: botResult.reply.substring(0, 100)
+                                                            last_message_preview: replyText.substring(0, 100)
                                                         })
                                                         .eq('id', conv.id);
                                                 }

@@ -1,6 +1,7 @@
 import { createElement, useEffect, useMemo, useState } from 'react'
 import {
     Blocks,
+    Calendar,
     ChevronDown,
     ChevronsUpDown,
     Briefcase,
@@ -11,6 +12,7 @@ import {
     HelpCircle,
     LogOut,
     Megaphone,
+    Download,
     MessageCircle,
     Plus,
     Settings,
@@ -20,16 +22,21 @@ import {
     UserCircle,
     Users,
     X,
+    BellRing,
 } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
 import { useAuth } from '../context/AuthContext'
+import { useWhatsAppAccounts } from '../context/WhatsAppAccountContext'
+import { usePwaInstall } from '../context/PwaInstallContext'
+import { usePush } from '../context/PushContext'
 
 const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: Grid2X2 },
     { name: 'Accounts', href: '/whatsapp-connect', icon: Smartphone },
     { name: 'New Number', href: '#', icon: PhoneCall, badge: 'Coming soon' },
     { name: 'Chats', href: '/live-chat', icon: MessageSquareText, badge: 'LIVE' },
+    { name: 'Scheduled Meetings', href: '/scheduled-meetings', icon: Calendar },
     { name: 'Contacts', href: '/contacts', icon: Users },
     { name: 'AI Agents', href: '/bot-agents', icon: Briefcase },
     { name: 'Team Members', href: '/team-members', icon: Users },
@@ -43,7 +50,15 @@ const navigation = [
             { name: 'Explore Templates', href: '/templates/industries' }
         ]
     },
-    { name: 'Broadcasts', href: '/broadcast', icon: Megaphone },
+    {
+        name: 'Broadcasts',
+        href: '/broadcast',
+        icon: Megaphone,
+        subItems: [
+            { name: 'New Campaign', href: '/broadcast' },
+            { name: 'History', href: '/broadcast/history' }
+        ]
+    },
     { name: 'WA Link Generator', href: '/wa-link-generator', icon: MessageCircle },
 ]
 
@@ -59,8 +74,10 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
     const [isHovered, setIsHovered] = useState(false)
     const [isOrgMenuOpen, setIsOrgMenuOpen] = useState(false)
     const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
-    const [waAccounts, setWaAccounts] = useState([])
+    const { accounts: waAccounts } = useWhatsAppAccounts()
     const [selectedWaAccount, setSelectedWaAccount] = useState(() => localStorage.getItem(SELECTED_WA_ACCOUNT_KEY) || 'All')
+    const { isInstallable, promptInstall } = usePwaInstall()
+    const { permissionStatus, isSubscribed, subscribeToPush } = usePush()
 
     const isOwner = userRole === 'owner'
     const usesCompactSidebar = location.pathname.startsWith('/live-chat')
@@ -82,24 +99,11 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
     })
 
     const selectedAccountLabel = useMemo(() => {
-        if (selectedWaAccount === 'All') return 'GAP FlowPilot'
+        if (selectedWaAccount === 'All') return 'GAP WhatsApp Pilot'
         const account = waAccounts.find(item => String(getAccountSwitchKey(item)) === String(selectedWaAccount))
         return account?.name || account?.display_phone_number || account?.phone_number_id || 'Selected account'
     }, [selectedWaAccount, waAccounts])
     const shouldHighlightConnect = isOwner && waAccounts.length === 0
-
-    useEffect(() => {
-        let cancelled = false
-        apiCall(`${API_BASE}/whatsapp/accounts`)
-            .then(res => res.ok ? res.json() : [])
-            .then(data => {
-                if (!cancelled) setWaAccounts(Array.isArray(data) ? data : [])
-            })
-            .catch(() => {
-                if (!cancelled) setWaAccounts([])
-            })
-        return () => { cancelled = true }
-    }, [apiCall])
 
     const isActive = (href) => {
         const [path, search] = href.split('?')
@@ -169,7 +173,7 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
                             title={selectedAccountLabel}
                         >
                             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white ring-1 ring-gray-200">
-                                <img src="/logo.png" alt="GAP FlowPilot" className="h-[17px] w-[17px] object-contain" />
+                                <img src="/logo.png" alt="GAP WhatsApp Pilot" className="h-[17px] w-[17px] object-contain" />
                             </span>
                             <span className={labelTransition(isExpanded, 'flex min-w-0 flex-1 items-center gap-2')}>
                                 <span className="truncate font-medium text-gray-700">{selectedAccountLabel}</span>
@@ -224,7 +228,7 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
                         ) : null}
                     </div>
 
-                    <nav data-tour="sidebar-nav" className="flex-1 overflow-y-auto px-2 py-3">
+                    <nav data-tour="sidebar-nav" className="flex-1 overflow-y-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden px-2 py-3">
                         <div className="space-y-1">
                             {filteredNavigation.slice(0, 3).map(item => {
                                 if (item.subItems) {
@@ -259,6 +263,36 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
                     </nav>
 
                     <div className="border-t border-gray-100 p-2">
+                        {isInstallable && (
+                            <button
+                                onClick={promptInstall}
+                                className={clsx(
+                                    'mb-2 flex h-9 w-full items-center rounded-lg bg-green-50 text-[14px] font-medium text-green-700 transition-colors hover:bg-green-100',
+                                    isCollapsed ? 'justify-center px-0' : 'gap-2 px-2'
+                                )}
+                                title={isCollapsed ? "Install App" : undefined}
+                            >
+                                <Download className="h-4 w-4 shrink-0 stroke-[1.9]" />
+                                <span className={labelTransition(isExpanded, 'flex min-w-0 flex-1 items-center')}>
+                                    <span className="min-w-0 flex-1 truncate text-left">Install App</span>
+                                </span>
+                            </button>
+                        )}
+                        {(!isSubscribed && permissionStatus !== 'denied') && (
+                            <button
+                                onClick={() => subscribeToPush(organization.id)}
+                                className={clsx(
+                                    'mb-2 flex h-9 w-full items-center rounded-lg bg-blue-50 text-[14px] font-medium text-blue-700 transition-colors hover:bg-blue-100',
+                                    isCollapsed ? 'justify-center px-0' : 'gap-2 px-2'
+                                )}
+                                title={isCollapsed ? "Enable Notifications" : undefined}
+                            >
+                                <BellRing className="h-4 w-4 shrink-0 stroke-[1.9]" />
+                                <span className={labelTransition(isExpanded, 'flex min-w-0 flex-1 items-center')}>
+                                    <span className="min-w-0 flex-1 truncate text-left">Enable Notifications</span>
+                                </span>
+                            </button>
+                        )}
                         {isOwner ? (
                             <>
                                 <NavItem
@@ -350,7 +384,7 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
                                 title={selectedAccountLabel}
                             >
                                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white ring-1 ring-gray-200">
-                                    <img src="/logo.png" alt="GAP FlowPilot" className="h-5 w-5 object-contain" />
+                                    <img src="/logo.png" alt="GAP WhatsApp Pilot" className="h-5 w-5 object-contain" />
                                 </span>
                                 <span className="min-w-0 flex-1">
                                     <span className="block truncate">{selectedAccountLabel}</span>
@@ -395,7 +429,7 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
                             </div>
                         ) : null}
 
-                        <nav className="flex-1 overflow-y-auto px-3 py-4">
+                        <nav className="flex-1 overflow-y-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden px-3 py-4">
                             <div className="space-y-1">
                                 {filteredNavigation.map(item => {
                                     if (item.subItems) {
