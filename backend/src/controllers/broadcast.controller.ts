@@ -39,10 +39,38 @@ export async function getBroadcastTags(req: any, res: Response) {
 export async function uploadHeaderMedia(req: any, res: Response) {
     const orgId = req.organization_id;
     const file = req.file;
+    const mediaType = String(req.query.media_type || '').toLowerCase();
 
     try {
         if (!orgId) return res.status(400).json({ error: 'organization_id is required' });
         if (!file) return res.status(400).json({ error: 'File is required' });
+
+        const sizeMB = file.size / (1024 * 1024);
+        const ext = (file.originalname || '').split('.').pop()?.toLowerCase() || '';
+        const mime = (file.mimetype || '').toLowerCase();
+
+        if (mediaType === 'image') {
+            if (sizeMB > 5) {
+                return res.status(400).json({ error: `Image file is too large (${sizeMB.toFixed(1)} MB). Meta WhatsApp API limits template header images to 5 MB.` });
+            }
+            if (ext === 'webp' || ext === 'gif' || mime.includes('webp') || mime.includes('gif')) {
+                return res.status(400).json({ error: 'Meta WhatsApp API only supports JPG and PNG image formats for template headers. WebP and GIF are not supported.' });
+            }
+            if (ext && !['jpg', 'jpeg', 'png'].includes(ext) && !['image/jpeg', 'image/png', 'image/jpg'].some(m => mime.includes(m))) {
+                return res.status(400).json({ error: `Invalid image format (.${ext}). Meta WhatsApp API requires JPG or PNG images.` });
+            }
+        } else if (mediaType === 'video') {
+            if (sizeMB > 16) {
+                return res.status(400).json({ error: `Video file is too large (${sizeMB.toFixed(1)} MB). Meta WhatsApp API limits template header videos to 16 MB.` });
+            }
+            if (ext && !['mp4', '3gp'].includes(ext) && !['video/mp4', 'video/3gpp'].some(m => mime.includes(m))) {
+                return res.status(400).json({ error: `Invalid video format (.${ext}). Meta WhatsApp API requires MP4 or 3GP videos.` });
+            }
+        } else if (mediaType === 'document') {
+            if (sizeMB > 100) {
+                return res.status(400).json({ error: `Document file is too large (${sizeMB.toFixed(1)} MB). Meta WhatsApp API limits template header documents to 100 MB.` });
+            }
+        }
 
         const uploaded = await uploadMediaToStorage({
             organization_id: orgId,
