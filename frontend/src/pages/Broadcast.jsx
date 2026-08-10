@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Send, Users, FileText, Calendar, Check, ArrowRight, LayoutGrid, Loader2, Clock, Trash2, ChevronDown, ChevronUp, Upload, Link as LinkIcon, Info, Wallet, Pause, Play, Phone, MessageSquare, ShieldCheck, TrendingUp, Search, X, Megaphone } from 'lucide-react'
+import { Send, Users, FileText, Calendar, Check, ArrowRight, LayoutGrid, Loader2, RotateCw, Clock, Trash2, ChevronDown, ChevronUp, Upload, Link as LinkIcon, Info, Wallet, Pause, Play, Phone, MessageSquare, ShieldCheck, TrendingUp, Search, X, Megaphone } from 'lucide-react'
 import { format } from 'date-fns'
 import { useAuth } from '../context/AuthContext'
 import { useDialog } from '../context/DialogContext'
@@ -418,7 +418,8 @@ export default function Broadcast({ defaultTab = 'new' }) {
     }, [campaign.wa_account_id])
 
     const fetchCampaignHistory = (silent = false) => {
-        if (!silent) {
+        const isSilent = typeof silent === 'boolean' ? silent : false;
+        if (!isSilent) {
             setIsLoadingHistory(true);
             setHistoryLoadState('loading');
         }
@@ -434,10 +435,10 @@ export default function Broadcast({ defaultTab = 'new' }) {
             })
             .catch(error => {
                 console.error(error);
-                if (!silent) setHistoryLoadState('error');
+                if (!isSilent) setHistoryLoadState('error');
             })
             .finally(() => {
-                if (!silent) setIsLoadingHistory(false);
+                if (!isSilent) setIsLoadingHistory(false);
             });
     }
 
@@ -646,6 +647,61 @@ export default function Broadcast({ defaultTab = 'new' }) {
         }));
     };
 
+    const validateMediaHeaderFile = (file, format) => {
+        if (!file) return { ok: false, message: 'No file selected.' }
+        const headerFormat = String(format || 'IMAGE').toUpperCase()
+        const sizeMB = file.size / (1024 * 1024)
+        const ext = file.name ? file.name.split('.').pop().toLowerCase() : ''
+        const mime = (file.type || '').toLowerCase()
+
+        if (headerFormat === 'IMAGE') {
+            if (sizeMB > 5) {
+                return {
+                    ok: false,
+                    message: `Image file is too large (${sizeMB.toFixed(1)} MB). Meta WhatsApp Cloud API limits template header images to max 5 MB.`
+                }
+            }
+            const isWebpOrGif = ext === 'webp' || ext === 'gif' || mime.includes('webp') || mime.includes('gif')
+            if (isWebpOrGif) {
+                return {
+                    ok: false,
+                    message: `Meta WhatsApp Cloud API only supports JPG and PNG image formats for template headers. WebP and GIF formats are not supported.`
+                }
+            }
+            const allowedExts = ['jpg', 'jpeg', 'png']
+            const allowedMimes = ['image/jpeg', 'image/png', 'image/jpg']
+            if (ext && !allowedExts.includes(ext) && !allowedMimes.some(m => mime.includes(m))) {
+                return {
+                    ok: false,
+                    message: `Invalid image format (.${ext || 'unknown'}). Meta WhatsApp Cloud API requires JPG or PNG images.`
+                }
+            }
+        } else if (headerFormat === 'VIDEO') {
+            if (sizeMB > 16) {
+                return {
+                    ok: false,
+                    message: `Video file is too large (${sizeMB.toFixed(1)} MB). Meta WhatsApp Cloud API limits template header videos to max 16 MB.`
+                }
+            }
+            const allowedExts = ['mp4', '3gp']
+            const allowedMimes = ['video/mp4', 'video/3gpp']
+            if (ext && !allowedExts.includes(ext) && !allowedMimes.some(m => mime.includes(m))) {
+                return {
+                    ok: false,
+                    message: `Invalid video format (.${ext || 'unknown'}). Meta WhatsApp Cloud API requires MP4 or 3GP videos.`
+                }
+            }
+        } else if (headerFormat === 'DOCUMENT') {
+            if (sizeMB > 100) {
+                return {
+                    ok: false,
+                    message: `Document file is too large (${sizeMB.toFixed(1)} MB). Meta WhatsApp Cloud API limits template header documents to max 100 MB.`
+                }
+            }
+        }
+        return { ok: true }
+    }
+
     const validateHeaderMediaUrl = async () => {
         if (!needsHeaderMedia) return true
         const url = headerMediaUrl.trim()
@@ -660,6 +716,19 @@ export default function Broadcast({ defaultTab = 'new' }) {
         if (/^https?:\/\/example\.com\//i.test(url)) {
             await alertDialog('Please replace the example URL with your actual public media URL.', { title: 'Replace example URL', tone: 'warning' })
             return false
+        }
+        if (selectedHeaderFormat === 'IMAGE') {
+            const lower = url.toLowerCase()
+            if (lower.endsWith('.webp') || lower.endsWith('.gif')) {
+                await alertDialog('Meta WhatsApp API only supports JPG and PNG images for template headers. WebP and GIF URLs will cause broadcast delivery errors.', { title: 'Unsupported Image Format', tone: 'warning' })
+                return false
+            }
+        } else if (selectedHeaderFormat === 'VIDEO') {
+            const lower = url.toLowerCase()
+            if (lower.endsWith('.webm') || lower.endsWith('.avi') || lower.endsWith('.mov') || lower.endsWith('.mkv')) {
+                await alertDialog('Meta WhatsApp API requires MP4 or 3GP videos for template headers. Other video formats will cause broadcast delivery errors.', { title: 'Unsupported Video Format', tone: 'warning' })
+                return false
+            }
         }
         return true
     }
@@ -695,11 +764,16 @@ export default function Broadcast({ defaultTab = 'new' }) {
 
     const handleHeaderMediaUpload = async (file) => {
         if (!file) return
+        const validation = validateMediaHeaderFile(file, selectedHeaderFormat)
+        if (!validation.ok) {
+            await alertDialog(validation.message, { title: 'Header Media Limits', tone: 'warning' })
+            return
+        }
         const formData = new FormData()
         formData.append('file', file)
         setIsHeaderUploading(true)
         try {
-            const res = await apiCall(`${API_URL}/api/broadcasts/header-media`, {
+            const res = await apiCall(`${API_URL}/api/broadcasts/header-media?media_type=${selectedHeaderFormat.toLowerCase()}`, {
                 method: 'POST',
                 body: formData
             })
@@ -1130,23 +1204,36 @@ const renderLivePreview = () => {
                             <h2 className="text-xl font-semibold text-gray-950">Campaign history</h2>
                             <p className="mt-1 text-sm text-gray-500">Monitor delivery and manage active broadcasts.</p>
                         </div>
-                        <button onClick={fetchCampaignHistory} className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-[#0064b7] transition-colors hover:bg-[#eef7ff]">
-                            <Loader2 className={`w-4 h-4 ${isLoadingHistory ? 'animate-spin' : ''}`} />
-                            Refresh
+                        <button
+                            type="button"
+                            disabled={isLoadingHistory}
+                            onClick={() => {
+                                fetchCampaignHistory(false);
+                                if (expandedCampaignId) {
+                                    fetchRecipientReport(expandedCampaignId, 1);
+                                }
+                            }}
+                            className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-[#0064b7] transition-all hover:bg-[#eef7ff] hover:border-[#b9dcfb] active:scale-95 shadow-xs disabled:opacity-75 cursor-pointer"
+                        >
+                            <RotateCw className={`w-4 h-4 ${isLoadingHistory ? 'animate-spin' : ''}`} />
+                            <span>Refresh</span>
                         </button>
                         </div>
-                        <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_180px]">
-                            <input
-                                type="search"
-                                value={historySearch}
-                                onChange={event => setHistorySearch(event.target.value)}
-                                placeholder="Search campaigns or templates"
-                                className="h-10 rounded-lg border-gray-300 bg-white text-sm"
-                            />
+                        <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px]">
+                            <div className="relative">
+                                <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                <input
+                                    type="search"
+                                    value={historySearch}
+                                    onChange={event => setHistorySearch(event.target.value)}
+                                    placeholder="Search campaigns or templates"
+                                    className="w-full h-10 pl-10 pr-4 rounded-xl border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#0064b7]/20 focus:border-[#0064b7] shadow-xs"
+                                />
+                            </div>
                             <select
                                 value={historyStatus}
                                 onChange={event => setHistoryStatus(event.target.value)}
-                                className="h-10 rounded-lg border-gray-300 bg-white text-sm"
+                                className="h-10 rounded-xl border border-gray-300 bg-white text-sm px-3 focus:outline-none focus:ring-2 focus:ring-[#0064b7]/20 focus:border-[#0064b7] shadow-xs"
                                 aria-label="Filter campaigns by status"
                             >
                                 <option value="all">All statuses</option>
@@ -1208,7 +1295,7 @@ const renderLivePreview = () => {
                                     <div className="grid grid-cols-2 gap-4 rounded-xl bg-gray-50/80 p-4 border border-gray-100 text-xs">
                                         <div>
                                             <span className="block text-gray-500 font-medium">Audience</span>
-                                            <span className="mt-1 block font-bold text-gray-800 flex items-center gap-1">
+                                            <span className="mt-1 font-bold text-gray-800 flex items-center gap-1">
                                                 <Users className="w-3.5 h-3.5 text-gray-400" />
                                                 {camp.total_contacts || camp.prepared_count || 0} contacts
                                             </span>
@@ -1296,90 +1383,93 @@ const renderLivePreview = () => {
                             ))}
                         </div>
                         <div className="hidden overflow-x-auto md:block">
-                            <table className="w-full text-left text-sm whitespace-nowrap">
-                                <thead className="bg-gray-50/80 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
+                            <table className="w-full text-left text-sm min-w-[900px]">
+                                <thead className="bg-gray-50/80 text-gray-500 font-semibold uppercase text-[11px] tracking-wider border-b border-gray-200 select-none">
                                     <tr>
-                                        <th className="px-5 py-4">Campaign Name</th>
-                                        <th className="px-5 py-4">Status</th>
-                                        <th className="px-5 py-4">Audience</th>
-                                        <th className="px-5 py-4">Date / Scheduled</th>
-                                        <th className="px-5 py-4">Performance</th>
-                                        <th className="px-5 py-4 text-right">Actions</th>
+                                        <th className="px-4 py-3.5 pl-6 min-w-[200px]">Campaign Name</th>
+                                        <th className="px-4 py-3.5 min-w-[110px]">Status</th>
+                                        <th className="px-4 py-3.5 min-w-[130px]">Audience</th>
+                                        <th className="px-4 py-3.5 min-w-[160px]">Date / Scheduled</th>
+                                        <th className="px-4 py-3.5 min-w-[140px]">Performance</th>
+                                        <th className="px-4 py-3.5 pr-6 text-right min-w-[210px]">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {visibleCampaigns.map(camp => (
                                         <React.Fragment key={camp.id}>
                                             <tr className="hover:bg-gray-50/60 transition-colors">
-                                                <td className="px-5 py-4">
-                                                    <div className="font-bold text-gray-900">{camp.name}</div>
+                                                <td className="px-4 py-3.5 pl-6">
+                                                    <div className="font-bold text-gray-900 truncate max-w-[220px]" title={camp.name}>{camp.name}</div>
                                                     <div className="text-xs font-medium text-gray-500 mt-1 flex items-center gap-1.5">
                                                         <FileText className="w-3.5 h-3.5 text-gray-400 shrink-0" /> 
-                                                        <span className="truncate max-w-[200px]">{camp.template_name}</span>
+                                                        <span className="truncate max-w-[140px]" title={camp.template_name}>{camp.template_name}</span>
                                                         {templateUsageCounts[camp.template_name] > 0 && (
-                                                            <span className="text-[10px] bg-gray-100/80 text-gray-500 border border-gray-200 px-1.5 py-0.5 rounded-md font-semibold whitespace-nowrap" title={`This template has been used in ${templateUsageCounts[camp.template_name]} campaigns`}>
+                                                            <span className="text-[10px] bg-gray-100 text-gray-500 border border-gray-200/80 px-1.5 py-0.5 rounded-md font-semibold whitespace-nowrap shrink-0" title={`This template has been used in ${templateUsageCounts[camp.template_name]} campaigns`}>
                                                                 {templateUsageCounts[camp.template_name]} {templateUsageCounts[camp.template_name] === 1 ? 'time' : 'times'}
                                                             </span>
                                                         )}
                                                     </div>
                                                 </td>
-                                                <td className="px-5 py-4">
-                                                    <span className={`px-3 py-1.5 text-xs font-bold rounded-lg uppercase tracking-wide flex items-center inline-flex gap-1.5 ${camp.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60' :
-                                                            camp.status === 'failed' ? 'bg-rose-50 text-rose-700 border border-rose-200/60' :
-                                                                camp.status === 'cancelled' ? 'bg-gray-50 text-gray-700 border border-gray-300' :
-                                                                    camp.status === 'processing' ? 'bg-blue-50 text-blue-700 border border-blue-200/60' :
-                                                                        'bg-amber-50 text-amber-700 border border-amber-200/60'
-                                                        }`}>
+                                                <td className="px-4 py-3.5">
+                                                    <span className={`px-2.5 py-1 text-[10px] font-bold rounded-lg uppercase tracking-wide inline-flex items-center gap-1.5 whitespace-nowrap ${
+                                                        camp.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60' :
+                                                        camp.status === 'failed' ? 'bg-rose-50 text-rose-700 border border-rose-200/60' :
+                                                        camp.status === 'cancelled' ? 'bg-gray-50 text-gray-700 border border-gray-300' :
+                                                        camp.status === 'processing' ? 'bg-blue-50 text-blue-700 border border-blue-200/60' :
+                                                        'bg-amber-50 text-amber-700 border border-amber-200/60'
+                                                    }`}>
                                                         {camp.status === 'processing' && <Loader2 className="w-3 h-3 animate-spin" />}
                                                         {camp.status}
                                                     </span>
                                                 </td>
-                                                <td className="px-5 py-4 text-gray-600 font-medium">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <Users className="w-4 h-4 text-gray-400" />
-                                                        {camp.audience_tag || (String(camp.audience_type).toLowerCase().includes('csv') || camp.csv_data ? 'CSV Upload' : camp.audience_type === 'saved' ? 'Saved Contacts' : 'All Contacts')}
+                                                <td className="px-4 py-3.5 text-gray-600 font-medium">
+                                                    <div className="flex items-center gap-1.5 text-xs truncate max-w-[150px]" title={camp.audience_tag || (String(camp.audience_type).toLowerCase().includes('csv') || camp.csv_data ? 'CSV Upload' : camp.audience_type === 'saved' ? 'Saved Contacts' : 'All Contacts')}>
+                                                        <Users className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                                        <span className="truncate">
+                                                            {camp.audience_tag || (String(camp.audience_type).toLowerCase().includes('csv') || camp.csv_data ? 'CSV Upload' : camp.audience_type === 'saved' ? 'Saved Contacts' : 'All Contacts')}
+                                                        </span>
                                                     </div>
                                                 </td>
-                                                <td className="px-5 py-4 text-gray-600 font-medium">
+                                                <td className="px-4 py-3.5 text-gray-600 font-medium text-xs whitespace-nowrap">
                                                     {camp.scheduled_at ? format(new Date(camp.scheduled_at), 'MMM dd, yyyy · hh:mm a') : format(new Date(camp.created_at), 'MMM dd, yyyy · hh:mm a')}
                                                 </td>
-                                                <td className="px-5 py-4">
+                                                <td className="px-4 py-3.5">
                                                     {camp.schema_version >= 2 || camp.status === 'completed' ? (
-                                                        <div className="flex flex-wrap gap-2 text-xs items-center">
-                                                            <div className="flex items-center gap-1.5 text-emerald-700 font-bold bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-100">
-                                                                <Check className="w-3.5 h-3.5" /> {camp.schema_version >= 2 ? (camp.accepted_count ?? camp.sent_count ?? 0) : (camp.results?.filter(r => ['accepted', 'sent', 'delivered', 'read'].includes(r?.status)).length || 0)}
+                                                        <div className="flex items-center gap-1.5 text-xs whitespace-nowrap">
+                                                            <div className="flex items-center gap-1 text-emerald-700 font-bold bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100/80" title="Accepted/Delivered">
+                                                                <Check className="w-3 h-3" /> {camp.schema_version >= 2 ? (camp.accepted_count ?? camp.sent_count ?? 0) : (camp.results?.filter(r => ['accepted', 'sent', 'delivered', 'read'].includes(r?.status)).length || 0)}
                                                             </div>
-                                                            <div className="flex items-center gap-1.5 text-rose-700 font-bold bg-rose-50 px-2.5 py-1.5 rounded-lg border border-rose-100">
-                                                                <Info className="w-3.5 h-3.5" /> {camp.schema_version >= 2 ? (camp.failed_count ?? 0) : (camp.results?.filter(r => r?.status === 'failed').length || 0)}
+                                                            <div className="flex items-center gap-1 text-rose-700 font-bold bg-rose-50 px-2 py-1 rounded-md border border-rose-100/80" title="Failed">
+                                                                <Info className="w-3 h-3" /> {camp.schema_version >= 2 ? (camp.failed_count ?? 0) : (camp.results?.filter(r => r?.status === 'failed').length || 0)}
                                                             </div>
-                                                            {camp.schema_version >= 2 && <span className="text-gray-500">{camp.prepared_count || 0}/{camp.total_contacts || 0}</span>}
+                                                            {camp.schema_version >= 2 && <span className="text-gray-400 font-mono text-[10px] ml-0.5">{camp.prepared_count || 0}/{camp.total_contacts || 0}</span>}
                                                         </div>
                                                     ) : <span className="text-gray-400 font-medium">-</span>}
                                                 </td>
-                                                <td className="px-5 py-4 text-right">
-                                                    <div className="flex justify-end gap-3 items-center">
+                                                <td className="px-4 py-3.5 pr-6 text-right whitespace-nowrap">
+                                                    <div className="flex justify-end gap-2 items-center">
                                                         {camp.schema_version >= 2 && ['queued', 'processing'].includes(camp.status) && (
-                                                            <button onClick={() => updateCampaignState(camp.id, 'pause')} className="text-amber-700 text-xs font-bold flex items-center gap-1 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200">
+                                                            <button onClick={() => updateCampaignState(camp.id, 'pause')} className="text-amber-700 text-xs font-bold flex items-center gap-1 bg-amber-50 hover:bg-amber-100 px-2.5 py-1.5 rounded-lg border border-amber-200 transition-colors">
                                                                 <Pause className="w-3.5 h-3.5" /> Pause
                                                             </button>
                                                         )}
                                                         {camp.schema_version >= 2 && camp.status === 'paused' && (
-                                                            <button onClick={() => updateCampaignState(camp.id, 'resume')} className="text-emerald-700 text-xs font-bold flex items-center gap-1 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">
+                                                            <button onClick={() => updateCampaignState(camp.id, 'resume')} className="text-emerald-700 text-xs font-bold flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1.5 rounded-lg border border-emerald-200 transition-colors">
                                                                 <Play className="w-3.5 h-3.5" /> Resume
                                                             </button>
                                                         )}
                                                         {(['preparing', 'queued', 'processing', 'paused', 'scheduled'].includes(camp.status)) && (
                                                             <button
                                                                 onClick={() => cancelCampaign(camp.id)}
-                                                                className="text-rose-600 hover:text-white text-xs font-bold flex items-center gap-1.5 bg-rose-50 hover:bg-rose-500 px-3 py-1.5 rounded-lg transition-colors border border-rose-200 hover:border-rose-500"
-                                                                title="Stop and Abandon Campaign"
+                                                                className="text-rose-600 hover:text-white text-xs font-bold flex items-center gap-1 bg-rose-50 hover:bg-rose-500 px-2.5 py-1.5 rounded-lg transition-colors border border-rose-200 hover:border-rose-500"
+                                                                title="Stop and Cancel Campaign"
                                                             >
                                                                 <Trash2 className="w-3.5 h-3.5" /> Stop & Cancel
                                                             </button>
                                                         )}
                                                         <button
                                                             onClick={() => setBroadcastAgainCamp(camp)}
-                                                            className="text-[#0064b7] hover:text-[#0064b7] hover:bg-[#eef7ff] text-xs font-bold flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg transition-colors border border-gray-200"
+                                                            className="text-[#0064b7] hover:text-[#0064b7] hover:bg-[#eef7ff] text-xs font-bold flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg transition-colors border border-gray-200 shadow-2xs"
                                                             title="Broadcast Again"
                                                         >
                                                             <Megaphone className="w-3.5 h-3.5" /> Broadcast Again
@@ -1387,9 +1477,9 @@ const renderLivePreview = () => {
                                                         {((camp.schema_version >= 2 && (camp.total_contacts || camp.prepared_count)) || ((camp.status === 'completed' || camp.status === 'cancelled') && camp.results?.length > 0)) && (
                                                             <button
                                                                 onClick={() => toggleCampaignDetails(camp)}
-                                                                className="text-indigo-600 hover:text-indigo-800 text-xs font-bold flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
+                                                                className="text-indigo-600 hover:text-indigo-800 text-xs font-bold flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1.5 rounded-lg transition-colors"
                                                             >
-                                                                {expandedCampaignId === camp.id ? 'Hide Details' : 'View Results'}
+                                                                {expandedCampaignId === camp.id ? 'Hide Results' : 'View Results'}
                                                                 {expandedCampaignId === camp.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                                                             </button>
                                                         )}
@@ -2229,24 +2319,31 @@ const renderLivePreview = () => {
                                                                 </div>
                                                             </div>
                                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-                                                                <label className="flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-zinc-200 bg-zinc-50/50 px-4 py-4 text-center transition-all hover:border-zinc-400 hover:bg-zinc-50 active:scale-[0.98]">
-                                                                    {isHeaderUploading ? (
-                                                                        <Loader2 className="h-5 w-5 animate-spin text-zinc-850" />
-                                                                    ) : (
-                                                                        <Upload className="h-5 w-5 text-zinc-800" />
-                                                                    )}
-                                                                    <span className="mt-2 text-xs font-semibold text-zinc-800">
-                                                                        {isHeaderUploading ? 'Uploading...' : `Upload ${selectedHeaderFormat.toLowerCase()}`}
-                                                                    </span>
-                                                                    <input
-                                                                        type="file"
-                                                                        className="hidden"
-                                                                        accept={selectedHeaderFormat === 'IMAGE' ? 'image/*' : selectedHeaderFormat === 'VIDEO' ? 'video/mp4,video/*' : '*/*'}
-                                                                        disabled={isHeaderUploading}
-                                                                        onChange={(e) => handleHeaderMediaUpload(e.target.files?.[0])}
-                                                                    />
-                                                                </label>
-                                                                <div className="flex flex-col justify-center">
+                                                                <div className="flex flex-col gap-2">
+                                                                    <label className="flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-zinc-200 bg-zinc-50/50 px-4 py-4 text-center transition-all hover:border-zinc-400 hover:bg-zinc-50 active:scale-[0.98]">
+                                                                        {isHeaderUploading ? (
+                                                                            <Loader2 className="h-5 w-5 animate-spin text-zinc-850" />
+                                                                        ) : (
+                                                                            <Upload className="h-5 w-5 text-zinc-800" />
+                                                                        )}
+                                                                        <span className="mt-2 text-xs font-semibold text-zinc-800">
+                                                                            {isHeaderUploading ? 'Uploading...' : `Upload ${selectedHeaderFormat.toLowerCase()}`}
+                                                                        </span>
+                                                                        <input
+                                                                            type="file"
+                                                                            className="hidden"
+                                                                            accept={selectedHeaderFormat === 'IMAGE' ? 'image/jpeg,image/png' : selectedHeaderFormat === 'VIDEO' ? 'video/mp4,video/3gpp' : '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip'}
+                                                                            disabled={isHeaderUploading}
+                                                                            onChange={(e) => handleHeaderMediaUpload(e.target.files?.[0])}
+                                                                        />
+                                                                    </label>
+                                                                    <p className="text-[10px] text-zinc-500 font-sans leading-tight text-center">
+                                                                        {selectedHeaderFormat === 'IMAGE' && 'Max 5 MB · JPG or PNG only (WebP & GIF not supported)'}
+                                                                        {selectedHeaderFormat === 'VIDEO' && 'Max 16 MB · MP4 or 3GP only'}
+                                                                        {selectedHeaderFormat === 'DOCUMENT' && 'Max 100 MB · PDF, DOC, XLS, PPT, TXT, ZIP'}
+                                                                    </p>
+                                                                </div>
+                                                                <div className="flex flex-col justify-start">
                                                                     <label className="mb-1.5 block text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Public media URL</label>
                                                                     <div className="relative">
                                                                         <LinkIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
@@ -2265,7 +2362,9 @@ const renderLivePreview = () => {
                                                                     </div>
                                                                     <p className="mt-2 flex items-start gap-1 text-[10px] text-zinc-400 leading-normal">
                                                                         <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-zinc-400" />
-                                                                        Use an uploaded file or a public URL.
+                                                                        {selectedHeaderFormat === 'IMAGE' && 'Direct HTTPS URL ending in .jpg or .png'}
+                                                                        {selectedHeaderFormat === 'VIDEO' && 'Direct HTTPS URL ending in .mp4 or .3gp'}
+                                                                        {selectedHeaderFormat === 'DOCUMENT' && 'Direct HTTPS URL to public document'}
                                                                     </p>
                                                                 </div>
                                                             </div>

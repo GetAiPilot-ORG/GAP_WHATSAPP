@@ -463,8 +463,8 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                                     type="button"
                                     onClick={() => setShowMobileFilters(!showMobileFilters)}
                                     className={`h-10 w-full flex items-center justify-center rounded-xl border transition-all ${showMobileFilters
-                                            ? 'bg-blue-50 border-blue-500 text-blue-600'
-                                            : 'bg-white border-gray-300 text-gray-500'
+                                        ? 'bg-blue-50 border-blue-500 text-blue-600'
+                                        : 'bg-white border-gray-300 text-gray-500'
                                         }`}
                                     style={{ borderRadius: '10px' }}
                                     title="Toggle Filters"
@@ -873,9 +873,9 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                                         <div className="mb-3.5 flex items-start justify-between gap-3">
                                             <div className="flex items-center gap-3 min-w-0">
                                                 <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${categoryName === 'MARKETING' ? 'bg-indigo-50 border-indigo-100 text-indigo-650' :
-                                                        categoryName === 'UTILITY' ? 'bg-emerald-50 border-emerald-100 text-emerald-650' :
-                                                            categoryName === 'AUTHENTICATION' ? 'bg-purple-50 border-purple-100 text-purple-650' :
-                                                                'bg-blue-50 border-blue-100 text-blue-655'
+                                                    categoryName === 'UTILITY' ? 'bg-emerald-50 border-emerald-100 text-emerald-650' :
+                                                        categoryName === 'AUTHENTICATION' ? 'bg-purple-50 border-purple-100 text-purple-650' :
+                                                            'bg-blue-50 border-blue-100 text-blue-655'
                                                     }`}>
                                                     <MessageSquareText className="h-5 w-5" strokeWidth={1.8} />
                                                 </div>
@@ -980,9 +980,9 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                                         <div className="flex items-center gap-2">
                                             {/* Status Badge */}
                                             <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${template.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                                                    template.status === 'PENDING' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                                                        template.status === 'DRAFT' ? 'bg-gray-50 text-gray-650 border-gray-250' :
-                                                            'bg-rose-50 text-rose-700 border-rose-100'
+                                                template.status === 'PENDING' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                                    template.status === 'DRAFT' ? 'bg-gray-50 text-gray-650 border-gray-250' :
+                                                        'bg-rose-50 text-rose-700 border-rose-100'
                                                 }`}>
                                                 {template.status === 'APPROVED' && <CheckCircle className="h-3 w-3 shrink-0 text-emerald-600" />}
                                                 {template.status === 'PENDING' && <Clock className="h-3 w-3 shrink-0 text-amber-600" />}
