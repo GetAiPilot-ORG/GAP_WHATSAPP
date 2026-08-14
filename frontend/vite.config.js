@@ -141,7 +141,7 @@ export default defineConfig({
     notificationSoundsPlugin(),
     VitePWA({
       registerType: 'prompt',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      includeAssets: [],
       manifest: {
         name: 'GAP WhatsApp CRM',
         short_name: 'GAP CRM',
@@ -160,8 +160,14 @@ export default defineConfig({
       srcDir: 'src',
       filename: 'sw.js',
       injectManifest: {
-        maximumFileSizeToCacheInBytes: 15 * 1024 * 1024,
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}']
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        globPatterns: [
+          'assets/**/*.{js,css}',
+          'index.html',
+          'favicon.ico',
+          'apple-touch-icon.png',
+          'masked-icon.svg'
+        ]
       },
       devOptions: {
         enabled: true,
@@ -185,7 +191,19 @@ export default defineConfig({
     }
   },
   build: {
-    chunkSizeWarningLimit: 1600,
+    chunkSizeWarningLimit: 2500,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            const normalizedId = id.replaceAll('\\', '/')
+            if (normalizedId.includes('/node_modules/exceljs/') || normalizedId.includes('/node_modules/xlsx/')) {
+              return 'vendor-sheets'
+            }
+          }
+        }
+      }
+    }
   }
 })
 
