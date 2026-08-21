@@ -8,27 +8,14 @@ import { DialogProvider } from './context/DialogContext'
 import { WhatsAppAccountProvider } from './context/WhatsAppAccountContext'
 import { PwaInstallProvider } from './context/PwaInstallContext'
 import Contacts from './pages/Contacts'
-import WhatsAppConnect from './pages/WhatsAppConnect'
-import FlowBuilder from './pages/FlowBuilder'
 import Login from './pages/Login'
 import AgentLogin from './pages/AgentLogin'
 import Signup from './pages/Signup'
 import Dashboard from './pages/Dashboard'
-import Templates from './pages/Templates'
-import TemplateWizard from './pages/TemplateWizard'
-import Broadcast from './pages/Broadcast'
-import LiveChat from './pages/LiveChat'
-import BotAgents from './pages/BotAgents'
-import Settings from './pages/Settings'
-import TeamMembers from './pages/TeamMembers'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import SSOLogin from './pages/SSOLogin'
 import AcceptInvite from './pages/AcceptInvite'
-import HelpCenter from './pages/HelpCenter'
-import BillingPage from './pages/BillingPage'
 import PaymentSuccessPage from './pages/PaymentSuccessPage'
-import WhatsAppNumberPage from './pages/WhatsAppNumberPage'
-import WhatsAppLinkGenerator from './pages/WhatsAppLinkGenerator'
 import WhatsAppRedirect from './pages/WhatsAppRedirect'
 import CookieConsent from './components/CookieConsent'
 import PwaUpdater from './components/PwaUpdater'
@@ -37,7 +24,29 @@ import HomePage from './pages/HomePage'
 import TermsOfService from './pages/TermsOfService'
 import { loadFacebookSDK } from './services/facebookSdkLoader'
 
+const FlowBuilder = lazy(() => import('./pages/FlowBuilder'))
+const Templates = lazy(() => import('./pages/Templates'))
+const TemplateWizard = lazy(() => import('./pages/TemplateWizard'))
+const Broadcast = lazy(() => import('./pages/Broadcast'))
+const LiveChat = lazy(() => import('./pages/LiveChat'))
+const BotAgents = lazy(() => import('./pages/BotAgents'))
+const Settings = lazy(() => import('./pages/Settings'))
+const TeamMembers = lazy(() => import('./pages/TeamMembers'))
+const HelpCenter = lazy(() => import('./pages/HelpCenter'))
+const BillingPage = lazy(() => import('./pages/BillingPage'))
+const WhatsAppConnect = lazy(() => import('./pages/WhatsAppConnect'))
+const WhatsAppNumberPage = lazy(() => import('./pages/WhatsAppNumberPage'))
+const WhatsAppLinkGenerator = lazy(() => import('./pages/WhatsAppLinkGenerator'))
 const ScheduledMeetings = lazy(() => import('./pages/ScheduledMeetings'))
+
+const PageFallback = () => (
+  <div className="flex h-[60vh] w-full items-center justify-center">
+    <div className="flex items-center space-x-2 text-xs font-semibold text-gray-400">
+      <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+      <span>Loading page...</span>
+    </div>
+  </div>
+)
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -82,23 +91,23 @@ export default function App() {
                     <Route path="/wa/:data" element={<WhatsAppRedirect />} />
                     <Route element={<Layout />}>
                       <Route path="dashboard" element={<Dashboard />} />
-                      <Route path="whatsapp-connect" element={<WhatsAppConnect />} />
-                      <Route path="whatsapp-number" element={<WhatsAppNumberPage />} />
+                      <Route path="whatsapp-connect" element={<Suspense fallback={<PageFallback />}><WhatsAppConnect /></Suspense>} />
+                      <Route path="whatsapp-number" element={<Suspense fallback={<PageFallback />}><WhatsAppNumberPage /></Suspense>} />
                       <Route path="contacts" element={<Contacts />} />
-                      <Route path="flow-builder" element={<FlowBuilder />} />
-                      <Route path="templates" element={<Templates />} />
-                      <Route path="templates/new" element={<TemplateWizard />} />
-                      <Route path="templates/industries" element={<Templates defaultView="INDUSTRIES" />} />
-                      <Route path="broadcast" element={<Broadcast defaultTab="new" />} />
-                      <Route path="broadcast/history" element={<Broadcast defaultTab="history" />} />
-                      <Route path="live-chat" element={<LiveChat />} />
-                      <Route path="bot-agents" element={<BotAgents />} />
-                      <Route path="billing" element={<BillingPage />} />
-                      <Route path="settings" element={<Settings />} />
-                      <Route path="team-members" element={<TeamMembers />} />
-                      <Route path="scheduled-meetings" element={<Suspense fallback={<div className="p-8 text-center text-xs font-semibold text-gray-500">Loading Scheduled Meetings...</div>}><ScheduledMeetings /></Suspense>} />
-                      <Route path="help" element={<HelpCenter />} />
-                      <Route path="wa-link-generator" element={<WhatsAppLinkGenerator />} />
+                      <Route path="flow-builder" element={<Suspense fallback={<PageFallback />}><FlowBuilder /></Suspense>} />
+                      <Route path="templates" element={<Suspense fallback={<PageFallback />}><Templates /></Suspense>} />
+                      <Route path="templates/new" element={<Suspense fallback={<PageFallback />}><TemplateWizard /></Suspense>} />
+                      <Route path="templates/industries" element={<Suspense fallback={<PageFallback />}><Templates defaultView="INDUSTRIES" /></Suspense>} />
+                      <Route path="broadcast" element={<Suspense fallback={<PageFallback />}><Broadcast defaultTab="new" /></Suspense>} />
+                      <Route path="broadcast/history" element={<Suspense fallback={<PageFallback />}><Broadcast defaultTab="history" /></Suspense>} />
+                      <Route path="live-chat" element={<Suspense fallback={<PageFallback />}><LiveChat /></Suspense>} />
+                      <Route path="bot-agents" element={<Suspense fallback={<PageFallback />}><BotAgents /></Suspense>} />
+                      <Route path="billing" element={<Suspense fallback={<PageFallback />}><BillingPage /></Suspense>} />
+                      <Route path="settings" element={<Suspense fallback={<PageFallback />}><Settings /></Suspense>} />
+                      <Route path="team-members" element={<Suspense fallback={<PageFallback />}><TeamMembers /></Suspense>} />
+                      <Route path="scheduled-meetings" element={<Suspense fallback={<PageFallback />}><ScheduledMeetings /></Suspense>} />
+                      <Route path="help" element={<Suspense fallback={<PageFallback />}><HelpCenter /></Suspense>} />
+                      <Route path="wa-link-generator" element={<Suspense fallback={<PageFallback />}><WhatsAppLinkGenerator /></Suspense>} />
                     </Route>
                   </Routes>
                   {import.meta.env.VITE_ENABLE_COOKIE_CONSENT === 'true' && <CookieConsent />}

@@ -396,7 +396,7 @@ export async function finalizeCampaignIfComplete(campaignId: string) {
         .in('status', ['prepared', 'queued', 'processing', 'retrying']);
     if (active) return false;
     const { data: campaign } = await supabase.from('w_campaigns')
-        .select('status, wallet_reserved_paise').eq('id', campaignId).single();
+        .select('organization_id, name, status, wallet_reserved_paise').eq('id', campaignId).single();
     if (!campaign) return false;
     const terminalStatus = ['cancelling', 'cancelled'].includes(campaign.status) ? 'cancelled' : 'completed';
     await supabase.from('w_campaigns').update({
@@ -407,6 +407,36 @@ export async function finalizeCampaignIfComplete(campaignId: string) {
         processing_count: 0,
         last_progress_at: new Date().toISOString(),
     }).eq('id', campaignId);
+    
+    // Notify via Supermailbox if it successfully completed
+    if (terminalStatus === 'completed') {
+        try {
+            // Import dynamically or at top-level. (Since we are in a service, we'll do it inline for safety or just import at top)
+            const { sendTransactionalEmail } = await import('./supermailbox.service.js');
+            // Find the organization owner's email
+            const { data: admin } = await supabase.from('organization_members')
+                .select('email, name')
+                .eq('organization_id', campaign.organization_id)
+                .in('role', ['owner', 'admin'])
+                .limit(1)
+                .single();
+            if (admin && admin.email) {
+                await sendTransactionalEmail({
+                    to: admin.email,
+                    productCode: 'GAP_WHATSAPP',
+                    templateKey: 'broadcast_success',
+                    idempotencyKey: `gap_whatsapp_broadcast_success_${campaign.id}`,
+                    variables: {
+                        full_name: admin.name || 'Admin',
+                        campaign_name: campaign.name || 'Your Broadcast',
+                    }
+                });
+            }
+        } catch (e) {
+            console.error('[Supermailbox] Failed to trigger broadcast success notification:', e);
+        }
+    }
+    
     return true;
 }
 
