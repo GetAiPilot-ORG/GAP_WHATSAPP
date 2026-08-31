@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { useDialog } from '../context/DialogContext'
 import { useWhatsAppAccounts } from '../context/WhatsAppAccountContext'
 import { formatINRFromPaise } from '../config/whatsappPricing'
-import { MESSAGING_TIERS, getMessagingTierLabel } from '../utils/messagingLimits'
+import { MESSAGING_TIERS, getMessagingTierLabel, isCurrentTier } from '../utils/messagingLimits'
 import DateTimePicker from '../components/DateTimePicker'
 import Modal from '../components/Modal'
 
@@ -1690,7 +1690,7 @@ const renderLivePreview = () => {
                                             <div className="p-4 min-h-[176px] flex flex-col justify-center">
                                                 <div className="grid grid-cols-5 overflow-hidden rounded-lg border border-gray-200">
                                                     {MESSAGING_TIERS.map((tier) => {
-                                                        const isCurrent = tier.value === messagingLimits.messaging_limit_tier
+                                                        const isCurrent = isCurrentTier(tier, messagingLimits?.messaging_limit_tier)
                                                         return (
                                                             <div key={tier.value} className={`flex min-h-16 flex-col items-center justify-center border-r border-gray-200 px-1 text-center last:border-r-0 ${isCurrent ? 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-300' : 'bg-gray-50 text-gray-400'}`}>
                                                                 {isCurrent && <span className="mb-1 rounded-full bg-blue-600 px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-white">Current</span>}
