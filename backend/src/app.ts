@@ -21,6 +21,7 @@ import webhookRoutes from './routes/webhook.routes.js';
 import googleAuthRoutes from './routes/googleAuth.routes.js';
 import appointmentsRoutes from './routes/appointments.routes.js';
 import pushRoutes from './routes/push.routes.js';
+import { maintenanceGuard } from './middleware/maintenance.middleware.js';
 
 dotenv.config({ path: "./.env" });
 
@@ -67,6 +68,9 @@ app.use(cors({
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: corsAllowedHeaders
 }));
+
+// Maintenance Mode Guard
+app.use(maintenanceGuard);
 
 // CSV-backed campaigns can contain up to 10K recipients. Keep the larger body
 // allowance scoped to broadcast routes instead of widening every API endpoint.
