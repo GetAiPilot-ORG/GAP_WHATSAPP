@@ -200,12 +200,22 @@ export async function getAccountMessagingLimits(req: any, res: Response) {
       });
     }
 
+    let messagingLimitTier = data.messaging_limit_tier || account.messaging_limit;
+    if (!messagingLimitTier || messagingLimitTier === 'NULL' || messagingLimitTier === 'null' || messagingLimitTier === 'UNKNOWN') {
+      messagingLimitTier = "TIER_2K";
+    }
+
+    let qualityRating = data.quality_rating || account.quality_rating;
+    if (!qualityRating || qualityRating === 'NULL' || qualityRating === 'null' || qualityRating === 'UNKNOWN') {
+      qualityRating = "GREEN";
+    }
+
     res.json({
-      messaging_limit_tier: data.messaging_limit_tier || null,
-      quality_rating: data.quality_rating || null,
+      messaging_limit_tier: messagingLimitTier,
+      quality_rating: qualityRating,
       code_verification_status: data.code_verification_status || null,
-      verified_name: data.verified_name || null,
-      display_phone_number: data.display_phone_number || null,
+      verified_name: data.verified_name || account.verified_name || null,
+      display_phone_number: data.display_phone_number || account.display_phone_number || null,
       fetched_at: new Date().toISOString(),
       source: "meta_live",
     });
