@@ -10,10 +10,10 @@ async function fetchMaintenanceStatus() {
   }
 
   const supabaseUrl = process.env.SUPABASE_URL;
-  const anonKey = process.env.SUPABASE_ANON_KEY;
+  const anonKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !anonKey) {
-    console.warn("Supabase env vars missing for maintenance check.");
+    statusCache = { data: null, expiresAt: Date.now() + CACHE_TTL_MS };
     return null;
   }
 
