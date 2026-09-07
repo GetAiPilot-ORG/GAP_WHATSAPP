@@ -55,13 +55,51 @@ export async function authMiddleware(req: any, res: any, next: any) {
 
         req.user = user;
 
-        const { data: member } = await supabase
-            .from('organization_members')
-            .select('role, organization_id, is_active')
-            .eq('user_id', user.id)
-            .maybeSingle();
-
         const portal = req.headers['x-auth-portal'] || 'owner';
+        const targetOrgId = req.headers['x-organization-id'] || user.user_metadata?.organization_id || null;
+
+        // Fetch all memberships for this user
+        let { data: memberRows } = await supabase
+            .from('organization_members')
+            .select('id, user_id, role, organization_id, is_active')
+            .eq('user_id', user.id);
+
+        // Fallback: If no rows found by user.id, check by verified email
+        const isEmailVerified = Boolean(user.email_confirmed_at || user.user_metadata?.email_verified || user.app_metadata?.provider === 'google');
+        if ((!memberRows || memberRows.length === 0) && user.email && isEmailVerified) {
+            const { data: byEmail } = await supabase
+                .from('organization_members')
+                .select('id, user_id, role, organization_id, is_active')
+                .ilike('email', user.email);
+
+            if (byEmail && byEmail.length > 0) {
+                memberRows = byEmail;
+                // Auto-heal user_id for all matching rows
+                const unlinked = byEmail.some((m: any) => m.user_id !== user.id);
+                if (unlinked) {
+                    await supabase
+                        .from('organization_members')
+                        .update({ user_id: user.id })
+                        .ilike('email', user.email);
+                }
+            }
+        }
+
+        // Pick the most relevant membership
+        let member: any = null;
+        if (memberRows && memberRows.length > 0) {
+            if (targetOrgId) {
+                member = memberRows.find((m: any) => m.organization_id === targetOrgId);
+            }
+            if (!member && portal === 'agent') {
+                // For agent portal, prioritize active agent memberships
+                member = memberRows.find((m: any) => m.role === 'agent' && m.is_active) || memberRows.find((m: any) => m.role === 'agent') || memberRows[0];
+            } else if (!member) {
+                // For owner portal, prioritize owner/admin memberships
+                member = memberRows.find((m: any) => m.role === 'owner' || m.role === 'admin') || memberRows[0];
+            }
+        }
+
         const dbRole = member?.role;
 
         if (portal === 'agent') {
@@ -79,7 +117,7 @@ export async function authMiddleware(req: any, res: any, next: any) {
             req.role = dbRole || 'owner';
         }
 
-        let orgId = member?.organization_id || user.user_metadata?.organization_id || null;
+        let orgId = member?.organization_id || targetOrgId || null;
 
         if (!orgId && req.role !== 'agent') {
             console.log(`[Auth] Auto-provisioning organization for: ${user.email}`);

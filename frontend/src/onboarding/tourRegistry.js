@@ -19,9 +19,9 @@ export const tours = {
         steps: [
             step('[data-tour="sidebar-nav"]', 'Main navigation', 'Yahan se dashboard, chats, contacts, agents, flows, broadcasts aur billing open hote hain.', 'right'),
             step('[data-tour="account-switcher"]', 'WhatsApp account switcher', 'Agar multiple numbers/accounts connected hain, yahan se active account choose kar sakte ho.', 'right'),
-            step('[data-tour="dashboard-overview"]', 'Business overview', 'Dashboard par messages, delivery health, wallet aur automation status ka quick view milta hai.', 'bottom'),
-            step('[data-tour="nav-whatsapp-connect"], [data-tour="mobile-menu-button"]', 'Start setup', 'Pehla practical step: WhatsApp account connect karo ya naya number request karo.', 'right'),
-            step('[data-tour="tour-menu"]', 'Guides anytime', 'Har important page par Show Tour se short page guide dobara dekh sakte ho.', 'bottom', 'end'),
+            step('[data-tour="dashboard-overview"]', 'Business overview & rules', 'Dashboard par messages, delivery health, wallet aur WhatsApp 24-hour messaging limits track hoti hain.', 'bottom'),
+            step('[data-tour="nav-whatsapp-connect"], [data-tour="mobile-menu-button"]', 'Start setup', 'Pehla practical step: WhatsApp Cloud API connect karo. Connect hone ke baad customer ke aane par 24h free chat window open hoti hai.', 'right'),
+            step('[data-tour="tour-menu"]', 'Guides anytime', 'Har page par Show Tour se short page guide aur WhatsApp rules dobara dekh sakte ho.', 'bottom', 'end'),
         ],
     },
     dashboard: {
@@ -42,7 +42,7 @@ export const tours = {
         steps: [
             step('[data-tour="connect-primary"]', 'Official Meta setup', 'Recommended path: Meta embedded signup se WhatsApp Cloud API connect karo.', 'bottom'),
             step('[data-tour="connect-manual"]', 'Manual advanced setup', 'Agar Meta flow nahi use karna, WABA ID aur token se manual connect kar sakte ho.', 'top'),
-            step('[data-tour="connect-accounts"]', 'Connected accounts', 'Connected numbers, diagnostics aur send readiness yahan verify hoti hai.', 'top'),
+            step('[data-tour="connect-accounts"]', 'Connected accounts & rules', 'Connected numbers, diagnostics aur send readiness verify hoti hai. Note: New contacts ko outreach karne ke liye Meta-approved Template chahiye hota hai.', 'top'),
         ],
     },
     'whatsapp-number': {
@@ -50,7 +50,7 @@ export const tours = {
         route: '/whatsapp-number',
         ...copy,
         steps: [
-            step('[data-tour="number-tabs"]', 'Choose setup type', 'Instant setup aur assisted setup ke beech yahan choose karo.', 'bottom'),
+            step('[data-tour="number-tabs"]', 'Choose setup type', 'Assisted setup ke zariye official dedicated number request submit karo.', 'bottom'),
             step('[data-tour="number-form"]', 'Assisted setup form', 'Business details fill karo so team number setup request process kar sake.', 'top'),
             step('[data-tour="number-requests"]', 'Request status', 'Submitted setup requests ka latest status yahan dikhega.', 'top'),
         ],
@@ -63,7 +63,7 @@ export const tours = {
             step('[data-tour="contacts-import"]', 'Import CSV', 'Bulk contacts upload karo. Extra columns custom fields ban jaate hain.', 'bottom'),
             step('[data-tour="contacts-add"]', 'Add contact', 'Single customer manually save karne ke liye use karo.', 'bottom'),
             step('[data-tour="contacts-filters"]', 'Search and filters', 'Name, phone, tags, account aur custom fields se list narrow karo.', 'bottom'),
-            step('[data-tour="contacts-table"]', 'Contact table', 'Row click karke profile drawer open hota hai.', 'top'),
+            step('[data-tour="contacts-table"]', 'Contact table & outreach', 'Row click karke profile open karo. Yaad rahe: New contacts ko pehla message hamesha approved Template se bheja jaata hai.', 'top'),
         ],
     },
     'bot-agents': {
@@ -94,7 +94,7 @@ export const tours = {
         route: '/templates',
         ...copy,
         steps: [
-            step('[data-tour="templates-create"]', 'New template', 'WhatsApp-approved message template create aur submit karo.', 'bottom'),
+            step('[data-tour="templates-create"]', 'New template (Outbound initiation)', 'Meta-approved message template create karo. New contacts ya expired 24h window me conversation start karne ke liye templates zaroori hain.', 'bottom'),
             step('[data-tour="templates-filters"]', 'Status filters', 'Approved, pending, rejected/draft templates quickly filter karo.', 'bottom'),
             step('[data-tour="templates-list"]', 'Template cards', 'Preview, delete, add from library, aur approval status yahan dikhta hai.', 'top'),
             step('[data-tour="templates-library-search"]', 'Industry library', 'Ready templates search/filter karke apne account mein add karo.', 'bottom'),
@@ -120,8 +120,8 @@ export const tours = {
         steps: [
             step('[data-tour="chat-search"]', 'Search chats', 'Customer ya phone number search karke chat quickly find karo.', 'bottom'),
             step('[data-tour="chat-filters"]', 'Chat filters', 'Unread, assigned, favorites, archived jaise views switch karo.', 'bottom'),
-            step('[data-tour="chat-header"]', 'Chat controls', 'Assignment, AI fallback aur contact info yahan manage hota hai.', 'bottom'),
-            step('[data-tour="chat-composer"]', 'Reply box', 'Text, media, audio aur templates se customer ko reply bhejo.', 'top'),
+            step('[data-tour="chat-header"]', 'Chat controls & 24h timer', 'Assignment, AI fallback aur 24-hour reply window status yahan visible rehta hai.', 'bottom'),
+            step('[data-tour="chat-composer"]', 'Reply box & template sender', 'Agar customer ne 24h ke andar message bheja hai to freeform text send hota hai; agar new contact ya expired window hai to Template bhejna padta hai.', 'top'),
         ],
     },
     billing: {

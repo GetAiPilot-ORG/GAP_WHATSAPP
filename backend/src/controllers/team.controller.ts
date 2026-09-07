@@ -76,8 +76,14 @@ export async function getMembers(req: any, res: Response) {
                 onlineTimeToday += diffSecs;
             }
 
+            const {
+                invite_temp_password_encrypted,
+                invite_token_hash,
+                ...safeMember
+            } = member;
+
             return {
-                ...member,
+                ...safeMember,
                 invite_status: getMemberInviteState(member),
                 active_chats_count: member.user_id ? (activeChatsMap[member.user_id] || 0) : 0,
                 last_active_at: lastActiveAt,
@@ -252,8 +258,7 @@ export async function acceptInvite(req: any, res: Response) {
             .update({
                 is_active: true,
                 invite_accepted_at: new Date().toISOString(),
-                invite_token_hash: null,
-                invite_temp_password_encrypted: null
+                invite_token_hash: null
             })
             .eq('id', member.id);
 
@@ -290,7 +295,12 @@ export async function resendInvite(req: any, res: Response) {
 
         const inviteToken = createInviteToken();
         const inviteExpiresAt = getInviteExpiryDate();
-        const temporaryPassword = createTemporaryPassword();
+        
+        // Retain the custom password originally configured for this member
+        const existingPassword = member.invite_temp_password_encrypted
+            ? decryptToken(member.invite_temp_password_encrypted)
+            : null;
+        const temporaryPassword = req.body?.password || existingPassword || createTemporaryPassword();
 
         const { error: authErr } = await supabase.auth.admin.updateUserById(member.user_id, {
             password: temporaryPassword,
@@ -385,14 +395,46 @@ export async function deleteMember(req: any, res: Response) {
 
 export async function getMyProfile(req: any, res: Response) {
     try {
-        const { data, error } = await supabase
+        const orgId = req.organization_id;
+        const { data: member, error } = await supabase
             .from('organization_members')
             .select('*')
             .eq('user_id', req.user.id)
+            .eq('organization_id', orgId)
             .maybeSingle();
 
         if (error) throw error;
-        res.json(data);
+        if (!member) return res.status(404).json({ error: 'Member profile not found in this organization' });
+
+        // Fetch subscription info from organization owner
+        const { data: ownerMember } = await supabase
+            .from('organization_members')
+            .select('user_id')
+            .eq('organization_id', orgId)
+            .eq('role', 'owner')
+            .maybeSingle();
+
+        let subscription: any = null;
+        if (ownerMember?.user_id) {
+            const { data: sub } = await supabase
+                .from('app_user_subscriptions')
+                .select('plan_id, plan_label, expires_at, status')
+                .eq('user_id', ownerMember.user_id)
+                .maybeSingle();
+            subscription = sub;
+        }
+
+        const {
+            invite_temp_password_encrypted,
+            invite_token_hash,
+            ...safeMember
+        } = member;
+
+        res.json({
+            ...safeMember,
+            organization_id: orgId,
+            subscription
+        });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
     }

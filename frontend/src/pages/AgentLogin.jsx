@@ -43,8 +43,9 @@ export default function AgentLogin() {
                 }
             })
             if (!profileRes.ok) {
+                const errData = await profileRes.json().catch(() => ({}))
                 await signOut()
-                throw new Error('This page is only for active team agents. Owners should use the main login page.')
+                throw new Error(errData?.error || 'This page is only for active team agents. Owners should use the main login page.')
             }
 
             setShowOnlinePrompt(true)

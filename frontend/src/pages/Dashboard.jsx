@@ -530,13 +530,16 @@ function FirstRunOnboarding() {
                             Connect WhatsApp Account
                             <ArrowRight className="h-3.5 w-3.5" />
                         </Link>
-                        <Link
-                            to="/whatsapp-number"
-                            className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-2xs"
+                        <button
+                            type="button"
+                            disabled
+                            title="Virtual number service is coming soon"
+                            className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-gray-100 px-4 py-2 text-xs font-semibold text-gray-400 cursor-not-allowed select-none shadow-2xs"
                         >
                             <PhoneCall className="h-3.5 w-3.5" />
                             Need a new number?
-                        </Link>
+                            <span className="rounded-full bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">Coming Soon</span>
+                        </button>
                     </div>
                 </div>
 

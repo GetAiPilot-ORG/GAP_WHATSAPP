@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { get, set } from 'idb-keyval'
-import { Search, MoreVertical, Paperclip, Send, Smile, Phone, Tag, Check, CheckCheck, Clock, AlertCircle, Info, ChevronLeft, ChevronDown, ArrowDown, FileText, Mic, Pencil, Bot, User, ExternalLink, Reply, Forward, X, Copy, Trash2, Archive, Pin, PinOff, MailOpen, Star, StarOff, Eraser, Inbox, BellOff } from 'lucide-react'
+import { Search, MoreVertical, Paperclip, Send, Smile, Phone, Tag, Check, CheckCheck, Clock, AlertCircle, Info, ChevronLeft, ChevronDown, ArrowDown, FileText, Mic, Pencil, Bot, User, ExternalLink, Reply, Forward, X, Copy, Trash2, Archive, Pin, PinOff, MailOpen, Star, StarOff, Eraser, Inbox, BellOff, MessageSquare, MessageSquareText, Sparkles } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { format, isToday, isYesterday } from 'date-fns'
 import { io } from "socket.io-client";
@@ -14,6 +14,7 @@ import AudioMessageBubble from '../components/AudioMessageBubble'
 import AudioRecorderOrUploader from '../components/AudioRecorderOrUploader'
 import { useNotificationSound } from '../hooks/useNotificationSound'
 import TourButton from '../onboarding/TourButton'
+import WhatsAppMessagingGuideModal from '../components/WhatsAppMessagingGuideModal'
 import { supabase } from '../supabaseClient'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -271,6 +272,7 @@ export default function LiveChat() {
     })
     const [isResizing, setIsResizing] = useState(false)
     const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 1024)
+    const [isGuideModalOpen, setIsGuideModalOpen] = useState(false)
 
     useEffect(() => {
         const handleResize = () => {
@@ -3002,9 +3004,13 @@ export default function LiveChat() {
         if (expiredWindowChatIds.has(String(selectedChat.id))) return true
         if (customerWindowState.hasFailedOutboundMessage) return true
 
-        // If the loaded thread has no customer message, WhatsApp's free-form service window is not open.
-        return customerWindowState.hasLoadedMessages && !customerWindowState.hasCustomerMessage
-    }, [customerWindowState, expiredWindowChatIds, selectedChat])
+        // If thread has loaded and there are no customer messages, WhatsApp's free-form service window is not open.
+        if (!isThreadLoading && !customerWindowState.hasCustomerMessage) {
+            return true
+        }
+
+        return false
+    }, [customerWindowState, expiredWindowChatIds, selectedChat, isThreadLoading])
 
     const markCustomerWindowExpired = (chatId) => {
         if (!chatId) return
@@ -3487,11 +3493,45 @@ export default function LiveChat() {
                 {/* Middle Cone: Chat Area */}
                 <div className={`${!selectedChat ? 'hidden lg:flex' : 'flex'} relative min-w-0 flex-1 flex-col bg-[#efeae2]`}>
                     {!selectedChat ? (
-                        <div className="flex-1 flex flex-col items-center justify-center text-gray-400 p-4">
-                            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                                <Send className="h-8 w-8 text-gray-300 ml-1" />
+                        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+                            <div className="w-16 h-16 bg-white/90 border border-gray-200 shadow-sm rounded-2xl flex items-center justify-center mb-4 text-emerald-600">
+                                <MessageSquareText className="h-8 w-8" />
                             </div>
-                            <p className="text-sm font-medium">Select a chat to start messaging</p>
+                            <h3 className="text-base sm:text-lg font-bold text-gray-900">Select a chat to start messaging</h3>
+                            <p className="mt-1 max-w-sm text-xs sm:text-sm text-gray-500">
+                                Choose a conversation from the left sidebar to read messages, reply, or send approved templates.
+                            </p>
+
+                            {/* Quick Educational Rules Card in Empty State */}
+                            <div className="mt-6 max-w-md w-full rounded-2xl border border-emerald-200 bg-white/95 p-4 sm:p-5 shadow-sm text-left">
+                                <div className="flex items-center justify-between">
+                                    <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800">
+                                        <Sparkles className="h-3 w-3 text-emerald-600" />
+                                        WhatsApp Messaging Rules
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsGuideModalOpen(true)}
+                                        className="text-xs font-bold text-emerald-700 hover:text-emerald-800 underline"
+                                    >
+                                        View Guide &rarr;
+                                    </button>
+                                </div>
+                                <div className="mt-3 space-y-2 text-xs text-gray-600">
+                                    <div className="flex items-start gap-2">
+                                        <span className="font-bold text-emerald-700 shrink-0">⏳ 24h Window:</span>
+                                        <span>Unlimited free replies when a customer sends you a message.</span>
+                                    </div>
+                                    <div className="flex items-start gap-2">
+                                        <span className="font-bold text-blue-700 shrink-0">📋 Templates:</span>
+                                        <span>Required to message new numbers or after 24h without reply.</span>
+                                    </div>
+                                    <div className="flex items-start gap-2">
+                                        <span className="font-bold text-purple-700 shrink-0">🔗 QR / Links:</span>
+                                        <span>Share your Click-to-Chat link so customers message you first.</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     ) : (
                         <>
@@ -3598,6 +3638,15 @@ export default function LiveChat() {
                                     </div>
                                 </div>
                                 <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsGuideModalOpen(true)}
+                                        className="inline-flex h-8 sm:h-9 items-center justify-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50/80 px-2.5 sm:px-3 text-xs font-semibold text-emerald-800 shadow-2xs hover:bg-emerald-100 transition-colors"
+                                        title="WhatsApp Cloud API Messaging Rules Guide"
+                                    >
+                                        <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+                                        <span className="hidden md:inline">WhatsApp Rules</span>
+                                    </button>
                                     <TourButton compact className="hidden sm:block" />
                                     {/* Assign Agent Dropdown */}
                                     <div className="relative hidden sm:block" data-assign-menu>
@@ -4179,19 +4228,43 @@ export default function LiveChat() {
                                                 <AlertCircle className="h-4.5 w-4.5 text-rose-600" />
                                             </div>
                                             <div className="min-w-0 text-xs sm:text-sm leading-relaxed text-gray-700">
-                                                <div className="font-bold text-gray-900 text-sm mb-0.5">24 Hour Limit</div>
-                                                <p className="text-gray-600">
-                                                    WhatsApp does not allow sending normal messages 24 hours after the user's last message. You can still initiate contact using a template message.
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-bold text-gray-900 text-sm">
+                                                        {!customerWindowState.hasCustomerMessage ? 'New Conversation • Meta Template Required' : '24-Hour Window Closed'}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setIsGuideModalOpen(true)}
+                                                        className="inline-flex items-center gap-1 rounded-full bg-rose-100/70 px-2 py-0.5 text-[10px] font-semibold text-rose-800 hover:bg-rose-200/80 transition-colors"
+                                                    >
+                                                        <Info className="h-3 w-3" />
+                                                        Why is this?
+                                                    </button>
+                                                </div>
+                                                <p className="mt-0.5 text-gray-600">
+                                                    {!customerWindowState.hasCustomerMessage
+                                                        ? 'WhatsApp requires an approved Template Message to initiate contact with a new number. Once the contact replies, 24-hour free chat opens automatically.'
+                                                        : "WhatsApp does not allow sending freeform messages 24 hours after the user's last message. Send an approved template message to re-open the window."}
                                                 </p>
                                             </div>
                                         </div>
-                                        <button
-                                            type="button"
-                                            onClick={openTemplateSender}
-                                            className="inline-flex h-10 w-full sm:w-auto shrink-0 items-center justify-center rounded-xl bg-[#00a884] hover:bg-[#029977] px-2 text-sm font-bold text-white transition-all duration-200 shadow-sm shadow-green-100 active:scale-[0.98] outline-none"
-                                        >
-                                            Send Template
-                                        </button>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsGuideModalOpen(true)}
+                                                className="hidden sm:inline-flex h-10 items-center justify-center rounded-xl border border-gray-200 bg-white hover:bg-gray-50 px-3 text-xs font-semibold text-gray-700 transition-colors"
+                                            >
+                                                View Rules
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={openTemplateSender}
+                                                className="inline-flex h-10 w-full sm:w-auto shrink-0 items-center justify-center gap-1.5 rounded-xl bg-[#00a884] hover:bg-[#029977] px-4 text-xs sm:text-sm font-bold text-white transition-all duration-200 shadow-sm shadow-green-100 active:scale-[0.98] outline-none"
+                                            >
+                                                <FileText className="h-4 w-4" />
+                                                Send Template
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
                                 <form onSubmit={handleSendMessage} className={`mx-auto flex w-full max-w-[1180px] items-end gap-1 sm:gap-2 ${isCustomerWindowExpired && !isInternalNote ? 'justify-end' : ''}`}>
@@ -4542,6 +4615,7 @@ export default function LiveChat() {
                         </div>
                     </div>
                 )}
+                <WhatsAppMessagingGuideModal isOpen={isGuideModalOpen} onClose={() => setIsGuideModalOpen(false)} />
             </div>
         </AudioPlayerProvider>
     )

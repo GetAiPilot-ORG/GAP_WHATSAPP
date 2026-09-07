@@ -11,7 +11,12 @@ export function hashInviteToken(token: string) {
 }
 
 export function createTemporaryPassword() {
-    return `Flow-${crypto.randomBytes(6).toString('base64url')}`;
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for (let i = 0; i < 6; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return `Flow@${code}`;
 }
 
 export function getInviteExpiryDate() {
@@ -39,7 +44,7 @@ export async function sendTeamInviteEmail(params: {
 }) {
     const roleLabel = String(params.role || 'agent').charAt(0).toUpperCase() + String(params.role || 'agent').slice(1);
     const expiresLabel = params.expiresAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-    const frontendUrl = process.env.FRONTEND_URL || 'https://wb.getaipilot.in';
+    const frontendUrl = getFrontendBaseUrl();
     const logoUrl = `${frontendUrl}/logo.png`;
 
     const { sendTransactionalEmail } = await import('../services/supermailbox.service.js');
@@ -47,7 +52,7 @@ export async function sendTeamInviteEmail(params: {
         to: params.email,
         productCode: 'GAP_WHATSAPP',
         templateKey: 'team_invite',
-        idempotencyKey: `gap_whatsapp_team_invite_${params.email}`,
+        idempotencyKey: `gap_whatsapp_team_invite_${params.email}_${Date.now()}`,
         variables: {
             full_name: params.name,
             role: roleLabel,

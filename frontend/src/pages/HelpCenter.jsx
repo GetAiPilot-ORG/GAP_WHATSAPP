@@ -145,6 +145,20 @@ const faqs = [
         answer:
             'Settings → Notifications section mein jaayein jahan aap incoming message ke liye different notification sounds select kar sakte hain. Aap sound ko enable/disable bhi kar sakte hain aur volume adjust kar sakte hain.',
     },
+    {
+        id: 'lc-5',
+        category: 'live-chat',
+        question: 'Why can\'t I send a freeform text message to a new contact? (WhatsApp 24-Hour Rule)',
+        answer:
+            'Meta WhatsApp Cloud API ke rules ke according, businesses kisi new contact ko directly freeform text message nahi bhej sakti. Pehla message hamesha ek Meta-approved Template Message hona chahiye. Jaise hi customer us template ka reply karta hai, 24 hours ke liye freeform chat window unlock ho jaati hai.',
+    },
+    {
+        id: 'lc-6',
+        category: 'live-chat',
+        question: 'WhatsApp 24-Hour Customer Care Window kya hai aur kaise kaam karta hai?',
+        answer:
+            'Jab bhi koi customer aapke WhatsApp number par message bhejta hai, Meta 24 hours ka active chat window kholta hai. Is 24h window mein aap aur aapke AI bots unlimited messages, images, documents aur audio bhej sakte hain. Har naya customer message is 24h window ko refresh kar deta hai. Agar 24h bina customer reply ke khatam ho jaayein, to naya message sirf approved Template ke through hi bheja ja sakta hai.',
+    },
 
     // Bot Agents
     {

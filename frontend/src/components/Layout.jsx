@@ -621,7 +621,8 @@ export default function Layout() {
 
     const planName = String(user?.plan || '').toLowerCase();
     const isWhatsAppPlan = planName.includes('whatsapp') || planName.includes('ultimate') || planName.includes('ecosystem') || planName.includes('all_in_one') || planName.includes('bundle') || planName.includes('starter') || planName.includes('growth') || planName.includes('pro') || planName.includes('gap') || planName.includes('max') || planName.includes('core');
-    const hasActiveSubscription = user?.subscription_status === 'active' && isWhatsAppPlan;
+    const isAgent = userRole === 'agent';
+    const hasActiveSubscription = isAgent || (user?.subscription_status === 'active' && isWhatsAppPlan);
 
     const handleDirectLogout = async () => {
         setIsLoggingOut(true);

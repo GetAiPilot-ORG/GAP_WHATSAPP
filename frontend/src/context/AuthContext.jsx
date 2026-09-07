@@ -26,46 +26,62 @@ export function AuthProvider({ children }) {
 
     const fetchUserProfile = useCallback(async (sessionUser) => {
         try {
-            // Find organization owner to get their subscription status
-            const { data: member } = await supabase
-                .from('organization_members')
-                .select('organization_id')
-                .eq('user_id', sessionUser.id)
-                .maybeSingle()
+            const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token;
+            if (token) {
+                const res = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api/team/my-profile`, {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'X-Auth-Portal': loginType || 'owner'
+                    }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    const role = data?.role || (loginType === 'agent' ? 'agent' : 'owner');
+                    setUserRole(role);
+                    setMemberProfile(data);
 
-            let ownerId = sessionUser.id
-            if (member?.organization_id) {
-                const { data: ownerMember } = await supabase
-                    .from('organization_members')
-                    .select('user_id')
-                    .eq('organization_id', member.organization_id)
-                    .eq('role', 'owner')
-                    .maybeSingle()
-                if (ownerMember?.user_id) {
-                    ownerId = ownerMember.user_id
+                    if (data?.subscription) {
+                        const expiresAt = data.subscription.expires_at ? new Date(data.subscription.expires_at).getTime() : 0;
+                        const isSubActive = expiresAt > Date.now();
+                        let resolvedPlan = isSubActive
+                            ? (data.subscription.plan_label || data.subscription.plan_id || 'GAP Max')
+                            : 'No active plan';
+                        const resolvedStatus = isSubActive ? 'active' : (data.subscription ? 'expired' : 'inactive');
+                        resolvedPlan = resolvePlanName(resolvedPlan);
+
+                        setUser(prev => prev ? {
+                            ...prev,
+                            plan: resolvedPlan,
+                            subscription_status: role === 'agent' ? 'active' : resolvedStatus,
+                            subscription_checked: true,
+                            role: role
+                        } : null);
+                        return;
+                    }
                 }
             }
 
+            // Fallback for direct owners if endpoint is loading or unreachable
             const { data: sub } = await supabase
                 .from('app_user_subscriptions')
                 .select('plan_id, plan_label, expires_at')
-                .eq('user_id', ownerId)
-                .maybeSingle()
+                .eq('user_id', sessionUser.id)
+                .maybeSingle();
 
-            const isSubActive = sub?.expires_at ? new Date(sub.expires_at) > new Date() : false
+            const isSubActive = sub?.expires_at ? new Date(sub.expires_at) > new Date() : false;
             let resolvedPlan = isSubActive
                 ? (sub?.plan_label || sub?.plan_id || 'No active plan')
-                : 'No active plan'
-            const resolvedStatus = isSubActive ? 'active' : (sub ? 'expired' : 'inactive')
+                : 'No active plan';
+            const resolvedStatus = isSubActive ? 'active' : (sub ? 'expired' : 'inactive');
+            resolvedPlan = resolvePlanName(resolvedPlan);
 
-            resolvedPlan = resolvePlanName(resolvedPlan)
-
-            setUser(prev => prev ? { ...prev, plan: resolvedPlan, subscription_status: resolvedStatus, subscription_checked: true } : null)
+            setUser(prev => prev ? { ...prev, plan: resolvedPlan, subscription_status: resolvedStatus, subscription_checked: true } : null);
         } catch (err) {
-            console.error('[AUTH] fetchUserProfile error:', err)
-            setUser(prev => prev ? { ...prev, subscription_checked: true } : null)
+            console.error('[AUTH] fetchUserProfile error:', err);
+            setUser(prev => prev ? { ...prev, subscription_checked: true } : null);
         }
-    }, [])
+    }, [loginType]);
 
     const refreshProfile = useCallback(async () => {
         const { data: { session: currentSession } } = await supabase.auth.getSession()
@@ -96,15 +112,34 @@ export function AuthProvider({ children }) {
                 const role = data?.role || (loginType === 'agent' ? 'agent' : 'owner')
                 setUserRole(role)
                 setMemberProfile(data)
+
+                // If this is an agent or team member, inherit the organization's subscription status
+                if (data?.subscription) {
+                    const expiresAt = data.subscription.expires_at ? new Date(data.subscription.expires_at).getTime() : 0
+                    const isSubActive = expiresAt > Date.now()
+                    let resolvedPlan = isSubActive
+                        ? (data.subscription.plan_label || data.subscription.plan_id || 'No active plan')
+                        : 'No active plan'
+                    const resolvedStatus = isSubActive ? 'active' : (data.subscription ? 'expired' : 'inactive')
+                    resolvedPlan = resolvePlanName(resolvedPlan)
+
+                    setUser(prev => prev ? {
+                        ...prev,
+                        plan: resolvedPlan,
+                        subscription_status: resolvedStatus,
+                        subscription_checked: true,
+                        role: role
+                    } : null)
+                }
             } else {
                 const errorData = await res.json().catch(() => ({}))
                 console.warn("Failed to resolve profile role:", res.status, errorData?.error || res.statusText)
-                setUserRole('agent')
+                setUserRole(loginType === 'agent' ? 'agent' : 'owner')
                 setMemberProfile(null)
             }
         } catch (e) {
             console.error("Failed to fetch member profile", e)
-            setUserRole('agent')
+            setUserRole(loginType === 'agent' ? 'agent' : 'owner')
             setMemberProfile(null)
         } finally {
             setIsProfileLoading(false)

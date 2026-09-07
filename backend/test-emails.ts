@@ -1,7 +1,7 @@
 import 'dotenv/config';
 
 process.env.SUPERMAILBOX_API_KEY = 'supermailbox-secret-key-12345';
-process.env.SUPERMAILBOX_API_URL = 'http://localhost:5050';
+process.env.SUPERMAILBOX_API_URL = 'https://gapmail.getaipilot.in';
 
 import { sendTransactionalEmail } from './src/services/supermailbox.service.js';
 
