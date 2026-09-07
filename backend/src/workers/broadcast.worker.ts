@@ -34,6 +34,35 @@ workers.push(new Worker(BROADCAST_PREPARE_QUEUE, async (job: any) => {
             status: 'failed',
             queue_error: error.message || 'Campaign preparation failed',
         }).eq('id', job.data.campaignId);
+        
+        const { data: campaign } = await supabase.from('w_campaigns').select('organization_id, name').eq('id', job.data.campaignId).single();
+        if (campaign && campaign.organization_id) {
+            try {
+                const { sendTransactionalEmail } = await import('../services/supermailbox.service.js');
+                const { data: admin } = await supabase.from('organization_members')
+                    .select('email, name')
+                    .eq('organization_id', campaign.organization_id)
+                    .in('role', ['owner', 'admin'])
+                    .limit(1)
+                    .single();
+                if (admin && admin.email) {
+                    await sendTransactionalEmail({
+                        to: admin.email,
+                        productCode: 'GAP_WHATSAPP',
+                        templateKey: 'broadcast_failed',
+                        idempotencyKey: `gap_whatsapp_broadcast_failed_${job.data.campaignId}`,
+                        variables: {
+                            full_name: admin.name || 'Admin',
+                            campaign_name: campaign.name || 'Your Broadcast',
+                            error_message: error.message || 'Campaign preparation failed',
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error('[Supermailbox] Failed to trigger broadcast failure notification:', e);
+            }
+        }
+        
         throw error;
     }
 }, { connection, concurrency: Number(process.env.BROADCAST_PREPARE_CONCURRENCY || 2) }));

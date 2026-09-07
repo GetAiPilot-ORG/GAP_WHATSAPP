@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { io } from 'socket.io-client'
 import { Plus, Search, Filter, MoreHorizontal, FileText, CheckCircle, Clock, XCircle, Image as ImageIcon, Video, Trash2, Link as LinkIcon, Phone, AlertCircle, RefreshCw, UploadCloud, Type, MessageSquareText, MousePointerClick, ChevronDown, Loader2, Check, CheckCheck, MessageSquare, Image, ExternalLink, ArrowRight, ShieldCheck, HelpCircle, Tag, Building2, Target, Sparkles, LockKeyhole, CalendarDays } from 'lucide-react'
 import Modal from '../components/Modal'
 import { useAuth } from '../context/AuthContext'
@@ -16,6 +17,12 @@ import { useGSAP } from '@gsap/react'
 gsap.registerPlugin(useGSAP)
 
 const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+const BACKEND_BASE = API_URL.replace(/\/api$/, '');
+const socket = io(BACKEND_BASE, {
+    withCredentials: true,
+    transports: ['websocket', 'polling'],
+    autoConnect: true,
+})
 
 const formatDateToIST = (dateStr) => {
     if (!dateStr) return 'recently';
@@ -162,6 +169,32 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
         setViewMode(defaultView);
     }, [defaultView]);
 
+    useEffect(() => {
+        const handleTemplateDeleted = (payload) => {
+            if (!payload?.name && !payload?.template_id) return;
+            const deletedName = String(payload?.name || '').trim().toLowerCase();
+            const deletedTemplateId = String(payload?.template_id || '').trim();
+            queryClient.setQueryData(['whatsapp-templates'], (old) => {
+                if (!Array.isArray(old)) return old;
+                return old.filter(t => {
+                    const matchesName = deletedName
+                        ? String(t.name || '').trim().toLowerCase() === deletedName
+                        : false;
+                    const matchesTemplateId = deletedTemplateId
+                        ? String(t.id || t.template_id || '').trim() === deletedTemplateId
+                        : false;
+                    return !matchesName && !matchesTemplateId;
+                });
+            });
+            queryClient.invalidateQueries({ queryKey: ['whatsapp-templates'] });
+        };
+
+        socket.on('template_deleted', handleTemplateDeleted);
+        return () => {
+            socket.off('template_deleted', handleTemplateDeleted);
+        };
+    }, [queryClient]);
+
     // Compute unified templates list
     const allTemplatesList = useMemo(() => {
         return templates;
@@ -262,11 +295,10 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                 // so the UI updates even before Meta propagates the deletion
                 queryClient.setQueryData(['whatsapp-templates'], (old) => {
                     if (!Array.isArray(old)) return old;
-                    return old.filter(t => t.name !== name);
+                    const deletedName = String(name || '').trim().toLowerCase();
+                    return old.filter(t => String(t.name || '').trim().toLowerCase() !== deletedName);
                 });
-                // Refetch after a short delay to let Meta API propagate the deletion
-                // This prevents the template from reappearing due to Meta cache lag
-                setTimeout(() => fetchData(), 2500);
+                queryClient.invalidateQueries({ queryKey: ['whatsapp-templates'] });
             } else {
                 const data = await res.json();
                 notify.error(data.error || 'Failed to delete template')
@@ -431,8 +463,8 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                                     type="button"
                                     onClick={() => setShowMobileFilters(!showMobileFilters)}
                                     className={`h-10 w-full flex items-center justify-center rounded-xl border transition-all ${showMobileFilters
-                                            ? 'bg-blue-50 border-blue-500 text-blue-600'
-                                            : 'bg-white border-gray-300 text-gray-500'
+                                        ? 'bg-blue-50 border-blue-500 text-blue-600'
+                                        : 'bg-white border-gray-300 text-gray-500'
                                         }`}
                                     style={{ borderRadius: '10px' }}
                                     title="Toggle Filters"
@@ -841,9 +873,9 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                                         <div className="mb-3.5 flex items-start justify-between gap-3">
                                             <div className="flex items-center gap-3 min-w-0">
                                                 <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${categoryName === 'MARKETING' ? 'bg-indigo-50 border-indigo-100 text-indigo-650' :
-                                                        categoryName === 'UTILITY' ? 'bg-emerald-50 border-emerald-100 text-emerald-650' :
-                                                            categoryName === 'AUTHENTICATION' ? 'bg-purple-50 border-purple-100 text-purple-650' :
-                                                                'bg-blue-50 border-blue-100 text-blue-655'
+                                                    categoryName === 'UTILITY' ? 'bg-emerald-50 border-emerald-100 text-emerald-650' :
+                                                        categoryName === 'AUTHENTICATION' ? 'bg-purple-50 border-purple-100 text-purple-650' :
+                                                            'bg-blue-50 border-blue-100 text-blue-655'
                                                     }`}>
                                                     <MessageSquareText className="h-5 w-5" strokeWidth={1.8} />
                                                 </div>
@@ -948,9 +980,9 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                                         <div className="flex items-center gap-2">
                                             {/* Status Badge */}
                                             <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${template.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                                                    template.status === 'PENDING' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                                                        template.status === 'DRAFT' ? 'bg-gray-50 text-gray-650 border-gray-250' :
-                                                            'bg-rose-50 text-rose-700 border-rose-100'
+                                                template.status === 'PENDING' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                                    template.status === 'DRAFT' ? 'bg-gray-50 text-gray-650 border-gray-250' :
+                                                        'bg-rose-50 text-rose-700 border-rose-100'
                                                 }`}>
                                                 {template.status === 'APPROVED' && <CheckCircle className="h-3 w-3 shrink-0 text-emerald-600" />}
                                                 {template.status === 'PENDING' && <Clock className="h-3 w-3 shrink-0 text-amber-600" />}

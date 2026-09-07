@@ -4146,7 +4146,7 @@ export default function LiveChat() {
 
                             {/* Input Area */}
                             <div data-tour="chat-composer" className={`px-2 py-1.5 sm:px-4 sm:py-2.5 lg:px-5 ${isInternalNote ? 'border-t border-amber-200 bg-amber-50' : 'bg-[#f0f2f5]'}`}>
-                                {!botEnabled && (
+                                {!botEnabled && (!isCustomerWindowExpired || isInternalNote) && (
                                     <div className="mx-auto mb-2 flex w-full max-w-[1180px] items-center justify-between gap-3 rounded-xl border border-amber-200/80 bg-gradient-to-r from-amber-50/90 via-amber-50/70 to-white/90 px-3.5 py-2 shadow-xs backdrop-blur-md animate-in fade-in duration-200">
                                         <div className="flex items-center gap-2.5 min-w-0">
                                             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-800 ring-1 ring-amber-200/80">

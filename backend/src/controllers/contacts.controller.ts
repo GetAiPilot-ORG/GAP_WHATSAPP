@@ -7,8 +7,9 @@ import {
     normalizeIndianPhoneKey,
     derivePhoneForStorage
 } from '../utils/format.js';
+import { syncWhatsAppContactToEcosystemSoon } from '../services/ecosystemSync.service.js';
 
-const CONTACT_SELECT = 'id, name, custom_name, phone, wa_id, wa_key, wa_account_id, tags, custom_fields, created_at, last_active, contact_type, saved_at, saved_by_user_id, save_source';
+const CONTACT_SELECT = 'id, name, custom_name, phone, wa_id, wa_key, wa_account_id, organization_id, tags, custom_fields, created_at, last_active, contact_type, saved_at, saved_by_user_id, save_source, canonical_contact_id, ecosystem_synced_at, ecosystem_sync_source, ecosystem_sync_status';
 const ADMIN_ROLES = new Set(['admin', 'owner']);
 
 function requireContactsAdmin(req: any, res: Response) {
@@ -191,6 +192,7 @@ export async function createContact(req: any, res: Response) {
         if (error) throw error;
 
         try { getIO().emit('contact_updated', { contact: data }); } catch(e) {}
+        syncWhatsAppContactToEcosystemSoon(data);
         res.status(201).json(data);
     } catch (err: any) {
         console.error('Error creating contact:', err);
@@ -305,6 +307,7 @@ export async function batchCreateContacts(req: any, res: Response) {
             .select(CONTACT_SELECT);
 
         if (error) throw error;
+        (data || []).forEach((contact: any) => syncWhatsAppContactToEcosystemSoon(contact));
 
         res.status(201).json({
             success: true,
@@ -397,6 +400,7 @@ export async function updateContact(req: any, res: Response) {
         if (updErr) throw updErr;
 
         try { getIO().emit('contact_updated', { contact: updated }); } catch(e) {}
+        syncWhatsAppContactToEcosystemSoon(updated);
         res.json(updated);
     } catch (err: any) {
         console.error('Error updating contact:', err);
@@ -433,6 +437,7 @@ export async function saveContact(req: any, res: Response) {
         if (updErr) throw updErr;
 
         try { getIO().emit('contact_updated', { contact: updated }); } catch(e) {}
+        syncWhatsAppContactToEcosystemSoon(updated);
         res.json(updated);
     } catch (err: any) {
         console.error('Error saving contact:', err);

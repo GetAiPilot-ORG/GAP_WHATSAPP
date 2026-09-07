@@ -12,3 +12,13 @@ test("template sync removes Meta-deleted cache rows but keeps drafts", () => {
 
   assert.deepEqual(findStaleMetaTemplateIds(metaRows, localRows), ["2"]);
 });
+
+test("template sync matches names and languages case-insensitively and trims whitespace", () => {
+  const metaRows = [{ name: "Welcome", language: "en_US" }];
+  const localRows = [
+    { id: "1", template_id: "m1", name: " welcome ", language: " EN_us ", status: "APPROVED" },
+    { id: "2", template_id: "m2", name: "stale", language: "en_US", status: "REJECTED" },
+  ];
+
+  assert.deepEqual(findStaleMetaTemplateIds(metaRows, localRows), ["2"]);
+});

@@ -561,8 +561,64 @@ export async function processCampaign(campaign: any) {
             billing_status: failed === contactsToProcess.length ? 'failed' : 'charged',
         }).eq('id', campaign.id);
 
+        if (!isCancelled) {
+            try {
+                const { sendTransactionalEmail } = await import('./supermailbox.service.js');
+                const { data: admin } = await supabase.from('organization_members')
+                    .select('email, name')
+                    .eq('organization_id', orgId)
+                    .in('role', ['owner', 'admin'])
+                    .limit(1)
+                    .single();
+                if (admin && admin.email) {
+                    await sendTransactionalEmail({
+                        to: admin.email,
+                        productCode: 'GAP_WHATSAPP',
+                        templateKey: 'broadcast_success',
+                        idempotencyKey: `gap_whatsapp_broadcast_success_${campaign.id}`,
+                        variables: {
+                            full_name: admin.name || 'Admin',
+                            campaign_name: campaign.name || 'Your Broadcast',
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error('[Supermailbox] Failed to trigger broadcast success notification in legacy processor:', e);
+            }
+        }
+
+
+
     } catch (err) {
         console.error('Error processing campaign:', campaign.id, err);
         await supabase.from('w_campaigns').update({ status: 'failed' }).eq('id', campaign.id);
+        
+        try {
+            const { sendTransactionalEmail } = await import('./supermailbox.service.js');
+            const orgId = campaign.organization_id;
+            if (orgId) {
+                const { data: admin } = await supabase.from('organization_members')
+                    .select('email, name')
+                    .eq('organization_id', orgId)
+                    .in('role', ['owner', 'admin'])
+                    .limit(1)
+                    .single();
+                if (admin && admin.email) {
+                    await sendTransactionalEmail({
+                        to: admin.email,
+                        productCode: 'GAP_WHATSAPP',
+                        templateKey: 'broadcast_failed',
+                        idempotencyKey: `gap_whatsapp_broadcast_failed_${campaign.id}`,
+                        variables: {
+                            full_name: admin.name || 'Admin',
+                            campaign_name: campaign.name || 'Your Broadcast',
+                            error_message: String(err)
+                        }
+                    });
+                }
+            }
+        } catch (e) {
+            console.error('[Supermailbox] Failed to trigger broadcast failure notification in legacy processor:', e);
+        }
     }
 }
