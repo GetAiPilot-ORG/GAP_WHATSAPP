@@ -71,10 +71,9 @@ push_error_utf8.txt
 **/app-state-sync-*
 
 .planning/
+.vscode/
 
 # AI Assistant history and cache
 .claude-code-history/
 .codex-history/
 .gemini/
-.planning
-
