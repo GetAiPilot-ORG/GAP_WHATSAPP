@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react'
 import { useAuth } from './AuthContext'
 import { supabase } from '../supabaseClient'
+import { safeLocalStorage } from '../utils/safeStorage'
 
 const WhatsAppAccountContext = createContext(null)
 
@@ -13,7 +14,7 @@ export function WhatsAppAccountProvider({ children }) {
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState(null)
     const [selectedAccountId, setSelectedAccountId] = useState(
-        () => localStorage.getItem(SELECTED_WA_ACCOUNT_KEY) || 'All'
+        () => safeLocalStorage.getItem(SELECTED_WA_ACCOUNT_KEY) || 'All'
     )
 
     const fetchAccounts = useCallback(async () => {
@@ -113,7 +114,7 @@ export function WhatsAppAccountProvider({ children }) {
     const handleSelectAccount = useCallback((id) => {
         const val = String(id || 'All')
         setSelectedAccountId(val)
-        localStorage.setItem(SELECTED_WA_ACCOUNT_KEY, val)
+        safeLocalStorage.setItem(SELECTED_WA_ACCOUNT_KEY, val)
         window.dispatchEvent(new CustomEvent('selected-wa-account-change', { detail: { accountId: val } }))
     }, [])
 

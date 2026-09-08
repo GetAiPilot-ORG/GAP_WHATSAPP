@@ -2,13 +2,29 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
+import ErrorBoundary from './components/ErrorBoundary.jsx'
 import axios from 'axios'
+
+// Safe diagnostic logging for unhandled errors without leaking credentials
+if (typeof window !== 'undefined') {
+  window.addEventListener('error', (event) => {
+    console.error('[Global Error Diagnostic]:', event?.message || event);
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    console.error('[Global Unhandled Rejection]:', event?.reason?.message || event?.reason || 'Unknown rejection');
+  });
+}
 
 const backendUrl = import.meta.env.VITE_BACKEND_URL || ''
 
 const shouldSkipNgrokWarning = (resource) => {
-  const url = typeof resource === 'string' ? resource : resource?.url
-  return url?.includes('ngrok-free.dev') || (backendUrl && url?.startsWith(backendUrl))
+  try {
+    const url = typeof resource === 'string' ? resource : resource?.url
+    return Boolean(url && (url.includes('ngrok-free.dev') || (backendUrl && url.startsWith(backendUrl))))
+  } catch {
+    return false
+  }
 }
 
 axios.interceptors.request.use((config) => {
@@ -19,21 +35,33 @@ axios.interceptors.request.use((config) => {
   return config
 })
 
-// Bypass Ngrok's anti-abuse warning screen for backend API fetches.
+// Bypass Ngrok's anti-abuse warning screen for backend API fetches safely.
 const originalFetch = window.fetch;
-window.fetch = async (...args) => {
-  let [resource, config] = args;
-  if (shouldSkipNgrokWarning(resource)) {
-    config = config || {}
-    const headers = new Headers(config.headers || {})
-    headers.set('ngrok-skip-browser-warning', 'true')
-    config.headers = headers
-  }
-  return originalFetch(resource, config);
-};
+if (typeof originalFetch === 'function') {
+  window.fetch = async (...args) => {
+    try {
+      let [resource, config] = args;
+      if (shouldSkipNgrokWarning(resource)) {
+        config = config || {}
+        const headers = new Headers(config.headers || {})
+        headers.set('ngrok-skip-browser-warning', 'true')
+        config.headers = headers
+      }
+      return await originalFetch(resource, config);
+    } catch (err) {
+      throw err;
+    }
+  };
+}
 
-createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+const rootElement = document.getElementById('root');
+if (rootElement) {
+  createRoot(rootElement).render(
+    <StrictMode>
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    </StrictMode>,
+  )
+}
+

@@ -62,11 +62,13 @@ export default function AudioRecorderOrUploader({
       const preferredTypes = [
         'audio/webm;codecs=opus',
         'audio/webm',
+        'audio/mp4',
+        'audio/aac',
         'audio/ogg;codecs=opus',
         'audio/ogg',
       ]
 
-      const mimeType = preferredTypes.find((t) => MediaRecorder.isTypeSupported(t)) || ''
+      const mimeType = preferredTypes.find((t) => typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(t)) || ''
       const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
       mediaRecorderRef.current = recorder
       chunksRef.current = []
@@ -82,11 +84,20 @@ export default function AudioRecorderOrUploader({
           // ignore
         }
 
-        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' })
+        const actualMime = recorder.mimeType || (chunksRef.current[0] && chunksRef.current[0].type) || 'audio/webm'
+        const blob = new Blob(chunksRef.current, { type: actualMime })
         const durationSeconds = await getDurationSecondsFromBlob(blob)
 
-        const ext = (recorder.mimeType || '').includes('ogg') ? 'ogg' : 'webm'
-        const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: recorder.mimeType || blob.type || 'audio/webm' })
+        let ext = 'webm'
+        if (actualMime.includes('mp4') || actualMime.includes('m4a')) {
+          ext = 'm4a'
+        } else if (actualMime.includes('aac')) {
+          ext = 'aac'
+        } else if (actualMime.includes('ogg')) {
+          ext = 'ogg'
+        }
+
+        const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: actualMime })
 
         onChange?.({ file, durationSeconds })
       }

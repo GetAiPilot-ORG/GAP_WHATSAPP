@@ -25,16 +25,23 @@
   #root {
     margin: 0;
     min-height: 100%;
+    min-height: 100vh;
+    min-height: 100dvh;
     width: 100%;
   }
 
   html {
     background: var(--fp-surface);
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
   }
 
   body {
     margin: 0;
     min-height: 100vh;
+    min-height: 100dvh;
     overflow-x: hidden;
     overflow-y: auto;
     background: var(--fp-surface);
@@ -46,6 +53,7 @@
 
   #root {
     min-height: 100vh;
+    min-height: 100dvh;
     width: 100%;
     max-width: none;
     padding: 0;

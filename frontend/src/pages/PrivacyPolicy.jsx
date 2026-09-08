@@ -6,6 +6,7 @@ import {
   Cookie, Clock, Trash2, Baby, Brain, Workflow, Phone, Server
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { safeClipboardCopy } from '../utils/compat';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const COMPANY_NAME = 'GetAiPilot';
@@ -809,12 +810,13 @@ function highlightText(text, query) {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 function CopyLinkButton({ sectionId }) {
   const [copied, setCopied] = useState(false);
-  const handleCopy = useCallback(() => {
+  const handleCopy = useCallback(async () => {
     const url = `${window.location.origin}${window.location.pathname}#${sectionId}`;
-    navigator.clipboard.writeText(url).then(() => {
+    const success = await safeClipboardCopy(url);
+    if (success) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    });
+    }
   }, [sectionId]);
 
   return (

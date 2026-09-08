@@ -645,7 +645,13 @@ export default function Layout() {
     }
 
     if (!user) return <Navigate to="/login" replace />
-    if (userRole === null) return null
+    if (userRole === null) {
+        return (
+            <div className="fixed inset-0 flex items-center justify-center bg-gray-50">
+                <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+            </div>
+        )
+    }
 
     if (!hasActiveSubscription) {
         return (

@@ -7,6 +7,7 @@ import { useDialog } from '../context/DialogContext'
 import { useWhatsAppAccounts } from '../context/WhatsAppAccountContext'
 import { formatINRFromPaise } from '../config/whatsappPricing'
 import { MESSAGING_TIERS, getMessagingTierLabel, isCurrentTier } from '../utils/messagingLimits'
+import { safeRandomUUID } from '../utils/compat'
 import DateTimePicker from '../components/DateTimePicker'
 import Modal from '../components/Modal'
 
@@ -176,7 +177,7 @@ export default function Broadcast({ defaultTab = 'new' }) {
     const [historyLoadState, setHistoryLoadState] = useState('idle')
     const [expandedCampaignId, setExpandedCampaignId] = useState(null)
     const [recipientReports, setRecipientReports] = useState({})
-    const launchIdempotencyKey = useRef(crypto.randomUUID())
+    const launchIdempotencyKey = useRef(safeRandomUUID())
 
     const [currentStep, setCurrentStep] = useState(1)
     const [campaign, setCampaign] = useState({
@@ -895,7 +896,7 @@ export default function Broadcast({ defaultTab = 'new' }) {
             const data = await res.json();
             if (res.ok) {
                 setSendResult(data);
-                launchIdempotencyKey.current = crypto.randomUUID();
+                launchIdempotencyKey.current = safeRandomUUID();
             } else {
                 alertDialog(data.error || 'Broadcast failed', { title: 'Broadcast failed', tone: 'danger' });
             }

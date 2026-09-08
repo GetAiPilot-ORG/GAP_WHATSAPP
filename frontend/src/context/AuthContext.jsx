@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
 import { supabase } from '../supabaseClient'
+import { safeLocalStorage } from '../utils/safeStorage'
 
 const AuthContext = createContext({})
 
@@ -22,7 +23,7 @@ export function AuthProvider({ children }) {
     const [isProfileLoading, setIsProfileLoading] = useState(false)
     const fetchedForProfileKey = useRef(null) // tracks which user + portal we last fetched profile for
     const lastSubscriptionCheckRef = useRef(0)
-    const [loginType, setLoginType] = useState(localStorage.getItem('auth_login_type') || 'owner')
+    const [loginType, setLoginType] = useState(() => safeLocalStorage.getItem('auth_login_type') || 'owner')
 
     const fetchUserProfile = useCallback(async (sessionUser) => {
         try {
@@ -263,7 +264,7 @@ export function AuthProvider({ children }) {
             setUserRole(null)
             setMemberProfile(null)
             setLoginType(type)
-            localStorage.setItem('auth_login_type', type)
+            safeLocalStorage.setItem('auth_login_type', type)
             return supabase.auth.signInWithPassword(data)
         },
         signInWithGoogle: () => supabase.auth.signInWithOAuth({
@@ -291,7 +292,7 @@ export function AuthProvider({ children }) {
             setUserRole(null)
             setMemberProfile(null)
             fetchedForProfileKey.current = null
-            localStorage.removeItem('auth_login_type')
+            safeLocalStorage.removeItem('auth_login_type')
             return supabase.auth.signOut()
         },
         refreshProfile,

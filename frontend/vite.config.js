@@ -191,6 +191,7 @@ export default defineConfig({
     }
   },
   build: {
+    target: ['es2020', 'safari14', 'ios14'],
     chunkSizeWarningLimit: 2500,
     rollupOptions: {
       output: {

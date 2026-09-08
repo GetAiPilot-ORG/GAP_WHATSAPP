@@ -1,4 +1,5 @@
-import { useEffect, lazy, Suspense } from 'react'
+import { useEffect, Suspense } from 'react'
+import { safeLazy } from './utils/safeLazy'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'sonner'
@@ -25,20 +26,20 @@ import HomePage from './pages/HomePage'
 import TermsOfService from './pages/TermsOfService'
 import { loadFacebookSDK } from './services/facebookSdkLoader'
 
-const FlowBuilder = lazy(() => import('./pages/FlowBuilder'))
-const Templates = lazy(() => import('./pages/Templates'))
-const TemplateWizard = lazy(() => import('./pages/TemplateWizard'))
-const Broadcast = lazy(() => import('./pages/Broadcast'))
-const LiveChat = lazy(() => import('./pages/LiveChat'))
-const BotAgents = lazy(() => import('./pages/BotAgents'))
-const Settings = lazy(() => import('./pages/Settings'))
-const TeamMembers = lazy(() => import('./pages/TeamMembers'))
-const HelpCenter = lazy(() => import('./pages/HelpCenter'))
-const BillingPage = lazy(() => import('./pages/BillingPage'))
-const WhatsAppConnect = lazy(() => import('./pages/WhatsAppConnect'))
-const WhatsAppNumberPage = lazy(() => import('./pages/WhatsAppNumberPage'))
-const WhatsAppLinkGenerator = lazy(() => import('./pages/WhatsAppLinkGenerator'))
-const ScheduledMeetings = lazy(() => import('./pages/ScheduledMeetings'))
+const FlowBuilder = safeLazy(() => import('./pages/FlowBuilder'))
+const Templates = safeLazy(() => import('./pages/Templates'))
+const TemplateWizard = safeLazy(() => import('./pages/TemplateWizard'))
+const Broadcast = safeLazy(() => import('./pages/Broadcast'))
+const LiveChat = safeLazy(() => import('./pages/LiveChat'))
+const BotAgents = safeLazy(() => import('./pages/BotAgents'))
+const Settings = safeLazy(() => import('./pages/Settings'))
+const TeamMembers = safeLazy(() => import('./pages/TeamMembers'))
+const HelpCenter = safeLazy(() => import('./pages/HelpCenter'))
+const BillingPage = safeLazy(() => import('./pages/BillingPage'))
+const WhatsAppConnect = safeLazy(() => import('./pages/WhatsAppConnect'))
+const WhatsAppNumberPage = safeLazy(() => import('./pages/WhatsAppNumberPage'))
+const WhatsAppLinkGenerator = safeLazy(() => import('./pages/WhatsAppLinkGenerator'))
+const ScheduledMeetings = safeLazy(() => import('./pages/ScheduledMeetings'))
 
 const PageFallback = () => (
   <div className="flex h-[60vh] w-full items-center justify-center">

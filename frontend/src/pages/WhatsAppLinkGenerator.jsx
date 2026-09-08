@@ -7,6 +7,7 @@ import {
     Facebook, Twitter, Youtube, Globe, Check, Sparkles,
     ArrowUpRight, Send, HelpCircle
 } from 'lucide-react'
+import { safeClipboardCopy, safeShare } from '../utils/compat'
 
 // ─── Country Data ─────────────────────────────────────────────────────────────
 const COUNTRIES = [
@@ -354,18 +355,19 @@ export default function WhatsAppLinkGenerator() {
     const handleCopyLink = async () => {
         const link = generatedLink || waLink
         if (!link) return
-        await navigator.clipboard.writeText(link)
-        setLinkCopied(true)
-        setTimeout(() => setLinkCopied(false), 2000)
+        const copied = await safeClipboardCopy(link)
+        if (copied) {
+            setLinkCopied(true)
+            setTimeout(() => setLinkCopied(false), 2000)
+        }
     }
 
     const handleShare = async () => {
         const link = generatedLink || waLink
         if (!link) return
-        if (navigator.share) {
-            await navigator.share({ title: 'WhatsApp Link', url: link })
-        } else {
-            await navigator.clipboard.writeText(link)
+        const shared = await safeShare({ title: 'WhatsApp Link', url: link })
+        if (!shared) {
+            await handleCopyLink()
         }
     }
 

@@ -22,28 +22,56 @@ const urlBase64ToUint8Array = (base64String) => {
     return outputArray;
 };
 
+const getInitialNotificationPermission = () => {
+    if (typeof window !== 'undefined' && 'Notification' in window && typeof Notification !== 'undefined') {
+        try {
+            return Notification.permission || 'default';
+        } catch {
+            return 'default';
+        }
+    }
+    return 'default';
+};
+
 export const PushProvider = ({ children }) => {
-    const [permissionStatus, setPermissionStatus] = useState(Notification.permission);
+    const [permissionStatus, setPermissionStatus] = useState(getInitialNotificationPermission);
     const [isSubscribed, setIsSubscribed] = useState(false);
 
     // Ensure we only run this once we have an active session
     useEffect(() => {
         const checkSubscription = async () => {
-            if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+            if (
+                typeof window === 'undefined' ||
+                typeof navigator === 'undefined' ||
+                !('serviceWorker' in navigator) ||
+                !('PushManager' in window)
+            ) {
                 return;
             }
 
-            const registration = await navigator.serviceWorker.ready;
-            const subscription = await registration.pushManager.getSubscription();
-            setIsSubscribed(!!subscription);
+            try {
+                const registration = await navigator.serviceWorker.ready;
+                if (!registration?.pushManager) return;
+                const subscription = await registration.pushManager.getSubscription();
+                setIsSubscribed(!!subscription);
+            } catch (err) {
+                console.warn('[PushContext] Subscription check skipped/failed:', err);
+            }
         };
 
         checkSubscription();
     }, []);
 
     const subscribeToPush = async (orgId) => {
-        if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-            console.error('Push notifications are not supported by this browser.');
+        if (
+            typeof window === 'undefined' ||
+            typeof navigator === 'undefined' ||
+            !('serviceWorker' in navigator) ||
+            !('PushManager' in window) ||
+            !('Notification' in window) ||
+            typeof Notification.requestPermission !== 'function'
+        ) {
+            console.warn('Push notifications are not supported by this browser.');
             return false;
         }
 
