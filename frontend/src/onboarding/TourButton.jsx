@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { HelpCircle, Map, RefreshCw, Sparkles, MessageSquare } from 'lucide-react'
+import { HelpCircle, Map, Sparkles, MessageSquare } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
 import { useOnboarding } from './onboardingContext'
+import { requestSetupGuideOpen } from './setupStorage'
 import WhatsAppMessagingGuideModal from '../components/WhatsAppMessagingGuideModal'
 
 export default function TourButton({ className = '', compact = false }) {
-    const { currentPageTour, isRunning, startCurrentPageTour, startGlobalTour, resetAllTours } = useOnboarding()
+    const { currentPageTour, isRunning, startCurrentPageTour } = useOnboarding()
+    const navigate = useNavigate()
     const [open, setOpen] = useState(false)
     const [showGuideModal, setShowGuideModal] = useState(false)
     const menuRef = useRef(null)
@@ -21,6 +24,12 @@ export default function TourButton({ className = '', compact = false }) {
     const run = async (action) => {
         setOpen(false)
         await action()
+    }
+
+    const openSetupGuide = () => {
+        setOpen(false)
+        navigate('/dashboard')
+        window.setTimeout(requestSetupGuideOpen, 0)
     }
 
     return (
@@ -74,13 +83,13 @@ export default function TourButton({ className = '', compact = false }) {
                                 <Map className="h-4 w-4" />
                             </div>
                             <span>
-                                <span className="block text-[14px] font-semibold text-[var(--fp-ink)]">Start page tour</span>
-                                <span className="block mt-0.5 text-[13px] text-[var(--fp-muted)]">Current page ka quick guide.</span>
+                                <span className="block text-[14px] font-semibold text-[var(--fp-ink)]">Tour this page</span>
+                                <span className="block mt-0.5 text-[13px] text-[var(--fp-muted)]">See a quick guide to the current page.</span>
                             </span>
                         </button>
                         <button
                             type="button"
-                            onClick={() => run(startGlobalTour)}
+                            onClick={openSetupGuide}
                             disabled={isRunning}
                             className="flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left text-sm text-[var(--fp-ink)] transition-all hover:bg-[var(--fp-border)] active:bg-black/10 disabled:opacity-50"
                         >
@@ -88,26 +97,8 @@ export default function TourButton({ className = '', compact = false }) {
                                 <Sparkles className="h-4 w-4" />
                             </div>
                             <span>
-                                <span className="block text-[14px] font-semibold text-[var(--fp-ink)]">Start app tour</span>
-                                <span className="block mt-0.5 text-[13px] text-[var(--fp-muted)]">Main setup guide dobara dekho.</span>
-                            </span>
-                        </button>
-                        <div className="my-1 h-px bg-[var(--fp-border)] mx-2" />
-                        <button
-                            type="button"
-                            onClick={() => {
-                                resetAllTours()
-                                setOpen(false)
-                            }}
-                            disabled={isRunning}
-                            className="flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left text-sm text-[var(--fp-ink)] transition-all hover:bg-[var(--fp-border)] active:bg-black/10 disabled:opacity-50"
-                        >
-                            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-600 ring-1 ring-gray-200">
-                                <RefreshCw className="h-4 w-4" />
-                            </div>
-                            <span>
-                                <span className="block text-[14px] font-semibold text-[var(--fp-ink)]">Reset tour history</span>
-                                <span className="block mt-0.5 text-[13px] text-[var(--fp-muted)]">First-run guide fir se dekhein.</span>
+                                <span className="block text-[14px] font-semibold text-[var(--fp-ink)]">View setup guide</span>
+                                <span className="block mt-0.5 text-[13px] text-[var(--fp-muted)]">Continue your WhatsApp account setup.</span>
                             </span>
                         </button>
                     </div>

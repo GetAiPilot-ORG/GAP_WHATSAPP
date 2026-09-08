@@ -17,12 +17,15 @@ import {
   createTemplate,
   deleteTemplate,
   getTemplateLibrary,
+  recordOnboardingEvent,
 } from "../controllers/whatsapp.controller.js";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
 // Base path: /api/whatsapp
+
+router.post("/onboarding-events", authMiddleware, recordOnboardingEvent);
 
 router.get("/number-requests", authMiddleware, getNumberRequests);
 router.post("/number-requests", authMiddleware, createNumberRequest);

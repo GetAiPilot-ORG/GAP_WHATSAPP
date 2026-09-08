@@ -1,4 +1,4 @@
-import { createElement, useMemo, useState, useRef } from 'react'
+import { createElement, useEffect, useMemo, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useGSAP } from '@gsap/react'
@@ -45,10 +45,14 @@ import {
     ArrowUpRight,
     CheckCheck,
     Eye,
+    X,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { useWhatsAppAccounts } from '../context/WhatsAppAccountContext'
 import { supabase } from '../supabaseClient'
 import { formatINRFromPaise } from '../config/whatsappPricing'
+import { dismissSetupWelcome, getSetupGuidePreference, setSetupGoal, setSetupGuideDismissed } from '../onboarding/setupStorage'
+import { trackOnboardingEvent } from '../onboarding/onboardingAnalytics'
 
 gsap.registerPlugin(useGSAP)
 
@@ -98,10 +102,29 @@ function freshness(updatedAt) {
 }
 
 export default function Dashboard() {
-    const { apiCall, session } = useAuth()
+    const { apiCall, session, user, userRole } = useAuth()
+    const { accounts: waAccounts, selectedAccount, selectedAccountId, isLoading: accountsLoading } = useWhatsAppAccounts()
     const [range, setRange] = useState('today')
     const [isAccountsOpen, setIsAccountsOpen] = useState(false)
     const dashboardRef = useRef(null)
+    const setupAccount = selectedAccount || waAccounts.find(account => account.status !== 'disconnected') || null
+    const setupAccountId = setupAccount?.id || null
+    const [setupPreference, setSetupPreference] = useState(() => getSetupGuidePreference(user, setupAccountId))
+
+    useEffect(() => {
+        setSetupPreference(getSetupGuidePreference(user, setupAccountId))
+    }, [user, setupAccountId])
+
+    useEffect(() => {
+        const reopen = () => {
+            setSetupGuideDismissed(user, setupAccountId, false)
+            setSetupPreference(current => ({ ...current, dismissed: false }))
+            trackOnboardingEvent({ user, accountId: setupAccountId, event: 'onboarding_resumed' })
+            window.setTimeout(() => document.querySelector('[data-tour="setup-checklist"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+        }
+        window.addEventListener('gap:open-setup-guide', reopen)
+        return () => window.removeEventListener('gap:open-setup-guide', reopen)
+    }, [user, setupAccountId])
 
     const {
         data: stats,
@@ -134,6 +157,52 @@ export default function Dashboard() {
         staleTime: 1000 * 60,
         refetchInterval: 60000,
         enabled: !!session?.access_token,
+    })
+
+    const { data: setupDiagnostics, isLoading: diagnosticsLoading, error: diagnosticsError } = useQuery({
+        queryKey: ['setup-account-diagnostics', session?.access_token, setupAccountId],
+        queryFn: async () => {
+            const res = await apiCall(`${API_BASE}/whatsapp/accounts/${encodeURIComponent(setupAccountId)}/diagnostics`)
+            const body = await res.json().catch(() => ({}))
+            if (!res.ok) throw new Error(body?.error || 'Could not verify this WhatsApp account')
+            return body
+        },
+        enabled: !!session?.access_token && !!setupAccountId,
+        staleTime: 5 * 60 * 1000,
+        retry: 1,
+    })
+
+    const { data: setupTemplates = [], isLoading: templatesLoading, error: templatesError } = useQuery({
+        queryKey: ['whatsapp-templates', setupAccountId],
+        queryFn: async () => {
+            const res = await apiCall(`${API_BASE}/whatsapp/templates?wa_account_id=${encodeURIComponent(setupAccountId)}`)
+            const body = await res.json().catch(() => [])
+            if (!res.ok) throw new Error(body?.error || 'Could not load templates')
+            return Array.isArray(body) ? body : []
+        },
+        enabled: !!session?.access_token && !!setupAccountId,
+        staleTime: 60 * 1000,
+        retry: 1,
+    })
+
+    const { data: setupCounts } = useQuery({
+        queryKey: ['setup-account-counts', session?.access_token, setupAccountId],
+        queryFn: async () => {
+            const [contacts, messages, campaigns, flows] = await Promise.all([
+                supabase.from('w_contacts').select('id', { count: 'exact', head: true }).eq('wa_account_id', setupAccountId).or('contact_type.eq.individual,contact_type.is.null'),
+                supabase.from('w_messages').select('id', { count: 'exact', head: true }).eq('wa_account_id', setupAccountId),
+                supabase.from('w_campaigns').select('id', { count: 'exact', head: true }).eq('wa_account_id', setupAccountId),
+                supabase.from('w_flows').select('id', { count: 'exact', head: true }).eq('wa_account_id', setupAccountId).neq('status', 'archived'),
+            ])
+            return {
+                contacts: contacts.error ? null : contacts.count,
+                messages: messages.error ? null : messages.count,
+                campaigns: campaigns.error ? null : campaigns.count,
+                flows: flows.error ? null : flows.count,
+            }
+        },
+        enabled: !!session?.access_token && !!setupAccountId,
+        staleTime: 30 * 1000,
     })
 
     const { data: conversationCount } = useQuery({
@@ -245,6 +314,20 @@ export default function Dashboard() {
 
     return (
         <div ref={dashboardRef} className="min-h-full bg-transparent p-3.5 sm:p-5 lg:p-6">
+            {userRole === 'owner' && !setupPreference.welcomeDismissed ? (
+                <SetupWelcome
+                    onChoose={(goal) => {
+                        setSetupGoal(user, setupAccountId, goal)
+                        setSetupPreference(current => ({ ...current, goal, welcomeDismissed: true, dismissed: false }))
+                        trackOnboardingEvent({ user, accountId: setupAccountId, event: 'onboarding_goal_selected', metadata: { goal } })
+                    }}
+                    onExplore={() => {
+                        dismissSetupWelcome(user, setupAccountId)
+                        setSetupPreference(current => ({ ...current, welcomeDismissed: true }))
+                        trackOnboardingEvent({ user, accountId: setupAccountId, event: 'onboarding_step_skipped', metadata: { step: 'welcome' } })
+                    }}
+                />
+            ) : null}
             <div className="mx-auto max-w-[1680px] space-y-4 sm:space-y-5">
                 {/* Header Section */}
                 <div className="dash-header">
@@ -264,8 +347,36 @@ export default function Dashboard() {
                     </div>
                 ) : null}
 
-                {/* First Run Onboarding Banner if no accounts */}
-                {!isLoading && !hasConnectedAccount ? <FirstRunOnboarding /> : null}
+                {/* State-aware setup guide for account owners */}
+                {userRole === 'owner' && !setupPreference.dismissed ? (
+                    <SetupChecklist
+                        account={setupAccount}
+                        accountSelection={selectedAccountId}
+                        accountsLoading={accountsLoading}
+                        diagnostics={setupDiagnostics}
+                        diagnosticsError={diagnosticsError}
+                        diagnosticsLoading={diagnosticsLoading}
+                        billingOverview={billingOverview}
+                        templates={setupTemplates}
+                        templatesError={templatesError}
+                        templatesLoading={templatesLoading}
+                        model={model}
+                        accountCounts={setupCounts}
+                        goal={setupPreference.goal}
+                        onChangeGoal={(goal) => {
+                            setSetupGoal(user, setupAccountId, goal)
+                            setSetupPreference(current => ({ ...current, goal }))
+                            trackOnboardingEvent({ user, accountId: setupAccountId, event: 'onboarding_goal_selected', metadata: { goal } })
+                        }}
+                        onStepOpen={(step) => trackOnboardingEvent({ user, accountId: setupAccountId, event: 'onboarding_step_viewed', metadata: { step } })}
+                        onProgress={(event, metadata) => trackOnboardingEvent({ user, accountId: setupAccountId, event, metadata })}
+                        onDismiss={() => {
+                            setSetupGuideDismissed(user, setupAccountId, true)
+                            setSetupPreference(current => ({ ...current, dismissed: true }))
+                            trackOnboardingEvent({ user, accountId: setupAccountId, event: 'onboarding_step_skipped', metadata: { step: 'setup_guide' } })
+                        }}
+                    />
+                ) : null}
 
                 {/* Top 4 Primary Metric Cards */}
                 <section data-tour="dashboard-metrics" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
@@ -483,77 +594,225 @@ export default function Dashboard() {
     )
 }
 
-function FirstRunOnboarding() {
-    const steps = [
-        {
-            icon: Smartphone,
-            title: 'Connect WhatsApp API',
-            text: 'Link your business phone number to Meta Cloud API to start receiving and sending live messages.',
-        },
-        {
-            icon: Wallet,
-            title: 'Add Wallet Balance',
-            text: 'WhatsApp conversation charges are deducted from your balance in real-time.',
-        },
-        {
-            icon: FileText,
-            title: 'Approve Templates',
-            text: 'Create Meta-approved message templates for broadcasts and proactive alerts.',
-        },
-        {
-            icon: Bot,
-            title: 'Enable AI & Flows',
-            text: 'Deploy AI agents and interactive chat flows to automate customer responses 24/7.',
-        },
+function SetupWelcome({ onChoose, onExplore }) {
+    const goals = [
+        { id: 'chats', icon: MessageSquareText, title: 'Manage customer chats', text: 'Connect your inbox and start replying to customers.' },
+        { id: 'broadcasts', icon: Send, title: 'Send broadcasts', text: 'Prepare contacts, templates, billing, and campaigns.' },
+        { id: 'automation', icon: Bot, title: 'Automate replies with AI', text: 'Create an agent or flow and test customer handoff.' },
     ]
 
     return (
-        <section className="overflow-hidden rounded-lg border border-blue-200 bg-white p-5 shadow-2xs">
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)] items-center">
-                <div>
-                    <div className="inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">
-                        <Sparkles className="h-3.5 w-3.5" />
-                        First-Time Setup
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="setup-welcome-title">
+            <div className="w-full max-w-3xl overflow-hidden rounded-2xl border border-white/20 bg-white shadow-2xl">
+                <div className="bg-gradient-to-br from-blue-700 to-indigo-800 px-6 py-6 text-white sm:px-8">
+                    <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-bold ring-1 ring-white/20">
+                        <Sparkles className="h-3.5 w-3.5" /> Welcome to wb.whatsapp
                     </div>
-                    <h2 className="mt-2.5 text-lg font-bold leading-snug text-gray-900">
-                        Connect your WhatsApp Business account to activate your dashboard.
-                    </h2>
-                    <p className="mt-1 text-xs text-gray-600 leading-normal max-w-2xl">
-                        Follow our quick setup guide: Link your official Meta Cloud API number, add wallet funds, and start managing live chats and broadcasts.
-                    </p>
-                    <div className="mt-4 flex flex-wrap gap-2.5">
-                        <Link
-                            to="/whatsapp-connect"
-                            className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-2xs hover:bg-blue-700 transition-colors"
-                        >
-                            <Smartphone className="h-3.5 w-3.5" />
-                            Connect WhatsApp Account
-                            <ArrowRight className="h-3.5 w-3.5" />
-                        </Link>
-                        <button
-                            type="button"
-                            disabled
-                            title="Virtual number service is coming soon"
-                            className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-gray-100 px-4 py-2 text-xs font-semibold text-gray-400 cursor-not-allowed select-none shadow-2xs"
-                        >
-                            <PhoneCall className="h-3.5 w-3.5" />
-                            Need a new number?
-                            <span className="rounded-full bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">Coming Soon</span>
-                        </button>
-                    </div>
+                    <h1 id="setup-welcome-title" className="mt-3 text-2xl font-bold">What would you like to do first?</h1>
+                    <p className="mt-1 text-sm text-blue-100">Choose a goal and we’ll guide you one step at a time. You can change it later.</p>
                 </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {steps.map((step) => (
-                        <div key={step.title} className="rounded-md border border-gray-200 bg-gray-50/60 p-3 shadow-2xs">
-                            <div className="h-7 w-7 rounded-md bg-white border border-gray-200 text-blue-600 flex items-center justify-center mb-1.5">
-                                {createElement(step.icon, { className: 'h-3.5 w-3.5' })}
-                            </div>
-                            <h3 className="text-xs font-bold text-gray-900">{step.title}</h3>
-                            <p className="mt-0.5 text-[10px] text-gray-600 leading-normal">{step.text}</p>
-                        </div>
+                <div className="grid gap-3 p-5 sm:grid-cols-3 sm:p-6">
+                    {goals.map(goal => (
+                        <button key={goal.id} type="button" onClick={() => onChoose(goal.id)} className="group rounded-xl border border-gray-200 p-4 text-left transition-all hover:border-blue-300 hover:bg-blue-50 hover:shadow-sm">
+                            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-700 group-hover:bg-white">
+                                <goal.icon className="h-4.5 w-4.5" />
+                            </span>
+                            <span className="mt-3 block text-sm font-bold text-gray-950">{goal.title}</span>
+                            <span className="mt-1 block text-xs leading-5 text-gray-600">{goal.text}</span>
+                        </button>
                     ))}
                 </div>
+                <div className="flex items-center justify-between border-t border-gray-200 bg-gray-50 px-5 py-4 sm:px-6">
+                    <span className="text-xs text-gray-500">This guide never blocks access to the platform.</span>
+                    <button type="button" onClick={onExplore} className="text-xs font-bold text-gray-700 hover:text-gray-950">Explore on my own</button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+function SetupChecklist({ account, accountSelection, accountsLoading, diagnostics, diagnosticsError, diagnosticsLoading, billingOverview, templates, templatesError, templatesLoading, model, accountCounts, goal, onChangeGoal, onStepOpen, onProgress, onDismiss }) {
+    const isConnected = Boolean(account && !['disconnected', 'failed'].includes(String(account.status || '').toLowerCase()))
+    const diagnosticsFailed = isConnected && !diagnosticsLoading && Boolean(diagnosticsError || diagnostics?.send_ready === false)
+    const isVerified = isConnected && diagnostics?.send_ready === true
+    const billingReady = n(billingOverview?.wallet?.balance_paise) > 0
+    const approvedTemplates = templates.filter(template => String(template.status || '').toUpperCase() === 'APPROVED').length
+    const contactCount = accountCounts?.contacts ?? n(model.contacts.total)
+    const messageCount = accountCounts?.messages ?? n(model.totalMessages)
+    const campaignCount = accountCounts?.campaigns ?? n(model.campaigns.total)
+    const flowCount = accountCounts?.flows ?? n(model.automation.publishedFlows)
+    const hasContacts = n(contactCount) > 0
+    const hasSuccessfulActivity = n(messageCount) > 0
+    const hasLaunchedWorkflow = n(campaignCount) > 0 || n(flowCount) > 0 || hasSuccessfulActivity
+
+    const goalOptions = {
+        chats: { label: 'Customer chats', workflowTitle: 'Open your live inbox', workflowDescription: 'Receive a customer message and reply from the shared inbox.', workflowHref: '/live-chat', workflowAction: 'Open inbox' },
+        broadcasts: { label: 'Broadcasts', workflowTitle: 'Create your first broadcast', workflowDescription: 'Choose recipients and an approved template, then review before sending.', workflowHref: '/broadcast', workflowAction: 'Create broadcast' },
+        automation: { label: 'AI automation', workflowTitle: 'Launch your first automation', workflowDescription: 'Create and test an AI agent or visual conversation flow.', workflowHref: '/bot-agents', workflowAction: 'Create automation' },
+    }
+    const activeGoal = goalOptions[goal] || goalOptions.broadcasts
+
+    const steps = [
+        {
+            id: 'connect_whatsapp',
+            title: 'Connect WhatsApp',
+            description: isConnected ? `${account.name || account.display_phone_number || 'WhatsApp account'} is connected.` : 'Connect an official Meta Cloud API account.',
+            href: '/whatsapp-connect',
+            action: 'Connect account',
+            complete: isConnected,
+            loading: accountsLoading,
+        },
+        {
+            id: 'verify_connection',
+            title: 'Verify connection',
+            description: diagnosticsFailed ? (diagnostics?.issues?.[0] || diagnosticsError?.message || 'Connection needs attention. Open diagnostics to fix it.') : isVerified ? 'Meta permissions, phone number, WABA, and webhook are ready.' : 'Confirm permissions, webhook, WABA, and send readiness.',
+            href: '/whatsapp-connect',
+            action: diagnosticsFailed ? 'Fix connection' : 'Check connection',
+            complete: isVerified,
+            blocked: !isConnected,
+            error: diagnosticsFailed,
+            loading: isConnected && diagnosticsLoading,
+        },
+        {
+            id: 'setup_billing',
+            title: 'Add wallet balance',
+            description: billingReady ? `${formatINRFromPaise(billingOverview.wallet.balance_paise)} is available for messaging.` : 'Add balance before sending paid template messages or broadcasts.',
+            href: '/billing',
+            action: 'Open billing',
+            complete: billingReady,
+            blocked: !isConnected,
+        },
+        {
+            id: 'approved_template',
+            title: 'Add an approved template',
+            description: templatesError ? `${templatesError.message}. Open Templates to retry.` : approvedTemplates > 0 ? `${approvedTemplates} approved template${approvedTemplates === 1 ? '' : 's'} ready for this account.` : 'Use the official library or submit a template for Meta approval.',
+            href: '/templates/industries',
+            action: 'Choose template',
+            complete: approvedTemplates > 0,
+            blocked: !isVerified,
+            error: Boolean(templatesError),
+            loading: isConnected && templatesLoading,
+        },
+        {
+            id: 'add_contacts',
+            title: 'Add contacts',
+            description: hasContacts ? `${fmt(contactCount)} contact${n(contactCount) === 1 ? '' : 's'} available for this account.` : 'Add one contact or import an opted-in CSV list.',
+            href: '/contacts',
+            action: 'Add contacts',
+            complete: hasContacts,
+            blocked: !isConnected,
+        },
+        {
+            id: 'first_message',
+            title: 'Send a first message',
+            description: hasSuccessfulActivity ? 'Message activity has been recorded.' : 'Open the inbox or use an approved template for your first message.',
+            href: approvedTemplates > 0 ? '/live-chat?onboarding=test' : '/templates',
+            action: approvedTemplates > 0 ? 'Open inbox' : 'Prepare template',
+            complete: hasSuccessfulActivity,
+            blocked: !isVerified || approvedTemplates === 0,
+        },
+        {
+            id: 'first_workflow',
+            title: activeGoal.workflowTitle,
+            description: hasLaunchedWorkflow ? 'Your workspace is active.' : activeGoal.workflowDescription,
+            href: activeGoal.workflowHref,
+            action: activeGoal.workflowAction,
+            complete: hasLaunchedWorkflow,
+            blocked: !hasSuccessfulActivity,
+        },
+    ]
+
+    const completedCount = steps.filter(step => step.complete).length
+    const progress = Math.round((completedCount / steps.length) * 100)
+    const nextStep = steps.find(step => !step.complete && !step.blocked) || steps.find(step => !step.complete)
+    const accountLabel = account
+        ? (account.name || account.display_phone_number || 'Connected account')
+        : 'No WhatsApp account selected'
+    const showingFallbackAccount = account && accountSelection === 'All'
+    const completionSignature = steps.filter(step => step.complete).map(step => step.id).join(',')
+    const previousCompletion = useRef('')
+
+    useEffect(() => {
+        if (!completionSignature || completionSignature === previousCompletion.current) return
+        const previous = new Set(previousCompletion.current.split(',').filter(Boolean))
+        completionSignature.split(',').filter(stepId => stepId && !previous.has(stepId)).forEach(stepId => {
+            onProgress('onboarding_step_completed', { step: stepId, goal: goal || 'broadcasts' })
+        })
+        if (completedCount === 7) onProgress('onboarding_completed', { goal: goal || 'broadcasts' })
+        previousCompletion.current = completionSignature
+    }, [completedCount, completionSignature, goal, onProgress])
+
+    if (completedCount === steps.length) return null
+
+    return (
+        <section data-tour="setup-checklist" className="dash-section overflow-hidden rounded-xl border border-blue-200 bg-white shadow-2xs">
+            <div className="border-b border-blue-100 bg-gradient-to-r from-blue-50 to-white px-4 py-4 sm:px-5">
+                <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-bold text-blue-700">
+                                <Sparkles className="h-3.5 w-3.5" />
+                                Setup guide
+                            </span>
+                            <span className="truncate text-xs font-semibold text-gray-600">{accountLabel}</span>
+                            <select value={goal || 'broadcasts'} onChange={(event) => onChangeGoal(event.target.value)} className="rounded-md border border-blue-200 bg-white px-2 py-1 text-xs font-semibold text-blue-800" aria-label="Onboarding goal">
+                                {Object.entries(goalOptions).map(([value, option]) => <option key={value} value={value}>{option.label}</option>)}
+                            </select>
+                        </div>
+                        <h2 className="mt-2 text-lg font-bold text-gray-950">Get ready to use WhatsApp</h2>
+                        <p className="mt-1 max-w-2xl text-xs leading-5 text-gray-600">
+                            Complete one step at a time. Progress is checked automatically from your live account data.
+                            {showingFallbackAccount ? ' Select a specific account from the sidebar to view its exact setup progress.' : ''}
+                        </p>
+                    </div>
+                    <button type="button" onClick={onDismiss} className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-white hover:text-gray-700" aria-label="Dismiss setup guide" title="Hide setup guide. You can reopen it from Help.">
+                        <X className="h-4 w-4" />
+                    </button>
+                </div>
+
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-blue-100" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={progress} aria-label="Setup progress">
+                        <div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${progress}%` }} />
+                    </div>
+                    <span className="shrink-0 text-xs font-bold text-blue-700">{completedCount} of {steps.length} complete</span>
+                </div>
+
+                {nextStep ? (
+                    <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <Link to={nextStep.href} onClick={() => onStepOpen(nextStep.title)} className="inline-flex w-fit items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-2xs transition-colors hover:bg-blue-700">
+                            Continue setup: {nextStep.action}
+                            <ArrowRight className="h-3.5 w-3.5" />
+                        </Link>
+                        {nextStep.blocked ? <span className="text-xs text-amber-700">Complete the earlier required step first.</span> : null}
+                    </div>
+                ) : null}
+            </div>
+
+            <div className="grid gap-px bg-gray-200 sm:grid-cols-2 xl:grid-cols-4">
+                {steps.map((step, index) => {
+                    const state = step.complete ? 'Completed' : step.loading ? 'Checking' : step.error ? 'Action required' : step.blocked ? 'Not ready' : 'Next step'
+                    const StateIcon = step.complete ? CheckCircle2 : step.loading ? RefreshCw : step.error ? AlertTriangle : Clock3
+                    const tone = step.complete ? 'text-emerald-700 bg-emerald-50' : step.error ? 'text-red-700 bg-red-50' : step.blocked ? 'text-gray-500 bg-gray-100' : 'text-blue-700 bg-blue-50'
+                    return (
+                        <div key={step.title} className="bg-white p-4">
+                            <div className="flex items-start gap-3">
+                                <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${tone}`}>
+                                    <StateIcon className={`h-3.5 w-3.5 ${step.loading ? 'animate-spin' : ''}`} />
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600">Step {index + 1} · {state}</p>
+                                    <h3 className="mt-0.5 text-xs font-bold text-gray-900">{step.title}</h3>
+                                    <p className="mt-1 text-[11px] leading-4 text-slate-700">{step.description}</p>
+                                    {!step.complete && !step.blocked && !step.loading ? (
+                                        <Link to={step.href} onClick={() => onStepOpen(step.title)} className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 hover:text-blue-800">
+                                            {step.action}<ArrowRight className="h-3 w-3" />
+                                        </Link>
+                                    ) : null}
+                                </div>
+                            </div>
+                        </div>
+                    )
+                })}
             </div>
         </section>
     )

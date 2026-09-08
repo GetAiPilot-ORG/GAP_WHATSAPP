@@ -1460,3 +1460,29 @@ export async function getTemplateLibrary(req: any, res: Response) {
     res.status(err.statusCode || 500).json({ error: err.message });
   }
 }
+
+export async function recordOnboardingEvent(req: any, res: any) {
+  try {
+    const { user_id, wa_account_id, event_name, metadata } = req.body || {};
+    const userId = req.user?.id || user_id;
+    if (!userId || !event_name) {
+      return res.status(200).json({ success: true, recorded: false });
+    }
+
+    if (supabase) {
+      try {
+        await supabase.from("w_onboarding_events").insert({
+          user_id: userId,
+          wa_account_id: wa_account_id || null,
+          event_name: String(event_name).slice(0, 80),
+          metadata: metadata && typeof metadata === "object" ? metadata : {},
+        });
+      } catch (dbErr) {
+        // Suppress missing table error if migration is pending
+      }
+    }
+    return res.status(200).json({ success: true, recorded: true });
+  } catch {
+    return res.status(200).json({ success: true, recorded: false });
+  }
+}

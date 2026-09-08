@@ -21,8 +21,10 @@ import {
     Wifi,
     Play,
     Star,
+    RefreshCw,
 } from 'lucide-react'
 import TourButton from '../onboarding/TourButton'
+import { useOnboarding } from '../onboarding/onboardingContext'
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 
@@ -90,184 +92,184 @@ const faqs = [
     {
         id: 'gs-1',
         category: 'getting-started',
-        question: 'GAP WhatsApp Pilot kaise connect karein apne WhatsApp number se?',
+        question: 'How do I connect my WhatsApp number to GAP WhatsApp Pilot?',
         answer:
-            'Left sidebar mein "Connect Account" par click karein. Wahan QR code scan karein WhatsApp mobile app se. Ek baar connected hone ke baad, green status indicator dikhega aur aap messages receive karne ke liye ready ho jaayenge.',
+            'Click "Accounts" in the left sidebar. Use the Meta Embedded Signup flow to connect your WhatsApp Business Account. Once connected, a green status indicator will appear and you will be ready to send and receive messages.',
     },
     {
         id: 'gs-2',
         category: 'getting-started',
-        question: 'Mera account kis tarah ka hona chahiye — personal ya business?',
+        question: 'What kind of WhatsApp account is recommended?',
         answer:
-            'GAP WhatsApp Pilot ke saath WhatsApp Business account sabse accha kaam karta hai. WhatsApp Business API use karne ke liye aapko ek approved Business Manager account chahiye. Personal numbers bhi kaam karte hain lekin kuch features (jaise broadcasts) limited ho sakte hain.',
+            'An official WhatsApp Business Account (WABA) using the WhatsApp Cloud API works best. Connecting an official account allows high-volume messaging, official templates, broadcasts, and AI automation.',
     },
     {
         id: 'gs-3',
         category: 'getting-started',
-        question: 'Team members ko kaise invite karein?',
+        question: 'How do I invite team members and assign roles?',
         answer:
-            'Settings → Team Members section mein jaayein. "Invite Member" button se email address daalen aur role select karein (Owner, Admin, ya Agent). Invited member ko email milegi accept karne ke liye. Agents sirf Shared Inbox access kar sakte hain.',
+            'Go to Settings → Team Members. Click "Invite Member", enter their email address, and select a role (Owner, Admin, or Agent). Agents can access the Shared Inbox to handle customer chats.',
     },
     {
         id: 'gs-4',
         category: 'getting-started',
-        question: 'Dashboard pe kaunse metrics dikhte hain?',
+        question: 'What metrics are tracked on the Dashboard?',
         answer:
-            'Dashboard pe aapko milega: Total messages sent, Delivery rate, Read rate, Failed messages percentage, Active contacts count, aur real-time system health. Data har 10 seconds pe automatically refresh hota hai.',
+            'The Dashboard displays total messages sent, delivery rate, read rate, failed delivery risk, inbound customer messages, and active conversation counts. Data syncs continuously.',
     },
 
     // Live Chat
     {
         id: 'lc-1',
         category: 'live-chat',
-        question: 'Shared Inbox kaise kaam karta hai?',
+        question: 'How does the Shared Inbox work?',
         answer:
-            'Shared Inbox ek centralized jagah hai jahan saari WhatsApp conversations aati hain. Multiple agents ek hi inbox dekhte hain. Aap conversations assign kar sakte hain specific agents ko, status change kar sakte hain (open/resolved), aur notes add kar sakte hain.',
+            'The Shared Inbox centralizes all WhatsApp conversations for your team. Multiple agents can collaborate, assign conversations, track unread messages, update resolution status, and add customer tags.',
     },
     {
         id: 'lc-2',
         category: 'live-chat',
-        question: 'Bot se human agent ko conversation kaise transfer karein?',
+        question: 'How do I transfer a conversation from an AI bot to a human agent?',
         answer:
-            'Jab bot kisi conversation ko handle kar raha ho, agent "Take Over" button click kar sakta hai. Isse bot automatically pause ho jaata hai us conversation ke liye aur human agent control le leta hai. Bot handoff summary bhi automatically generate hoti hai.',
+            'When an AI agent is handling a chat, any human agent can click "Take Over". This immediately pauses the AI agent for that conversation and hands full control to the human agent.',
     },
     {
         id: 'lc-3',
         category: 'live-chat',
-        question: 'Conversation labels aur filters kaise use karein?',
+        question: 'How do conversation labels and filters work?',
         answer:
-            'Chat list ke upar filter options hain — All, Open, Resolved, Assigned to me. Labels assign karne ke liye conversation open karein aur right panel mein "Add Label" click karein. Isse categorization aur tracking easy ho jaata hai.',
+            'Use the filters at the top of the chat list to switch between Open, Resolved, Unread, and Assigned views. You can assign custom labels and tags from the contact details panel for easy segmentation.',
     },
     {
         id: 'lc-4',
         category: 'live-chat',
-        question: 'Notification sound customize kaise karein?',
+        question: 'How do I customize notification sounds for incoming messages?',
         answer:
-            'Settings → Notifications section mein jaayein jahan aap incoming message ke liye different notification sounds select kar sakte hain. Aap sound ko enable/disable bhi kar sakte hain aur volume adjust kar sakte hain.',
+            'Go to Settings → Notifications to choose custom notification alert sounds for incoming customer messages, adjust the volume, or toggle sound notifications.',
     },
     {
         id: 'lc-5',
         category: 'live-chat',
-        question: 'Why can\'t I send a freeform text message to a new contact? (WhatsApp 24-Hour Rule)',
+        question: 'Why can\'t I send a free-form message to a new contact? (WhatsApp 24-Hour Rule)',
         answer:
-            'Meta WhatsApp Cloud API ke rules ke according, businesses kisi new contact ko directly freeform text message nahi bhej sakti. Pehla message hamesha ek Meta-approved Template Message hona chahiye. Jaise hi customer us template ka reply karta hai, 24 hours ke liye freeform chat window unlock ho jaati hai.',
+            'Under Meta WhatsApp Cloud API rules, businesses cannot initiate conversations with new contacts using free-form text. The first message must always use a Meta-approved Template. Once the customer replies, a 24-hour free-form customer care window opens.',
     },
     {
         id: 'lc-6',
         category: 'live-chat',
-        question: 'WhatsApp 24-Hour Customer Care Window kya hai aur kaise kaam karta hai?',
+        question: 'What is the WhatsApp 24-Hour Customer Care Window?',
         answer:
-            'Jab bhi koi customer aapke WhatsApp number par message bhejta hai, Meta 24 hours ka active chat window kholta hai. Is 24h window mein aap aur aapke AI bots unlimited messages, images, documents aur audio bhej sakte hain. Har naya customer message is 24h window ko refresh kar deta hai. Agar 24h bina customer reply ke khatam ho jaayein, to naya message sirf approved Template ke through hi bheja ja sakta hai.',
+            'Whenever a customer sends your business a message, Meta opens an active 24-hour session window. During this window, you and your AI bots can send free-form text, media, documents, and quick replies. Each incoming customer message resets the 24-hour timer. After 24 hours without a customer message, subsequent outbound messages must use an approved template.',
     },
 
     // Bot Agents
     {
         id: 'ba-1',
         category: 'bot-agents',
-        question: 'Bot Agent kya hota hai aur kaise create karein?',
+        question: 'What is a Bot Agent and how do I create one?',
         answer:
-            'Bot Agent ek AI-powered assistant hai jo automatically WhatsApp messages ka reply karta hai. Bot Agents page pe jaayein, "Create Agent" click karein, name aur purpose define karein, phir knowledge base add karein (FAQs, product info, etc.).',
+            'A Bot Agent is an AI-powered assistant that automatically replies to customer inquiries on WhatsApp. Go to AI Agents, click "Create Agent", define its role and system instructions, and upload knowledge documents (FAQs, product catalogs) to train it.',
     },
     {
         id: 'ba-2',
         category: 'bot-agents',
-        question: 'Bot ko specific contacts ya numbers ke liye assign karein?',
+        question: 'Can I assign Bot Agents to specific contacts or phone numbers?',
         answer:
-            'Bot Agents section mein, aap rules set kar sakte hain ki kaunse incoming numbers ya contact groups ke liye konsa bot respond kare. "Assignment Rules" tab mein jaayein aur conditions set karein.',
+            'Yes. Under AI Agents, you can configure assignment rules to route incoming chats to specific agents based on keywords, contact tags, or the connected WhatsApp number.',
     },
     {
         id: 'ba-3',
         category: 'bot-agents',
-        question: 'Bot agar galat jawab de toh kya karein?',
+        question: 'How do I improve or correct a Bot Agent\'s answers?',
         answer:
-            'Bot ke knowledge base ko update karein — jis topic pe galti ho rahi hai woh information add karein ya existing info ko correct karein. Bot Agent edit mode mein "Test Bot" feature se verify kar sakte hain ki responses correct hain.',
+            'Update the agent\'s knowledge base with clearer documentation or product details. You can test prompts and responses in real time using the built-in simulator before publishing updates.',
     },
 
     // Broadcasting
     {
         id: 'br-1',
         category: 'broadcast',
-        question: 'Broadcast kaise send karein?',
+        question: 'How do I create and send a WhatsApp broadcast?',
         answer:
-            'Broadcasting page pe jaayein → "New Broadcast" click karein → Recipients select karein (contacts ya groups) → Approved template choose karein → Schedule ya immediately send karein. Note: Sirf WhatsApp-approved templates broadcast ke liye use ho sakte hain.',
+            'Go to Broadcasts → New Campaign. Select your recipient contacts or tags, choose a Meta-approved template, fill in dynamic variables, review wallet costs, and send immediately or schedule for later.',
     },
     {
         id: 'br-2',
         category: 'broadcast',
-        question: 'Broadcast ke liye minimum contacts kitne chahiye?',
+        question: 'What is the minimum contact requirement for broadcasts?',
         answer:
-            'Technically ek contact se bhi broadcast send ho sakti hai. Lekin WhatsApp ke spam detection se bachne ke liye, initially chhoti list se start karein aur gradually scale karein. High-quality, opted-in contacts use karein.',
+            'You can broadcast to any number of contacts, even a single test contact. To maintain high messaging quality and protect your Meta tier, always send to opted-in customers.',
     },
     {
         id: 'br-3',
         category: 'broadcast',
-        question: 'Broadcast schedule kaise karein future date/time ke liye?',
+        question: 'How do I schedule a broadcast for a future date and time?',
         answer:
-            'New Broadcast create karte waqt "Schedule for later" option select karein. Date aur time picker se future slot choose karein. Scheduled broadcasts Broadcast page pe "Scheduled" tab mein dikh jaate hain, jahan aap edit ya cancel bhi kar sakte hain.',
+            'When creating a broadcast campaign, select "Schedule for later" on the review step. Pick your desired date and time. You can manage or cancel scheduled campaigns from the History tab.',
     },
 
     // Contacts
     {
         id: 'ct-1',
         category: 'contacts',
-        question: 'Contacts bulk import kaise karein CSV se?',
+        question: 'How do I bulk import contacts from a CSV file?',
         answer:
-            'Contacts page pe "Import" button click karein. CSV file upload karein jisme columns hon: name, phone, email (optional), aur custom fields. Sample CSV template download kar sakte hain. Import ke baad duplicates automatically detect hote hain.',
+            'Go to Contacts and click "Import". Upload a CSV file containing names, international phone numbers (with country code), and optional custom fields. Duplicate contacts are automatically detected and updated.',
     },
     {
         id: 'ct-2',
         category: 'contacts',
-        question: 'Contact ke liye custom fields kaise add karein?',
+        question: 'How do I add custom fields to contacts?',
         answer:
-            'Contact edit karte waqt ya Contact Modal mein "Custom Fields" section hota hai. Aap key-value pairs add kar sakte hain jaise "city", "plan_type", "order_id" etc. Yeh fields templates mein bhi use ho sakti hain personalization ke liye.',
+            'When adding or editing a contact, add custom key-value pairs (such as city, plan_tier, order_id). These custom fields can be dynamically mapped into template variables and AI agent prompts.',
     },
 
     // Flow Builder
     {
         id: 'fb-1',
         category: 'flow-builder',
-        question: 'Flow Builder kya hai aur kab use karein?',
+        question: 'What is the Visual Flow Builder?',
         answer:
-            'Flow Builder visual drag-and-drop tool hai automation workflows banane ke liye. Jaise: jab koi "Hi" likhe toh welcome message bhejo, phir options do. Use karein repetitive conversations automate karne ke liye — ordering, appointments, FAQs etc.',
+            'Flow Builder is a drag-and-drop workflow canvas for creating automated conversation trees, interactive menus, lead qualification forms, and support triage flows on WhatsApp.',
     },
     {
         id: 'fb-2',
         category: 'flow-builder',
-        question: 'Flow publish karne ke baad active kaise karein?',
+        question: 'How do I activate a flow after building it?',
         answer:
-            'Flow Builder mein flow complete karne ke baad "Save" karein. Phir top-right mein "Publish" button click karein. Published flows Bot Agents ya direct WhatsApp triggers ke saath link kar sakte hain.',
+            'Save your flow in the visual editor, then click "Publish". Active published flows will automatically trigger when customers send matching trigger keywords or open interactive menus.',
     },
 
     // Templates
     {
         id: 'tp-1',
         category: 'templates',
-        question: 'WhatsApp template submit kaise karein approval ke liye?',
+        question: 'How do I submit a WhatsApp message template for Meta approval?',
         answer:
-            'Templates page pe "New Template" click karein. Category choose karein (Marketing, Utility, Authentication), content likhein with variables like {{1}}, {{2}}, aur Submit karein. Meta approval mein usually 24-48 hours lagte hain.',
+            'Go to Templates and click "New Template" or browse the official Meta Template Library. Choose your category (Utility, Marketing, or Authentication), add your message content and sample variables, and submit for Meta review. Approvals typically complete within minutes.',
     },
     {
         id: 'tp-2',
         category: 'templates',
-        question: 'Template reject kyun hoti hai?',
+        question: 'Why do template submissions get rejected by Meta?',
         answer:
-            'Common reasons: Promotional language in Utility templates, vague call-to-action, phone numbers ya external links improperly formatted, ya WhatsApp policy violation. Rejection reason dekh kar template update karein aur re-submit karein.',
+            'Common rejection reasons include promotional wording in Utility templates, missing sample variable values, invalid CTA link formats, or policy violations. Review the rejection subcode provided by Meta, correct the template, and resubmit.',
     },
 
     // Account
     {
         id: 'ac-1',
         category: 'account',
-        question: 'Password ya email kaise change karein?',
+        question: 'How do I update my profile or password?',
         answer:
-            'Settings → Account section mein jaayein. Wahan "Change Password" aur "Update Email" options milenge. Email change ke baad verification link aayegi naye email pe.',
+            'Go to Settings → Account. You can update your display name, email address, or change your account password.',
     },
     {
         id: 'ac-2',
         category: 'account',
-        question: 'WhatsApp number disconnect ya switch kaise karein?',
+        question: 'How do I disconnect or switch connected WhatsApp accounts?',
         answer:
-            'Connect Account page pe current connection dekh sakte hain. "Disconnect" button se existing connection hatao. Phir nayi device ya number se fresh QR scan karo. Disconnect karne se saara chat history preserved rehta hai.',
+            'Go to Accounts (Connect WhatsApp) to manage connected numbers. You can switch between active accounts using the top sidebar switcher or disconnect a number from the account settings menu.',
     },
 ]
 
@@ -337,6 +339,7 @@ function StatCard({ icon, value, label, tone }) {
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function HelpCenter() {
+    const { resetAllTours, startGlobalTour, isRunning } = useOnboarding()
     const [search, setSearch] = useState('')
     const [activeCategory, setActiveCategory] = useState('all')
     const [openFaqId, setOpenFaqId] = useState(null)
@@ -372,10 +375,22 @@ export default function HelpCenter() {
                 </div>
                 <h1 className="text-3xl font-bold tracking-tight text-gray-950">Help Center</h1>
                 <p className="text-sm text-gray-500">
-                    GAP WhatsApp Pilot ke baare mein sawal? Yahan answers milenge. Har feature ka detailed guide available hai.
+                    Have questions about GAP WhatsApp Pilot? Find detailed answers and feature guides below.
                 </p>
                 </div>
-                <div className="hidden md:block">
+                <div className="hidden items-center gap-2 md:flex">
+                    <button
+                        type="button"
+                        disabled={isRunning}
+                        onClick={async () => {
+                            resetAllTours()
+                            await startGlobalTour()
+                        }}
+                        className="inline-flex h-12 items-center gap-2 rounded-full border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:opacity-50"
+                    >
+                        <RefreshCw className="h-4 w-4" />
+                        Restart all guides
+                    </button>
                     <TourButton />
                 </div>
             </div>
@@ -394,9 +409,9 @@ export default function HelpCenter() {
                         </span>
                         Live Documentation
                     </div>
-                    <h2 className="mt-3 text-2xl font-bold">Kya dhundh rahe hain aap?</h2>
+                    <h2 className="mt-3 text-2xl font-bold">What are you looking for?</h2>
                     <p className="mt-1 text-sm text-gray-400">
-                        {faqs.length}+ common questions ke answers neeche available hain.
+                        {faqs.length}+ common questions and answers are available below.
                     </p>
 
                     <div data-tour="help-search" className="relative mt-6 max-w-xl">
@@ -461,9 +476,9 @@ export default function HelpCenter() {
                 <div className="mb-4 flex items-center justify-between gap-3">
                     <h2 className="text-base font-bold text-gray-950">
                         {search.trim()
-                            ? `"${search}" ke results (${filteredFaqs.length})`
+                            ? `Results for "${search}" (${filteredFaqs.length})`
                             : activeCategory === 'all'
-                                ? `Sabhi Articles (${filteredFaqs.length})`
+                                ? `All Articles (${filteredFaqs.length})`
                                 : `${categories.find((c) => c.id === activeCategory)?.label} (${filteredFaqs.length})`}
                     </h2>
                     {openFaqId && (
@@ -480,9 +495,9 @@ export default function HelpCenter() {
                 {filteredFaqs.length === 0 ? (
                     <div className="rounded-xl border border-gray-200 bg-white p-12 text-center shadow-sm">
                         <AlertTriangle className="mx-auto h-10 w-10 text-amber-400" />
-                        <p className="mt-4 text-base font-semibold text-gray-950">Koi result nahi mila</p>
+                        <p className="mt-4 text-base font-semibold text-gray-950">No results found</p>
                         <p className="mt-2 text-sm text-gray-500">
-                            "{search}" ke liye koi article nahi hai. Search term change karein ya category filter hataayein.
+                            No articles matched "{search}". Try changing your search term or clearing category filters.
                         </p>
                         <button
                             type="button"
@@ -509,8 +524,8 @@ export default function HelpCenter() {
             {/* ── Contact Support ── */}
             <section data-tour="help-support" className="grid grid-cols-1 gap-5 sm:grid-cols-3">
                 <div className="col-span-1 sm:col-span-3">
-                    <h2 className="text-base font-bold text-gray-950">Aur madad chahiye?</h2>
-                    <p className="mt-1 text-sm text-gray-500">Humari team aapki help ke liye always ready hai.</p>
+                    <h2 className="text-base font-bold text-gray-950">Need more help?</h2>
+                    <p className="mt-1 text-sm text-gray-500">Our support team is always ready to assist you.</p>
                 </div>
 
                 <a
@@ -526,7 +541,7 @@ export default function HelpCenter() {
                             <p className="text-sm font-bold text-gray-950">Email Support</p>
                             <ExternalLink className="h-3.5 w-3.5 text-gray-400" />
                         </div>
-                        <p className="mt-1 text-sm text-gray-500">support@gapwhatsapppilot.com pe email karein. 24 hrs mein reply milegi.</p>
+                        <p className="mt-1 text-sm text-gray-500">Email us at support@gapwhatsapppilot.com. We respond within 24 hours.</p>
                     </div>
                 </a>
 
@@ -545,7 +560,7 @@ export default function HelpCenter() {
                             <p className="text-sm font-bold text-gray-950">WhatsApp Support</p>
                             <ExternalLink className="h-3.5 w-3.5 text-gray-400" />
                         </div>
-                        <p className="mt-1 text-sm text-gray-500">Directly WhatsApp par message karein quick support ke liye.</p>
+                        <p className="mt-1 text-sm text-gray-500">Message us directly on WhatsApp for quick real-time assistance.</p>
                     </div>
                 </a>
 
@@ -564,7 +579,7 @@ export default function HelpCenter() {
                                 Operational
                             </span>
                         </div>
-                        <p className="mt-1 text-sm text-gray-500">Saari services normally chal rahi hain. No incidents reported.</p>
+                        <p className="mt-1 text-sm text-gray-500">All services are operating normally. No active incidents.</p>
                     </div>
                 </div>
             </section>

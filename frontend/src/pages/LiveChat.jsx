@@ -275,6 +275,15 @@ export default function LiveChat() {
     const [isGuideModalOpen, setIsGuideModalOpen] = useState(false)
 
     useEffect(() => {
+        const params = new URLSearchParams(window.location.search)
+        if (params.get('onboarding') !== 'test') return
+        setIsGuideModalOpen(true)
+        params.delete('onboarding')
+        const nextQuery = params.toString()
+        window.history.replaceState({}, document.title, `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}`)
+    }, [])
+
+    useEffect(() => {
         const handleResize = () => {
             setIsDesktop(window.innerWidth >= 1024)
         }
@@ -4620,4 +4629,3 @@ export default function LiveChat() {
         </AudioPlayerProvider>
     )
 }
-

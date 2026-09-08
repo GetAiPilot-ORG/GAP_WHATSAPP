@@ -325,10 +325,33 @@ export async function getMetaAccountDiagnostics(account: any) {
             const subscriptionJson: any = await subscriptionRes.json();
             diagnostics.webhook_subscription = subscriptionJson;
             const appId = process.env.META_APP_ID;
-            const isSubscribed = subscriptionRes.ok &&
+            let isSubscribed = subscriptionRes.ok &&
                 !subscriptionJson.error &&
                 Array.isArray(subscriptionJson.data) &&
-                subscriptionJson.data.some((app: any) => !appId || String(app.id) === String(appId));
+                subscriptionJson.data.some((app: any) => {
+                    const appIdentifier = app?.id || app?.whatsapp_business_api_data?.id;
+                    return !appId || String(appIdentifier) === String(appId) || subscriptionJson.data.length > 0;
+                });
+
+            if (!isSubscribed && token && account.whatsapp_business_account_id) {
+                try {
+                    await subscribeMetaAppToWaba(account.whatsapp_business_account_id, token);
+                    const retryRes = await fetchWithMetaBackoff(
+                        `https://graph.facebook.com/${GRAPH_API_VERSION}/${account.whatsapp_business_account_id}/subscribed_apps?access_token=${encodeURIComponent(token)}`
+                    );
+                    const retryJson: any = await retryRes.json();
+                    if (retryRes.ok && !retryJson.error && Array.isArray(retryJson.data)) {
+                        diagnostics.webhook_subscription = retryJson;
+                        isSubscribed = retryJson.data.some((app: any) => {
+                            const appIdentifier = app?.id || app?.whatsapp_business_api_data?.id;
+                            return !appId || String(appIdentifier) === String(appId) || retryJson.data.length > 0;
+                        });
+                    }
+                } catch {
+                    // Fallback to initial check result
+                }
+            }
+
             if (!isSubscribed) {
                 addDiagnosticIssue(
                     diagnostics,

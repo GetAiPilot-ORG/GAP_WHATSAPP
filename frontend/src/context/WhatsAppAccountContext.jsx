@@ -110,16 +110,40 @@ export function WhatsAppAccountProvider({ children }) {
         }
     }, [session?.access_token])
 
+    useEffect(() => {
+        const handleAccountChange = (e) => {
+            const nextId = e?.detail?.accountId ?? localStorage.getItem(SELECTED_WA_ACCOUNT_KEY) ?? 'All'
+            setSelectedAccountId(String(nextId || 'All'))
+        }
+        const handleStorage = (e) => {
+            if (e.key === SELECTED_WA_ACCOUNT_KEY) {
+                setSelectedAccountId(String(e.newValue || 'All'))
+            }
+        }
+        window.addEventListener('selected-wa-account-change', handleAccountChange)
+        window.addEventListener('storage', handleStorage)
+        return () => {
+            window.removeEventListener('selected-wa-account-change', handleAccountChange)
+            window.removeEventListener('storage', handleStorage)
+        }
+    }, [])
+
     const handleSelectAccount = useCallback((id) => {
         const val = String(id || 'All')
         setSelectedAccountId(val)
-        localStorage.setItem(SELECTED_WA_ACCOUNT_KEY, val)
+        try {
+            localStorage.setItem(SELECTED_WA_ACCOUNT_KEY, val)
+        } catch {}
         window.dispatchEvent(new CustomEvent('selected-wa-account-change', { detail: { accountId: val } }))
     }, [])
 
     const selectedAccount = useMemo(() => {
-        if (selectedAccountId === 'All') return null
-        return accounts.find(acc => String(acc.id) === selectedAccountId || String(acc.phone_number_id) === selectedAccountId) || null
+        if (!selectedAccountId || selectedAccountId === 'All') return null
+        return accounts.find(acc =>
+            String(acc.id) === selectedAccountId ||
+            String(acc.phone_number_id) === selectedAccountId ||
+            String(acc.display_phone_number) === selectedAccountId
+        ) || null
     }, [accounts, selectedAccountId])
 
     const value = useMemo(() => ({
