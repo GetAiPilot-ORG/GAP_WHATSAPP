@@ -5,9 +5,9 @@ import { io } from 'socket.io-client'
 import { Plus, Search, Filter, MoreHorizontal, FileText, CheckCircle, Clock, XCircle, Image as ImageIcon, Video, Trash2, Link as LinkIcon, Phone, AlertCircle, RefreshCw, UploadCloud, Type, MessageSquareText, MousePointerClick, ChevronDown, Loader2, Check, CheckCheck, MessageSquare, Image, ExternalLink, ArrowRight, ShieldCheck, HelpCircle, Tag, Building2, Target, Sparkles, LockKeyhole, CalendarDays } from 'lucide-react'
 import Modal from '../components/Modal'
 import { useAuth } from '../context/AuthContext'
+import { useWhatsAppAccounts } from '../context/WhatsAppAccountContext'
 import { useDialog } from '../context/DialogContext'
 import { notify } from '../services/notificationService'
-import { META_TEMPLATES_LIBRARY } from '../data/metaTemplates'
 import MetaTemplateLibrary from '../components/MetaTemplateLibrary'
 import { getPendingReviewInfo } from '../utils/templateReview'
 import { placeholderCopy, suggestTemplateCategory } from '../utils/templateApproval'
@@ -75,6 +75,14 @@ const extractTemplateVariables = (text) => {
     const matches = String(text || '').match(/\{\{(\d+)\}\}/g);
     return matches ? Array.from(new Set(matches)) : [];
 };
+const isRealHttpsUrl = (value) => {
+    try {
+        const url = new URL(String(value || '').trim());
+        return url.protocol === 'https:' && !/^(?:www\.)?example\.com$/i.test(url.hostname);
+    } catch {
+        return false;
+    }
+};
 const USE_CASE_LABELS = {
     'All Use Cases': 'All Use Cases',
     'ACCOUNT_UPDATES': 'Account Updates',
@@ -95,6 +103,8 @@ const TOPIC_LABELS = {
 export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
     const navigate = useNavigate();
     const { session, apiCall } = useAuth();
+    const { accounts: waAccounts, selectedAccount } = useWhatsAppAccounts();
+    const templateAccountId = selectedAccount?.id || waAccounts[0]?.id || '';
     const { alertDialog, confirmDialog } = useDialog();
     const queryClient = useQueryClient();
     const [viewMode, setViewMode] = useState(defaultView);
@@ -108,22 +118,22 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
 
 
     const { data: templates = [], isLoading: loading, isFetching, error: queryError, refetch } = useQuery({
-        queryKey: ['whatsapp-templates'],
+        queryKey: ['whatsapp-templates', templateAccountId],
         queryFn: async () => {
-            const res = await apiCall(`${API_URL}/api/whatsapp/templates`)
+            const res = await apiCall(`${API_URL}/api/whatsapp/templates?wa_account_id=${encodeURIComponent(templateAccountId)}`)
             if (!res.ok) {
                 const data = await res.json().catch(() => ({}))
                 throw new Error(data.error || 'Could not load templates from Meta.')
             }
             return res.json()
         },
-        enabled: !!session?.access_token,
+        enabled: !!session?.access_token && !!templateAccountId,
         refetchInterval: query => query.state.data?.some(template => template.status === 'PENDING') ? 30000 : false,
     })
     const { data: officialLibrary = [], isLoading: libraryLoading, error: libraryError } = useQuery({
-        queryKey: ['meta-template-library', 'v2'],
+        queryKey: ['meta-template-library', 'v4', templateAccountId],
         queryFn: async () => {
-            const res = await apiCall(`${API_URL}/api/whatsapp/templates/library?language=en_US&limit=250`)
+            const res = await apiCall(`${API_URL}/api/whatsapp/templates/library?language=en_US&limit=250&wa_account_id=${encodeURIComponent(templateAccountId)}`)
             const json = await res.json().catch(() => ({}))
             if (!res.ok) throw new Error(json.error || 'Could not load the Meta template library.')
             return (json.data || []).map(item => {
@@ -144,16 +154,11 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                 }
             })
         },
-        enabled: !!session?.access_token && viewMode === 'INDUSTRIES',
+        enabled: !!session?.access_token && !!templateAccountId && viewMode === 'INDUSTRIES',
         staleTime: 5 * 60 * 1000,
     })
     const fetchError = queryError?.message || ''
-    const libraryTemplates = useMemo(() => [
-        ...officialLibrary,
-        ...META_TEMPLATES_LIBRARY
-            .filter(item => item.category !== 'UTILITY')
-            .map(item => ({ ...item, source: 'curated_draft' })),
-    ], [officialLibrary])
+    const libraryTemplates = officialLibrary
 
     // Prefill state
     const [prefilledTemplate, setPrefilledTemplate] = useState(null);
@@ -174,7 +179,7 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
             if (!payload?.name && !payload?.template_id) return;
             const deletedName = String(payload?.name || '').trim().toLowerCase();
             const deletedTemplateId = String(payload?.template_id || '').trim();
-            queryClient.setQueryData(['whatsapp-templates'], (old) => {
+            queryClient.setQueryData(['whatsapp-templates', templateAccountId], (old) => {
                 if (!Array.isArray(old)) return old;
                 return old.filter(t => {
                     const matchesName = deletedName
@@ -193,7 +198,7 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
         return () => {
             socket.off('template_deleted', handleTemplateDeleted);
         };
-    }, [queryClient]);
+    }, [queryClient, templateAccountId]);
 
     // Compute unified templates list
     const allTemplatesList = useMemo(() => {
@@ -258,10 +263,10 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
         refetch()
     }
 
-    const handleCreateSuccess = () => {
+    const handleCreateSuccess = (metaStatus = 'PENDING') => {
         fetchData();
         setViewMode('MY_TEMPLATES');
-        setActiveStatus('PENDING');
+        setActiveStatus(String(metaStatus).toUpperCase() === 'APPROVED' ? 'APPROVED' : 'PENDING');
     };
 
     // When user clicks "+ Add to My Templates" on any industry library template:
@@ -286,14 +291,14 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
         });
         if (!confirmed) return;
         try {
-            const res = await apiCall(`${API_URL}/api/whatsapp/templates/${name}`, {
+            const res = await apiCall(`${API_URL}/api/whatsapp/templates/${name}?wa_account_id=${encodeURIComponent(templateAccountId)}`, {
                 method: 'DELETE'
             });
             if (res.ok) {
                 notify.success(`Template "${name}" deleted successfully`)
                 // Optimistically remove the deleted template from the cache immediately
                 // so the UI updates even before Meta propagates the deletion
-                queryClient.setQueryData(['whatsapp-templates'], (old) => {
+                queryClient.setQueryData(['whatsapp-templates', templateAccountId], (old) => {
                     if (!Array.isArray(old)) return old;
                     const deletedName = String(name || '').trim().toLowerCase();
                     return old.filter(t => String(t.name || '').trim().toLowerCase() !== deletedName);
@@ -354,6 +359,7 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                     onSuccess={handleCreateSuccess}
                     apiCall={apiCall}
                     initialData={prefilledTemplate}
+                    waAccountId={templateAccountId}
                 />
                 <ViewTemplateModal
                     template={selectedTemplate}
@@ -631,6 +637,7 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                     onSuccess={handleCreateSuccess}
                     apiCall={apiCall}
                     initialData={prefilledTemplate}
+                    waAccountId={templateAccountId}
                 />
                 <ViewTemplateModal
                     template={selectedTemplate}
@@ -1033,6 +1040,7 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                 onSuccess={handleCreateSuccess}
                 apiCall={apiCall}
                 initialData={prefilledTemplate}
+                waAccountId={templateAccountId}
             />
             <ViewTemplateModal
                 template={selectedTemplate}
@@ -1230,9 +1238,10 @@ function ViewTemplateModal({ template, onClose, onAddToMyTemplates }) {
     )
 }
 
-function CreateTemplateModal({ isOpen, onClose, onSuccess, apiCall, initialData }) {
+function CreateTemplateModal({ isOpen, onClose, onSuccess, apiCall, initialData, waAccountId }) {
     const isPreApproved = initialData?.source === 'meta_library';
     const isOfficialLibrary = initialData?.source === 'meta_library'
+    const usesAuthenticationModel = isOfficialLibrary && initialData?.category === 'AUTHENTICATION'
     const [data, setData] = useState({
         name: '',
         category: 'MARKETING',
@@ -1267,8 +1276,12 @@ function CreateTemplateModal({ isOpen, onClose, onSuccess, apiCall, initialData 
         }
         return button.type !== 'PHONE_NUMBER' || /^\+[1-9]\d{7,14}$/.test(button.phone_number)
     })
-    const libraryInputsComplete = libraryButtonInputs.every(input => input.type !== 'URL' || /^https?:\/\/.+/i.test(input.url?.base_url || ''))
-    const canSubmit = normalizedName && /^[a-z0-9_]+$/.test(normalizedName) && (isOfficialLibrary ? libraryInputsComplete : (data.bodyText.trim() && !hasPlaceholderCopy && bodyLength <= 1024 && data.headerText.length <= 60 && data.footerText.length <= 60 && data.buttons.every(b => (b.text || '').length <= 25) && samplesComplete && buttonsComplete && !(data.headerType === 'TEXT' && !data.headerText.trim()) && !((data.headerType === 'IMAGE' || data.headerType === 'VIDEO') && !file)))
+    const libraryInputsComplete = libraryButtonInputs.every(input => {
+        if (input.type === 'URL') return isRealHttpsUrl(input.url?.base_url);
+        if (input.type === 'PHONE_NUMBER') return /^\+[1-9]\d{7,14}$/.test(input.phone_number || '') && !['+16505551234', '+18005551234'].includes(input.phone_number);
+        return true;
+    })
+    const canSubmit = Boolean(waAccountId) && normalizedName && /^[a-z0-9_]+$/.test(normalizedName) && (isOfficialLibrary ? libraryInputsComplete : (data.bodyText.trim() && !hasPlaceholderCopy && bodyLength <= 1024 && data.headerText.length <= 60 && data.footerText.length <= 60 && data.buttons.every(b => (b.text || '').length <= 25) && samplesComplete && buttonsComplete && !(data.headerType === 'TEXT' && !data.headerText.trim()) && !((data.headerType === 'IMAGE' || data.headerType === 'VIDEO') && !file)))
 
     useEffect(() => {
         if (initialData && isOpen) {
@@ -1296,11 +1309,17 @@ function CreateTemplateModal({ isOpen, onClose, onSuccess, apiCall, initialData 
             });
             setBodySamples(Object.fromEntries((bodyComp?.example?.body_text?.[0] || []).map((value, index) => [index + 1, value])))
             setHeaderSample(headerComp?.example?.header_text?.[0] || '')
-            setLibraryButtonInputs((buttonsComp?.buttons || []).map(button => button.type === 'URL'
-                ? { type: 'URL', url: { base_url: button.url || '' } }
-                : button.type === 'PHONE_NUMBER'
-                    ? { type: 'PHONE_NUMBER', phone_number: button.phone_number || '' }
-                    : { type: button.type }))
+            setLibraryButtonInputs((buttonsComp?.buttons || []).map(button => {
+                if (button.type === 'URL') {
+                    const baseUrl = String(button.url || '').replace(/\{\{\s*\d+\s*\}\}\s*$/, '');
+                    return { type: 'URL', url: { base_url: isRealHttpsUrl(baseUrl) ? baseUrl : '' } };
+                }
+                if (button.type === 'PHONE_NUMBER') {
+                    const phone = String(button.phone_number || '');
+                    return { type: 'PHONE_NUMBER', phone_number: ['+16505551234', '+18005551234'].includes(phone) ? '' : phone };
+                }
+                return { type: button.type };
+            }))
         } else if (isOpen) {
             setData({
                 name: '',
@@ -1365,74 +1384,85 @@ function CreateTemplateModal({ isOpen, onClose, onSuccess, apiCall, initialData 
             formData.append('name', normalizedName);
             formData.append('category', data.category);
             formData.append('language', data.language);
-            if (isOfficialLibrary) formData.append('library_template_name', initialData.name)
-            if (isOfficialLibrary && libraryButtonInputs.length) {
-                formData.append('library_template_button_inputs', JSON.stringify(libraryButtonInputs))
-            }
+            formData.append('wa_account_id', waAccountId);
+            if (isOfficialLibrary) {
+                formData.append('library_template_name', initialData.name);
+                if (usesAuthenticationModel) {
+                    formData.append('template_type', 'AUTHENTICATION');
+                    formData.append('type_config', JSON.stringify({
+                        otp_type: 'COPY_CODE',
+                        add_security_recommendation: true,
+                        code_expiration_minutes: 10,
+                    }));
+                }
+                if (libraryButtonInputs.length) {
+                    formData.append('library_template_button_inputs', JSON.stringify(libraryButtonInputs));
+                }
+            } else {
+                const components = [];
 
-            const components = [];
+                if (data.headerType !== 'NONE') {
+                    const headerComp = { type: 'HEADER', format: data.headerType };
+                    if (data.headerType === 'TEXT') {
+                        headerComp.text = data.headerText;
+                        const matches = data.headerText.match(/\{\{(\d+)\}\}/g);
+                        if (matches) {
+                            const varIndices = matches.map(m => parseInt(m.replace(/[^0-9]/g, ''), 10));
+                            const maxVar = Math.max(...varIndices);
+                            if (maxVar > 0) {
+                                headerComp.example = { header_text: Array.from({ length: maxVar }, () => headerSample.trim()) };
+                            }
+                        }
+                    } else if (isPreApproved && initialData) {
+                        const origHeader = initialData.components?.find(c => c.type === 'HEADER');
+                        if (origHeader?.example) {
+                            headerComp.example = origHeader.example;
+                        }
+                    }
+                    components.push(headerComp);
+                }
 
-            if (data.headerType !== 'NONE') {
-                const headerComp = { type: 'HEADER', format: data.headerType };
-                if (data.headerType === 'TEXT') {
-                    headerComp.text = data.headerText;
-                    const matches = data.headerText.match(/\{\{(\d+)\}\}/g);
+                if (data.bodyText) {
+                    const bodyComp = { type: 'BODY', text: data.bodyText };
+                    const matches = data.bodyText.match(/\{\{(\d+)\}\}/g);
                     if (matches) {
                         const varIndices = matches.map(m => parseInt(m.replace(/[^0-9]/g, ''), 10));
                         const maxVar = Math.max(...varIndices);
                         if (maxVar > 0) {
-                            headerComp.example = { header_text: Array.from({ length: maxVar }, () => headerSample.trim()) };
+                            bodyComp.example = {
+                                body_text: [
+                                    Array.from({ length: maxVar }, (_, i) => String(bodySamples[i + 1] || '').trim())
+                                ]
+                            };
                         }
                     }
-                } else if (isPreApproved && initialData) {
-                    const origHeader = initialData.components?.find(c => c.type === 'HEADER');
-                    if (origHeader?.example) {
-                        headerComp.example = origHeader.example;
-                    }
+                    components.push(bodyComp);
                 }
-                components.push(headerComp);
-            }
 
-            if (data.bodyText) {
-                const bodyComp = { type: 'BODY', text: data.bodyText };
-                const matches = data.bodyText.match(/\{\{(\d+)\}\}/g);
-                if (matches) {
-                    const varIndices = matches.map(m => parseInt(m.replace(/[^0-9]/g, ''), 10));
-                    const maxVar = Math.max(...varIndices);
-                    if (maxVar > 0) {
-                        bodyComp.example = {
-                            body_text: [
-                                Array.from({ length: maxVar }, (_, i) => String(bodySamples[i + 1] || '').trim())
-                            ]
-                        };
-                    }
+                if (data.footerText) {
+                    components.push({ type: 'FOOTER', text: data.footerText });
                 }
-                components.push(bodyComp);
-            }
 
-            if (data.footerText) {
-                components.push({ type: 'FOOTER', text: data.footerText });
-            }
-
-            if (data.buttons.length > 0) {
-                components.push({
-                    type: 'BUTTONS',
-                    buttons: data.buttons.map(b => {
-                        if (b.type === 'PHONE_NUMBER') return { type: 'PHONE_NUMBER', text: b.text, phone_number: b.phone_number };
-                        if (b.type === 'URL') {
-                            if (b.urlType === 'DYNAMIC') {
-                                return { type: 'URL', text: b.text, url: `${b.url}{{1}}`, example: [`${b.url}${b.urlExample.trim()}`] };
+                if (data.buttons.length > 0) {
+                    components.push({
+                        type: 'BUTTONS',
+                        buttons: data.buttons.map(b => {
+                            if (b.type === 'PHONE_NUMBER') return { type: 'PHONE_NUMBER', text: b.text, phone_number: b.phone_number };
+                            if (b.type === 'URL') {
+                                if (b.urlType === 'DYNAMIC') {
+                                    return { type: 'URL', text: b.text, url: `${b.url}{{1}}`, example: [`${b.url}${b.urlExample.trim()}`] };
+                                }
+                                return { type: 'URL', text: b.text, url: b.url };
                             }
-                            return { type: 'URL', text: b.text, url: b.url };
-                        }
-                        return { type: 'QUICK_REPLY', text: b.text };
-                    })
-                });
-            }
+                            return { type: 'QUICK_REPLY', text: b.text };
+                        })
+                    });
+                }
 
-            formData.append('components', JSON.stringify(components));
-            if (file && (data.headerType === 'IMAGE' || data.headerType === 'VIDEO')) {
-                formData.append('file', file);
+                formData.append('components', JSON.stringify(components));
+                if (file && (data.headerType === 'IMAGE' || data.headerType === 'VIDEO')) {
+                    formData.append('file', file);
+                }
             }
 
             const res = await apiCall(`${API_URL}/api/whatsapp/templates`, {
@@ -1442,7 +1472,7 @@ function CreateTemplateModal({ isOpen, onClose, onSuccess, apiCall, initialData 
 
             const json = await res.json();
             if (res.ok) {
-                if (onSuccess) onSuccess();
+                if (onSuccess) onSuccess(json.data?.status || json.data?.data?.status || 'PENDING');
                 closeModal();
             } else {
                 const issue = json.validation?.issues?.find(item => item.severity === 'error')
@@ -1468,22 +1498,44 @@ function CreateTemplateModal({ isOpen, onClose, onSuccess, apiCall, initialData 
                     <div className="p-5 sm:p-6">
                         <p className="text-xs text-slate-500">{initialData.category} · {initialData.useCase?.replaceAll('_', ' ')}</p>
                         <h3 className="mt-4 text-sm font-semibold text-slate-900">Enter template details</h3>
-                        <p className="mt-1 text-xs text-slate-500">Fixed Meta content stays unchanged to preserve instant library import.</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                            {usesAuthenticationModel
+                                ? 'Meta will generate the compliant OTP message with a Copy Code button and a 10-minute expiry.'
+                                : 'Fixed Meta content stays unchanged to preserve instant library import.'}
+                        </p>
                         <label className="mt-4 block text-xs font-semibold text-slate-700">
                             Name your template
                             <input className={`${fieldClass} mt-1.5`} value={data.name} maxLength={512} onChange={e => setData(current => ({ ...current, name: e.target.value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') }))} />
                         </label>
-                        {buttons.map((button, index) => button.type === 'URL' ? (
-                            <label key={index} className="mt-4 block rounded-lg bg-slate-50 p-3 text-xs font-semibold text-slate-700">
-                                {button.text || 'Website button'} URL
-                                <input
-                                    className={`${fieldClass} mt-1.5 bg-white`}
-                                    value={libraryButtonInputs[index]?.url?.base_url || ''}
-                                    placeholder="https://yourbusiness.com"
-                                    onChange={e => setLibraryButtonInputs(current => current.map((input, inputIndex) => inputIndex === index ? { ...input, url: { base_url: e.target.value } } : input))}
-                                />
-                            </label>
-                        ) : null)}
+                        {buttons.map((button, index) => {
+                            if (button.type === 'URL') {
+                                return (
+                                    <label key={index} className="mt-4 block rounded-lg bg-slate-50 p-3 text-xs font-semibold text-slate-700">
+                                        {button.text || 'Website button'} URL
+                                        <input
+                                            className={`${fieldClass} mt-1.5 bg-white`}
+                                            value={libraryButtonInputs[index]?.url?.base_url || ''}
+                                            placeholder="https://yourbusiness.com"
+                                            onChange={e => setLibraryButtonInputs(current => current.map((input, inputIndex) => inputIndex === index ? { ...input, url: { base_url: e.target.value } } : input))}
+                                        />
+                                    </label>
+                                );
+                            }
+                            if (button.type === 'PHONE_NUMBER') {
+                                return (
+                                    <label key={index} className="mt-4 block rounded-lg bg-slate-50 p-3 text-xs font-semibold text-slate-700">
+                                        {button.text || 'Phone button'} Number
+                                        <input
+                                            className={`${fieldClass} mt-1.5 bg-white`}
+                                            value={libraryButtonInputs[index]?.phone_number || ''}
+                                            placeholder="+16505551234"
+                                            onChange={e => setLibraryButtonInputs(current => current.map((input, inputIndex) => inputIndex === index ? { ...input, phone_number: e.target.value } : input))}
+                                        />
+                                    </label>
+                                );
+                            }
+                            return null;
+                        })}
                         {submitError && <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{submitError}</p>}
                     </div>
                     <div className="wa-template-canvas border-l border-slate-200 p-4">
@@ -1495,7 +1547,7 @@ function CreateTemplateModal({ isOpen, onClose, onSuccess, apiCall, initialData 
                     </div>
                 </div>
                 <div className="mt-5 flex items-center justify-between">
-                    <p className="text-xs text-slate-500">Official Meta library template</p>
+                    <p className="text-xs text-slate-500">{usesAuthenticationModel ? 'Official Meta authentication template' : 'Official Meta library template'}</p>
                     <div className="flex gap-2">
                         <button onClick={closeModal} className="h-10 rounded-full border border-slate-300 px-5 text-sm font-semibold text-slate-700">Cancel</button>
                         <button onClick={handleSubmit} disabled={!canSubmit || isSubmitting} className="inline-flex h-10 items-center gap-2 rounded-full bg-[#0070d1] px-5 text-sm font-semibold text-white disabled:opacity-50">

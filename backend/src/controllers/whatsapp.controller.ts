@@ -20,7 +20,11 @@ import {
   uploadMetaProfilePicture,
   updateMetaBusinessProfile,
 } from '../services/meta.service.js';
-import { buildMetaTemplatePayload } from '../utils/templateBuilder.js';
+import {
+  buildMetaTemplatePayload,
+  isLegacyAuthLibraryTemplate,
+  getLibraryTemplateUnavailabilityInfo,
+} from '../utils/templateBuilder.js';
 
 const GRAPH_API_VERSION = process.env.META_GRAPH_VERSION || process.env.META_API_VERSION || "v21.0";
 
@@ -48,6 +52,39 @@ function isTemplateRecentlyDeleted(orgId: string, name: string): boolean {
     return false;
   }
   return true;
+}
+
+async function resolveTemplateMetaAccount(orgId: string, requestedAccountId?: unknown) {
+  const cleanAccountId = String(requestedAccountId || '').trim();
+  let query = supabase
+    .from('w_wa_accounts')
+    .select('*')
+    .eq('organization_id', orgId)
+    .neq('status', 'disconnected')
+    .not('whatsapp_business_account_id', 'is', null);
+
+  if (cleanAccountId && cleanAccountId !== 'All') query = query.eq('id', cleanAccountId);
+
+  const { data: accounts, error } = await query.order('created_at', { ascending: false });
+  if (error) throw error;
+  if (!accounts?.length) {
+    const err: any = new Error(cleanAccountId && cleanAccountId !== 'All'
+      ? 'Selected Meta account was not found for this organization.'
+      : 'No connected Meta account found');
+    err.statusCode = cleanAccountId && cleanAccountId !== 'All' ? 404 : 400;
+    throw err;
+  }
+
+  const account = cleanAccountId && cleanAccountId !== 'All'
+    ? accounts[0]
+    : accounts.find((item: any) => Boolean(decryptToken(item.access_token_encrypted))) || accounts[0];
+  const token = decryptToken(account.access_token_encrypted);
+  if (!token) {
+    const err: any = new Error('Selected Meta account has no valid access token. Reconnect it before managing templates.');
+    err.statusCode = 400;
+    throw err;
+  }
+  return { account, token, waba_id: account.whatsapp_business_account_id };
 }
 
 export async function getNumberRequests(req: any, res: Response) {
@@ -738,25 +775,7 @@ export async function getTemplates(req: any, res: Response) {
   try {
     if (!orgId) throw new Error("No organization found");
 
-    const { data: accounts } = await supabase
-      .from("w_wa_accounts")
-      .select("*")
-      .eq("organization_id", orgId)
-      .neq("status", "disconnected")
-      .not("whatsapp_business_account_id", "is", null)
-      .order("created_at", { ascending: false });
-
-    if (!accounts || accounts.length === 0) {
-      return res.json([]);
-    }
-
-    const account = accounts.find((a: any) => Boolean(decryptToken(a.access_token_encrypted))) || accounts[0];
-    const token = decryptToken(account.access_token_encrypted);
-    if (!token) {
-      return res.status(400).json({ error: "No valid Meta access token found. Please click Connect Meta to link your WhatsApp account." });
-    }
-
-    const waba_id = account.whatsapp_business_account_id;
+    const { account, token, waba_id } = await resolveTemplateMetaAccount(orgId, req.query.wa_account_id);
 
     const response = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${waba_id}/message_templates?fields=id,name,language,status,category,components,quality_score,rejected_reason&limit=250`, {
       headers: { Authorization: `Bearer ${token}` }
@@ -782,7 +801,7 @@ export async function getTemplates(req: any, res: Response) {
     res.json(mergeTemplateRows(activeMetaTemplates, localRows || []));
   } catch (err: any) {
     console.error('Error fetching templates:', err);
-    res.status(500).json({ error: err.message });
+    res.status(err.statusCode || 500).json({ error: err.message });
   }
 }
 
@@ -790,19 +809,7 @@ export async function getTemplateContext(req: any, res: Response) {
   const orgId = req.organization_id;
   try {
     if (!orgId) return res.status(400).json({ error: 'No organization found' });
-    const { data: accounts } = await supabase
-      .from('w_wa_accounts')
-      .select('id, phone_number_id, display_phone_number, whatsapp_business_account_id, access_token_encrypted, status')
-      .eq('organization_id', orgId)
-      .neq('status', 'disconnected')
-      .not('whatsapp_business_account_id', 'is', null)
-      .order('created_at', { ascending: false });
-
-    const account = accounts?.find((a: any) => Boolean(decryptToken(a.access_token_encrypted))) || accounts?.[0];
-    if (!account) return res.status(400).json({ error: 'No connected Meta account found' });
-
-    const token = decryptToken(account.access_token_encrypted);
-    if (!token) return res.status(400).json({ error: 'No valid Meta access token found. Please click Connect Meta to link your account.' });
+    const { account, token } = await resolveTemplateMetaAccount(orgId, req.query.wa_account_id);
     const headers = { Authorization: `Bearer ${token}` };
     const base = `https://graph.facebook.com/${GRAPH_API_VERSION}/${account.whatsapp_business_account_id}`;
     const [catalogResponse, flowResponse] = await Promise.all([
@@ -863,7 +870,7 @@ export async function getTemplateContext(req: any, res: Response) {
     });
   } catch (err: any) {
     console.error('[Templates] Context error:', err);
-    res.status(500).json({ error: err.message || 'Failed to load template setup data' });
+    res.status(err.statusCode || 500).json({ error: err.message || 'Failed to load template setup data' });
   }
 }
 
@@ -897,131 +904,280 @@ export async function createTemplate(req: any, res: Response) {
   try {
     if (!orgId) throw new Error("No organization found");
 
-    const { data: accounts } = await supabase
-      .from("w_wa_accounts")
-      .select("*")
-      .eq("organization_id", orgId)
-      .neq("status", "disconnected")
-      .not("whatsapp_business_account_id", "is", null)
-      .order("created_at", { ascending: false });
+    const { account, token, waba_id } = await resolveTemplateMetaAccount(orgId, req.body.wa_account_id);
 
-    if (!accounts || accounts.length === 0) {
-      return res.status(400).json({ error: 'No connected Meta account found' });
-    }
+    const cleanName = String(name || '').trim().toLowerCase();
+    const cleanLang = String(language || 'en_US').trim();
+    const cleanCategory = String(category || 'UTILITY').trim().toUpperCase();
+    const libraryTemplateName = req.body.library_template_name;
+    const libraryButtonInputs = req.body.library_template_button_inputs;
+    const useAuthenticationModel = isLegacyAuthLibraryTemplate(libraryTemplateName);
 
-    const account = accounts[0];
-    const token = decryptToken(account.access_token_encrypted);
-    const waba_id = account.whatsapp_business_account_id;
-
-    let parsedComponents = [];
-    let typeConfig: Record<string, any> = {};
-    try {
-      parsedComponents = JSON.parse(components || '[]');
-      typeConfig = req.body.type_config ? JSON.parse(req.body.type_config) : {};
-    } catch (e) {
-      return res.status(400).json({ error: 'Invalid template components or type configuration.' });
-    }
-
-    // Enrich template variables with realistic sample values before Meta validation.
-    parsedComponents = enrichTemplateExamplesWithRealisticSamples(parsedComponents);
-
-    if (file) {
-      const headerFormat = parsedComponents.find((component: any) => component?.type === 'HEADER')?.format;
-      const mediaRules: Record<string, { max: number; types: RegExp }> = {
-        IMAGE: { max: 5 * 1024 * 1024, types: /^image\/(jpeg|png)$/ },
-        VIDEO: { max: 16 * 1024 * 1024, types: /^video\/mp4$/ },
-        DOCUMENT: { max: 100 * 1024 * 1024, types: /^(application\/pdf|application\/msword|application\/vnd\.|application\/octet-stream)/ },
-      };
-      const rule = mediaRules[headerFormat];
-      if (!rule || file.size > rule.max || !rule.types.test(file.mimetype)) {
-        return res.status(400).json({ error: 'Uploaded header file type or size is not supported by Meta.' });
-      }
-      const appId = process.env.META_APP_ID;
-      if (!appId) throw new Error('META_APP_ID is not configured. Cannot upload media for templates.');
-
-      const initUrl = new URL(`https://graph.facebook.com/${GRAPH_API_VERSION}/${appId}/uploads`);
-      initUrl.searchParams.set('file_length', String(file.size));
-      initUrl.searchParams.set('file_type', file.mimetype);
-      initUrl.searchParams.set('access_token', token);
-
-      const initRes = await fetch(initUrl, { method: 'POST' });
-      const initJson = await initRes.json();
-      if (!initRes.ok) throw new Error(initJson.error?.message || 'Upload initialization failed');
-
-      const uploadSessionId = initJson.id;
-
-      const uploadRes = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${uploadSessionId}`, {
-        method: 'POST',
-        headers: {
-          Authorization: `OAuth ${token}`,
-          file_offset: '0',
-          'Content-Type': file.mimetype || 'application/octet-stream'
-        },
-        body: file.buffer as any
-      });
-      const uploadJson = await uploadRes.json();
-      if (!uploadRes.ok) throw new Error(uploadJson.error?.message || 'File upload failed');
-
-      const handle = uploadJson.h;
-
-      const headerObj = parsedComponents.find((c: any) => c.type === 'HEADER');
-      if (headerObj && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerObj.format)) {
-        headerObj.example = { header_handle: [handle] };
-      }
-    }
-
-    const built = buildMetaTemplatePayload({
-      name,
-      category: String(category || '').toUpperCase(),
-      language,
-      templateType,
-      components: parsedComponents,
-      typeConfig: {
-        ...typeConfig,
-        calling_enabled: process.env.META_WHATSAPP_CALLING_ENABLED === 'true',
-      },
-    });
-    if (!built.canSubmit) {
-      return res.status(400).json({
-        error: 'Template has approval-risk issues. Fix the highlighted fields before submitting to Meta.',
-        validation: built,
+    const unavail = getLibraryTemplateUnavailabilityInfo(libraryTemplateName);
+    if (unavail) {
+      return res.status(422).json({
+        error: unavail.reason,
+        code: unavail.code,
+        meta_error_code: unavail.meta_error_code,
       });
     }
-    if (templateType === 'CATALOG' || templateType === 'FLOW') {
-      const assetUrl = templateType === 'CATALOG'
-        ? `https://graph.facebook.com/${GRAPH_API_VERSION}/${waba_id}/product_catalogs?fields=id&limit=100`
-        : `https://graph.facebook.com/${GRAPH_API_VERSION}/${waba_id}/flows?fields=id,status&limit=100`;
-      const assetResponse = await fetch(assetUrl, { headers: { Authorization: `Bearer ${token}` } });
-      const assetJson: any = await assetResponse.json().catch(() => ({}));
-      const requestedId = String(templateType === 'CATALOG' ? typeConfig.catalog_id : typeConfig.flow_id);
-      const asset = assetJson.data?.find((item: any) => String(item.id) === requestedId);
-      const valid = assetResponse.ok && asset && (templateType !== 'FLOW' || String(asset.status).toUpperCase() === 'PUBLISHED');
-      if (!valid) {
-        return res.status(400).json({
-          error: templateType === 'CATALOG'
-            ? 'The selected catalog is not connected to this WhatsApp account.'
-            : 'The selected Meta Flow is not published for this WhatsApp account.',
-        });
-      }
-    }
-    const validation = templateType === 'AUTHENTICATION'
-      ? { normalized: built.payload, issues: built.issues, riskScore: 0 }
-      : validateWhatsappTemplatePayload(built.payload);
 
+    // Check duplicate name only after local library eligibility checks.
     const existingRes = await fetch(
-      `https://graph.facebook.com/${GRAPH_API_VERSION}/${waba_id}/message_templates?name=${encodeURIComponent(built.payload.name)}&fields=id,name,language,status&limit=50`,
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/${waba_id}/message_templates?name=${encodeURIComponent(cleanName)}&fields=id,name,language,status&limit=50`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
     const existingJson = await existingRes.json().catch(() => ({}));
-    if (existingRes.ok && Array.isArray(existingJson.data) && existingJson.data.some((tpl: any) => tpl.name === built.payload.name && tpl.language === built.payload.language)) {
+    if (existingRes.ok && Array.isArray(existingJson.data) && existingJson.data.some((tpl: any) => tpl.name === cleanName && tpl.language === cleanLang)) {
       return res.status(409).json({
-        error: `Template "${built.payload.name}" already exists for ${built.payload.language}. Use a new template name before submitting.`,
+        error: `Template "${cleanName}" already exists for ${cleanLang}. Use a new template name before submitting.`,
         code: 'DUPLICATE_TEMPLATE_NAME',
-        suggested_name: `${built.payload.name}_${Date.now().toString().slice(-6)}`,
+        suggested_name: `${cleanName}_${Date.now().toString().slice(-6)}`,
       });
     }
 
-    const metaPayload = built.payload;
+    let metaPayload: Record<string, any>;
+    let validation: { normalized: any; issues: any[]; riskScore: number };
+    // Meta still lists several legacy authentication templates whose original
+    // definitions cannot be cloned. Keep their selected name/language, but use
+    // the supported OTP component model so Meta generates compliant content.
+    if (useAuthenticationModel) {
+      let typeConfig: Record<string, any> = {};
+      try {
+        typeConfig = req.body.type_config
+          ? (typeof req.body.type_config === 'string' ? JSON.parse(req.body.type_config) : req.body.type_config)
+          : {};
+      } catch {
+        return res.status(400).json({ error: 'Invalid authentication template configuration.' });
+      }
+
+      const built = buildMetaTemplatePayload({
+        name: cleanName,
+        category: 'AUTHENTICATION',
+        language: cleanLang,
+        templateType: 'AUTHENTICATION',
+        typeConfig: {
+          otp_type: 'COPY_CODE',
+          add_security_recommendation: true,
+          code_expiration_minutes: 10,
+          ...typeConfig,
+        },
+      });
+      if (!built.canSubmit) {
+        return res.status(400).json({
+          error: 'Authentication template configuration is invalid.',
+          validation: built,
+        });
+      }
+      metaPayload = built.payload;
+      validation = {
+        normalized: built.payload,
+        issues: built.issues,
+        riskScore: 0,
+      };
+    // Branch 1: Official Meta Library Template Clone (Meta already has components configured)
+    } else if (libraryTemplateName) {
+      metaPayload = {
+        name: cleanName,
+        category: cleanCategory,
+        language: cleanLang,
+        library_template_name: String(libraryTemplateName).trim(),
+      };
+
+      let buttonInputs: any[] = [];
+      if (libraryButtonInputs) {
+        try {
+          const parsed = typeof libraryButtonInputs === 'string'
+            ? JSON.parse(libraryButtonInputs)
+            : libraryButtonInputs;
+          if (Array.isArray(parsed)) {
+            buttonInputs = parsed;
+          }
+        } catch (e) {}
+      }
+
+      // Fetch official library buttons from Meta to guarantee exact button count and structure.
+      // Inputs are matched positionally after removing non-parameterized buttons.
+      try {
+        const libRes = await fetch(
+          `https://graph.facebook.com/${GRAPH_API_VERSION}/message_template_library?name=${encodeURIComponent(String(libraryTemplateName).trim())}&language=${encodeURIComponent(cleanLang)}&fields=category,buttons`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const libJson = await libRes.json();
+        const libTemplate = (libJson.data || []).find((t: any) => t.name === String(libraryTemplateName).trim());
+        if (!libRes.ok || !libTemplate) {
+          return res.status(502).json({
+            error: libJson.error?.message || 'Could not verify this template definition with Meta.',
+            code: 'META_LIBRARY_LOOKUP_FAILED',
+          });
+        }
+        metaPayload.category = String(libTemplate.category || cleanCategory).trim().toUpperCase();
+        const officialButtons: any[] = Array.isArray(libTemplate.buttons) ? libTemplate.buttons : [];
+
+        // Meta library buttons with input parameters are URL and PHONE_NUMBER buttons
+        const paramButtons = officialButtons.filter((btn: any) => btn.type === 'URL' || btn.type === 'PHONE_NUMBER');
+
+        const parameterInputs = buttonInputs.filter((input: any) => input?.type === 'URL' || input?.type === 'PHONE_NUMBER');
+        if (parameterInputs.length !== paramButtons.length) {
+          return res.status(400).json({
+            error: `This template requires ${paramButtons.length} URL/phone button value(s).`,
+            code: 'LIBRARY_BUTTON_INPUTS_REQUIRED',
+          });
+        }
+
+        if (paramButtons.length > 0) {
+          const normalizedButtonInputs: any[] = [];
+          for (let idx = 0; idx < paramButtons.length; idx += 1) {
+            const btn = paramButtons[idx];
+            const userInput = parameterInputs[idx];
+            if (userInput?.type !== btn.type) {
+              return res.status(400).json({
+                error: `Button ${idx + 1} must provide a ${btn.type} value.`,
+                code: 'LIBRARY_BUTTON_INPUT_TYPE_MISMATCH',
+              });
+            }
+            if (btn.type === 'URL') {
+              let urlVal = typeof userInput.url === 'string'
+                ? userInput.url
+                : userInput.url?.base_url;
+              // Strip trailing dynamic variable placeholder {{1}} if present
+              urlVal = String(urlVal || '').trim().replace(/\{\{\d+\}\}$/, '').replace(/\/$/, '');
+              let parsedUrl: URL;
+              try {
+                parsedUrl = new URL(urlVal);
+              } catch {
+                return res.status(400).json({ error: `Button ${idx + 1} requires a valid HTTPS URL.`, code: 'INVALID_LIBRARY_BUTTON_URL' });
+              }
+              if (parsedUrl.protocol !== 'https:' || /^(?:www\.)?example\.com$/i.test(parsedUrl.hostname)) {
+                return res.status(400).json({ error: `Button ${idx + 1} requires your real HTTPS business URL.`, code: 'INVALID_LIBRARY_BUTTON_URL' });
+              }
+              normalizedButtonInputs.push({
+                type: 'URL',
+                url: { base_url: urlVal },
+              });
+            } else if (btn.type === 'PHONE_NUMBER') {
+              const phoneVal = String(userInput.phone_number || '').trim();
+              if (!/^\+[1-9]\d{7,14}$/.test(phoneVal) || ['+16505551234', '+18005551234'].includes(phoneVal)) {
+                return res.status(400).json({ error: `Button ${idx + 1} requires your real phone number in E.164 format.`, code: 'INVALID_LIBRARY_BUTTON_PHONE' });
+              }
+              normalizedButtonInputs.push({
+                type: 'PHONE_NUMBER',
+                phone_number: phoneVal,
+              });
+            }
+          }
+          metaPayload.library_template_button_inputs = normalizedButtonInputs;
+        }
+      } catch (err) {
+        console.warn('Could not query library template buttons from Meta:', err);
+        return res.status(502).json({ error: 'Could not verify template button requirements with Meta.', code: 'META_LIBRARY_LOOKUP_FAILED' });
+      }
+
+      validation = {
+        normalized: metaPayload,
+        issues: [],
+        riskScore: 0,
+      };
+    } else {
+      // Branch 2: Custom / User-Created Template
+      let parsedComponents = [];
+      let typeConfig: Record<string, any> = {};
+      try {
+        parsedComponents = JSON.parse(components || '[]');
+        typeConfig = req.body.type_config ? JSON.parse(req.body.type_config) : {};
+      } catch (e) {
+        return res.status(400).json({ error: 'Invalid template components or type configuration.' });
+      }
+
+      // Enrich custom template variables with realistic sample values before Meta validation.
+      parsedComponents = enrichTemplateExamplesWithRealisticSamples(parsedComponents);
+
+      if (file) {
+        const headerFormat = parsedComponents.find((component: any) => component?.type === 'HEADER')?.format;
+        const mediaRules: Record<string, { max: number; types: RegExp }> = {
+          IMAGE: { max: 5 * 1024 * 1024, types: /^image\/(jpeg|png)$/ },
+          VIDEO: { max: 16 * 1024 * 1024, types: /^video\/mp4$/ },
+          DOCUMENT: { max: 100 * 1024 * 1024, types: /^(application\/pdf|application\/msword|application\/vnd\.|application\/octet-stream)/ },
+        };
+        const rule = mediaRules[headerFormat];
+        if (!rule || file.size > rule.max || !rule.types.test(file.mimetype)) {
+          return res.status(400).json({ error: 'Uploaded header file type or size is not supported by Meta.' });
+        }
+        const appId = process.env.META_APP_ID;
+        if (!appId) throw new Error('META_APP_ID is not configured. Cannot upload media for templates.');
+
+        const initUrl = new URL(`https://graph.facebook.com/${GRAPH_API_VERSION}/${appId}/uploads`);
+        initUrl.searchParams.set('file_length', String(file.size));
+        initUrl.searchParams.set('file_type', file.mimetype);
+        initUrl.searchParams.set('access_token', token);
+
+        const initRes = await fetch(initUrl, { method: 'POST' });
+        const initJson = await initRes.json();
+        if (!initRes.ok) throw new Error(initJson.error?.message || 'Upload initialization failed');
+
+        const uploadSessionId = initJson.id;
+
+        const uploadRes = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${uploadSessionId}`, {
+          method: 'POST',
+          headers: {
+            Authorization: `OAuth ${token}`,
+            file_offset: '0',
+            'Content-Type': file.mimetype || 'application/octet-stream'
+          },
+          body: file.buffer as any
+        });
+        const uploadJson = await uploadRes.json();
+        if (!uploadRes.ok) throw new Error(uploadJson.error?.message || 'File upload failed');
+
+        const handle = uploadJson.h;
+
+        const headerObj = parsedComponents.find((c: any) => c.type === 'HEADER');
+        if (headerObj && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerObj.format)) {
+          headerObj.example = { header_handle: [handle] };
+        }
+      }
+
+      const built = buildMetaTemplatePayload({
+        name: cleanName,
+        category: cleanCategory,
+        language: cleanLang,
+        templateType,
+        components: parsedComponents,
+        typeConfig: {
+          ...typeConfig,
+          calling_enabled: process.env.META_WHATSAPP_CALLING_ENABLED === 'true',
+        },
+      });
+      if (!built.canSubmit) {
+        return res.status(400).json({
+          error: 'Template has approval-risk issues. Fix the highlighted fields before submitting to Meta.',
+          validation: built,
+        });
+      }
+      if (templateType === 'CATALOG' || templateType === 'FLOW') {
+        const assetUrl = templateType === 'CATALOG'
+          ? `https://graph.facebook.com/${GRAPH_API_VERSION}/${waba_id}/product_catalogs?fields=id&limit=100`
+          : `https://graph.facebook.com/${GRAPH_API_VERSION}/${waba_id}/flows?fields=id,status&limit=100`;
+        const assetResponse = await fetch(assetUrl, { headers: { Authorization: `Bearer ${token}` } });
+        const assetJson: any = await assetResponse.json().catch(() => ({}));
+        const requestedId = String(templateType === 'CATALOG' ? typeConfig.catalog_id : typeConfig.flow_id);
+        const asset = assetJson.data?.find((item: any) => String(item.id) === requestedId);
+        const valid = assetResponse.ok && asset && (templateType !== 'FLOW' || String(asset.status).toUpperCase() === 'PUBLISHED');
+        if (!valid) {
+          return res.status(400).json({
+            error: templateType === 'CATALOG'
+              ? 'The selected catalog is not connected to this WhatsApp account.'
+              : 'The selected Meta Flow is not published for this WhatsApp account.',
+          });
+        }
+      }
+
+      validation = templateType === 'AUTHENTICATION'
+        ? { normalized: built.payload, issues: built.issues, riskScore: 0 }
+        : validateWhatsappTemplatePayload(built.payload);
+
+      metaPayload = { ...built.payload };
+    }
 
     const response = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${waba_id}/message_templates`, {
       method: 'POST',
@@ -1037,6 +1193,10 @@ export async function createTemplate(req: any, res: Response) {
       const errMsg = json.error?.error_user_msg || json.error?.message || 'Template creation failed';
       const errSubcode = json.error?.error_subcode || json.error?.code || null;
       const errData = json.error?.error_data || null;
+      const authVerificationBlocked = useAuthenticationModel && Number(errSubcode) === 2388185;
+      const clientError = authVerificationBlocked
+        ? 'Meta does not allow this unverified WhatsApp Business Account to create authentication templates. Complete Business Verification for this portfolio, then retry.'
+        : errMsg;
       await upsertLocalTemplateSubmission({
         organization_id: orgId,
         wa_account_id: account.id,
@@ -1054,8 +1214,10 @@ export async function createTemplate(req: any, res: Response) {
         submitted_by: req.user?.id || null,
       });
       return res.status(response.status).json({
-        error: errMsg,
-        code: /already exists|duplicate/i.test(errMsg) ? 'DUPLICATE_TEMPLATE_NAME' : 'META_TEMPLATE_CREATE_FAILED',
+        error: clientError,
+        code: authVerificationBlocked
+          ? 'AUTH_BUSINESS_VERIFICATION_REQUIRED'
+          : /already exists|duplicate/i.test(errMsg) ? 'DUPLICATE_TEMPLATE_NAME' : 'META_TEMPLATE_CREATE_FAILED',
         suggested_name: /already exists|duplicate/i.test(errMsg) ? `${validation.normalized.name}_${Date.now().toString().slice(-6)}` : undefined,
         error_subcode: errSubcode,
         error_data: errData,
@@ -1083,7 +1245,7 @@ export async function createTemplate(req: any, res: Response) {
     res.json({ success: true, data: json });
   } catch (err: any) {
     console.error('Create Template Error:', err);
-    res.status(500).json({ error: err.message });
+    res.status(err.statusCode || 500).json({ error: err.message });
   }
 }
 
@@ -1094,21 +1256,7 @@ export async function deleteTemplate(req: any, res: Response) {
   try {
     if (!orgId) throw new Error("No organization found");
 
-    const { data: accounts } = await supabase
-      .from("w_wa_accounts")
-      .select("*")
-      .eq("organization_id", orgId)
-      .neq("status", "disconnected")
-      .not("whatsapp_business_account_id", "is", null)
-      .order("created_at", { ascending: false });
-
-    if (!accounts || accounts.length === 0) {
-      return res.status(400).json({ error: "No connected Meta account found" });
-    }
-
-    const account = accounts[0];
-    const token = decryptToken(account.access_token_encrypted);
-    const waba_id = account.whatsapp_business_account_id;
+    const { account, token, waba_id } = await resolveTemplateMetaAccount(orgId, req.query.wa_account_id);
 
     // 1. Fetch local template first to check if it's a pure local DRAFT (never sent to Meta)
     const { data: localTemplate } = await supabase
@@ -1217,7 +1365,7 @@ export async function deleteTemplate(req: any, res: Response) {
     res.json({ success: true });
   } catch (err: any) {
     console.error("Delete Template Error:", err);
-    res.status(500).json({ error: err.message });
+    res.status(err.statusCode || 500).json({ error: err.message });
   }
 }
 
@@ -1227,20 +1375,7 @@ export async function getTemplateLibrary(req: any, res: Response) {
   try {
     if (!orgId) throw new Error("No organization found");
 
-    const { data: accounts } = await supabase
-      .from("w_wa_accounts")
-      .select("*")
-      .eq("organization_id", orgId)
-      .neq("status", "disconnected")
-      .not("whatsapp_business_account_id", "is", null)
-      .order("created_at", { ascending: false });
-
-    if (!accounts || accounts.length === 0) {
-      return res.status(400).json({ error: "No connected Meta account found" });
-    }
-
-    const account = accounts[0];
-    const token = decryptToken(account.access_token_encrypted);
+    const { token } = await resolveTemplateMetaAccount(orgId, req.query.wa_account_id);
 
     const allowedParams = ["search", "topic", "usecase", "industry", "language", "name", "limit", "after", "before"];
     const queryParams = new URLSearchParams();
@@ -1256,7 +1391,7 @@ export async function getTemplateLibrary(req: any, res: Response) {
     }
 
     if (!queryParams.has("fields")) {
-      queryParams.set("fields", "name,category,language,status,components,format,text,body,content,template,message_send_ttl_seconds");
+      queryParams.set("fields", "id,name,category,language,status,components,format,text,header,header_params,body,body_params,footer,buttons,topic,usecase,industry,message_send_ttl_seconds");
     }
 
     const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/message_template_library?${queryParams.toString()}`;
@@ -1265,11 +1400,6 @@ export async function getTemplateLibrary(req: any, res: Response) {
       headers: { Authorization: `Bearer ${token}` },
     });
     const json = await response.json();
-    try { fs.writeFileSync("debug_library_output.json", JSON.stringify(json, null, 2)); } catch(e) {}
-
-    if (json.data && json.data.length > 0) {
-      console.log("META API DEBUG: First template components:", JSON.stringify(json.data[0].components, null, 2));
-    }
 
     if (!response.ok) {
       console.error("Meta Template Library API Error:", json);
@@ -1278,9 +1408,55 @@ export async function getTemplateLibrary(req: any, res: Response) {
         .json({ error: json.error?.message || "Failed to fetch template library from Meta" });
     }
 
-    res.json({ success: true, data: json.data || [], paging: json.paging });
+    const templates = (json.data || []).map((item: any) => {
+      if (!Array.isArray(item.components) || item.components.length === 0) {
+        const comps: any[] = [];
+        if (item.header) {
+          comps.push({
+            type: 'HEADER',
+            format: item.format || 'TEXT',
+            text: item.header,
+            example: item.header_params?.length ? { header_text: item.header_params } : undefined,
+          });
+        }
+        if (item.body) {
+          comps.push({
+            type: 'BODY',
+            text: item.body,
+            example: item.body_params?.length ? { body_text: [item.body_params] } : undefined,
+          });
+        }
+        if (item.footer) {
+          comps.push({
+            type: 'FOOTER',
+            text: item.footer,
+          });
+        }
+        if (Array.isArray(item.buttons) && item.buttons.length > 0) {
+          comps.push({
+            type: 'BUTTONS',
+            buttons: item.buttons,
+          });
+        }
+        item.components = comps;
+      }
+      const unavail = getLibraryTemplateUnavailabilityInfo(item.name);
+      if (unavail) {
+        return {
+          ...item,
+          availability: 'UNAVAILABLE',
+          unavailable_reason: unavail.reason,
+          unavailable_code: unavail.code,
+          unavailable_badge: unavail.badge,
+          unavailable_error_code: unavail.meta_error_code,
+        };
+      }
+      return { ...item, availability: 'AVAILABLE' };
+    });
+
+    res.json({ success: true, data: templates, paging: json.paging });
   } catch (err: any) {
     console.error("Error fetching template library:", err);
-    res.status(500).json({ error: err.message });
+    res.status(err.statusCode || 500).json({ error: err.message });
   }
 }

@@ -214,6 +214,9 @@ export function enrichTemplateExamplesWithRealisticSamples(components: any[]) {
                         if (/\b(hi|hello|dear|hey|hola|welcome|greeting)\b/.test(contextBefore)) {
                             return "John";
                         }
+                        if (/\b(verify|verification|email|phone|profile)\b/.test(contextBefore) || /\b(to complete|profile|email|account)\b/.test(contextAfter)) {
+                            return "john.doe@example.com";
+                        }
                         if (/\b(address|street|location|city|delivery address|destination)\b/.test(contextBefore) || /\b(address|location|destination)\b/.test(contextAfter)) {
                             return "123 Main St, New York";
                         }
@@ -224,10 +227,10 @@ export function enrichTemplateExamplesWithRealisticSamples(components: any[]) {
                             return "10834";
                         }
                         if (/\b(account on|website|portal|app|platform|url|link|system)\b/.test(contextBefore)) {
-                            return "our website";
+                            return "https://example.com";
                         }
                         if (/\b(due to|reason|because of|suspended for|error|violation)\b/.test(contextBefore)) {
-                            return "suspicious activity";
+                            return "Account verification";
                         }
                         if (/\b(contact|support|call|reach|email)\b/.test(contextBefore) || /\b(support|inquiries|help)\b/.test(contextAfter)) {
                             return "support@example.com";
@@ -235,17 +238,34 @@ export function enrichTemplateExamplesWithRealisticSamples(components: any[]) {
                         if (/\b(otp|code|verification|login|security|password|passcode)\b/.test(contextBefore) || /\b(otp|code|verification)\b/.test(contextAfter)) {
                             return "123456";
                         }
-                        if (/\b(scheduled for|appointment on|delivery on|date of|appointment at|scheduled at|on|at|date|time|scheduled|appointment|delivery)\b/.test(contextBefore) || /\b(am|pm|ist|utc|est|gmt)\b/.test(contextAfter)) {
+                        if (/\b(scheduled for|appointment on|delivery on|date of|appointment at|scheduled at|on|at|date|time|scheduled|appointment|delivery|renew on|valid until|starting|expire)\b/.test(contextBefore) || /\b(am|pm|ist|utc|est|gmt|tonight|today)\b/.test(contextAfter)) {
                             return "June 25th";
                         }
                         if (/\b(within|in|takes|about|around)\b/.test(contextBefore) || /\b(days|business days|working days|hours|minutes|mins|weeks|months)\b/.test(contextAfter)) {
                             return "3";
                         }
-                        return "info";
+                        if (/\b(plan|subscription|membership|package)\b/.test(contextBefore) || /\b(plan|subscription|membership|package)\b/.test(contextAfter)) {
+                            return "Premium Plan";
+                        }
+                        if (/\b(product|item|purchase|order)\b/.test(contextBefore) || /\b(product|item)\b/.test(contextAfter)) {
+                            return "Wireless Headphones";
+                        }
+                        if (/\b(speed|internet|mbps|gbps)\b/.test(contextBefore) || /\b(mbps|gbps)\b/.test(contextAfter)) {
+                            return "100";
+                        }
+                        return "Account Details";
                     });
-                    if (!getBodyExampleValues(comp).some(value => String(value).trim())) {
-                        comp.example = { body_text: [samples] };
-                    }
+
+                    const existing = getBodyExampleValues(comp);
+                    const merged = Array.from({ length: maxVar }, (_, i) => {
+                        const val = String(existing[i] || '').trim();
+                        if (val && !GENERIC_SAMPLE_RE.test(val)) {
+                            return val;
+                        }
+                        return samples[i];
+                    });
+
+                    comp.example = { body_text: [merged] };
                 }
             }
         } else if (comp.type === 'HEADER' && comp.format === 'TEXT' && typeof comp.text === 'string') {
@@ -265,11 +285,19 @@ export function enrichTemplateExamplesWithRealisticSamples(components: any[]) {
                         if (/\b(order|invoice|id|#)\b/.test(contextBefore) || /#\s*$/.test(contextBefore)) {
                             return "10834";
                         }
-                        return "heading";
+                        return "Notification";
                     });
-                    if (!Array.isArray(comp.example?.header_text) || !comp.example.header_text.some((value: any) => String(value).trim())) {
-                        comp.example = { header_text: samples };
-                    }
+
+                    const existingHeader = Array.isArray(comp.example?.header_text) ? comp.example.header_text : [];
+                    const mergedHeader = Array.from({ length: maxVar }, (_, i) => {
+                        const val = String(existingHeader[i] || '').trim();
+                        if (val && !GENERIC_SAMPLE_RE.test(val)) {
+                            return val;
+                        }
+                        return samples[i];
+                    });
+
+                    comp.example = { header_text: mergedHeader };
                 }
             }
         }

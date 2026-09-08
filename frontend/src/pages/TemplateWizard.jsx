@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Check, ChevronDown, FileText, Image, Loader2, Plus, Search, ShieldCheck, Trash2, Type, UploadCloud, Video, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useWhatsAppAccounts } from '../context/WhatsAppAccountContext';
 import { useDialog } from '../context/DialogContext';
 import { META_LANGUAGES, getMetaLanguage } from '../data/metaLanguages';
 
@@ -156,6 +157,8 @@ export default function TemplateWizard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { apiCall, memberProfile } = useAuth();
+  const { accounts: waAccounts, selectedAccount, isLoading: accountsLoading } = useWhatsAppAccounts();
+  const templateAccountId = selectedAccount?.id || waAccounts[0]?.id || '';
   const { confirmDialog } = useDialog();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(initialForm);
@@ -166,13 +169,14 @@ export default function TemplateWizard() {
   const [restored, setRestored] = useState(false);
 
   const { data: context, isLoading, error } = useQuery({
-    queryKey: ['template-context'],
+    queryKey: ['template-context', templateAccountId],
     queryFn: async () => {
-      const response = await apiCall(`${API_URL}/api/whatsapp/template-context`);
+      const response = await apiCall(`${API_URL}/api/whatsapp/template-context?wa_account_id=${encodeURIComponent(templateAccountId)}`);
       const json = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(json.error || 'Could not load Meta template capabilities.');
       return json;
     },
+    enabled: Boolean(templateAccountId),
   });
   const draftKey = context?.account?.waba_id ? `wa-template-draft:${memberProfile?.organization_id || 'org'}:${context.account.waba_id}` : '';
   const variables = useMemo(() => getVariables(form.bodyText), [form.bodyText]);
@@ -262,6 +266,7 @@ export default function TemplateWizard() {
     try {
       const payload = new FormData();
       payload.append('name', form.name); payload.append('category', form.category); payload.append('language', form.language);
+      payload.append('wa_account_id', templateAccountId);
       payload.append('template_type', form.templateType); payload.append('components', JSON.stringify(buildComponents()));
       payload.append('type_config', JSON.stringify(typeConfig));
       if (file) payload.append('file', file);
@@ -281,7 +286,8 @@ export default function TemplateWizard() {
     navigate('/templates');
   };
 
-  if (isLoading) return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-blue-600" /></div>;
+  if (accountsLoading || isLoading) return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-blue-600" /></div>;
+  if (!templateAccountId) return <div className="mx-auto mt-12 max-w-xl rounded-xl border border-amber-200 bg-amber-50 p-6 text-amber-800">Connect a Meta WhatsApp account before creating templates.</div>;
   if (error) return <div className="mx-auto mt-12 max-w-xl rounded-xl border border-red-200 bg-red-50 p-6 text-red-700">{error.message}</div>;
 
   return (
