@@ -619,10 +619,12 @@ export default function Layout() {
         localStorage.removeItem('gap_appearance_mode')
     }, [isNightLight])
 
-    const planName = String(user?.plan || '').toLowerCase();
-    const isWhatsAppPlan = planName.includes('whatsapp') || planName.includes('ultimate') || planName.includes('ecosystem') || planName.includes('all_in_one') || planName.includes('bundle') || planName.includes('starter') || planName.includes('growth') || planName.includes('pro') || planName.includes('gap') || planName.includes('max') || planName.includes('core');
     const isAgent = userRole === 'agent';
-    const hasActiveSubscription = isAgent || (user?.subscription_status === 'active' && isWhatsAppPlan);
+    const subStatus = user?.subscription_status || memberProfile?.subscription?.status || 'inactive';
+    const isSubActive = subStatus === 'active';
+    const rawPlan = String(user?.plan || memberProfile?.subscription?.plan_label || memberProfile?.subscription?.plan_id || '').toLowerCase();
+    const isWhatsAppPlan = rawPlan.includes('whatsapp') || rawPlan.includes('ultimate') || rawPlan.includes('ecosystem') || rawPlan.includes('all_in_one') || rawPlan.includes('bundle') || rawPlan.includes('starter') || rawPlan.includes('growth') || rawPlan.includes('pro') || rawPlan.includes('gap') || rawPlan.includes('max') || rawPlan.includes('core') || rawPlan.includes('trial') || rawPlan.includes('enterprise');
+    const hasActiveSubscription = isAgent || (isSubActive && isWhatsAppPlan) || (isSubActive && !rawPlan);
 
     const handleDirectLogout = async () => {
         setIsLoggingOut(true);

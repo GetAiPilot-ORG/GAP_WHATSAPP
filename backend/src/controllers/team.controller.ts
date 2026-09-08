@@ -396,7 +396,7 @@ export async function deleteMember(req: any, res: Response) {
 export async function getMyProfile(req: any, res: Response) {
     try {
         const orgId = req.organization_id;
-        const { data: member, error } = await supabase
+        let { data: member, error } = await supabase
             .from('organization_members')
             .select('*')
             .eq('user_id', req.user.id)
@@ -404,9 +404,21 @@ export async function getMyProfile(req: any, res: Response) {
             .maybeSingle();
 
         if (error) throw error;
-        if (!member) return res.status(404).json({ error: 'Member profile not found in this organization' });
+        if (!member) {
+            // Fallback: check any membership for this user
+            const { data: anyMember } = await supabase
+                .from('organization_members')
+                .select('*')
+                .eq('user_id', req.user.id)
+                .maybeSingle();
+            if (anyMember) {
+                member = anyMember;
+            } else {
+                return res.status(404).json({ error: 'Member profile not found in this organization' });
+            }
+        }
 
-        // Fetch subscription info from organization owner
+        // Fetch subscription info from organization owner or requesting user
         const { data: ownerMember } = await supabase
             .from('organization_members')
             .select('user_id')
@@ -415,13 +427,31 @@ export async function getMyProfile(req: any, res: Response) {
             .maybeSingle();
 
         let subscription: any = null;
-        if (ownerMember?.user_id) {
+        const targetUserId = ownerMember?.user_id || req.user.id;
+        if (targetUserId) {
             const { data: sub } = await supabase
                 .from('app_user_subscriptions')
                 .select('plan_id, plan_label, expires_at, status')
-                .eq('user_id', ownerMember.user_id)
+                .eq('user_id', targetUserId)
                 .maybeSingle();
             subscription = sub;
+        }
+
+        // Also fallback to organization plan if subscription in app_user_subscriptions is missing
+        if (!subscription && orgId) {
+            const { data: org } = await supabase
+                .from('organizations')
+                .select('plan_id, plan_status, is_active')
+                .eq('id', orgId)
+                .maybeSingle();
+            if (org && (org.plan_status === 'active' || org.plan_status === 'trial')) {
+                subscription = {
+                    plan_id: org.plan_id || 'starter',
+                    plan_label: org.plan_id === 'pro' ? 'WA Pro' : org.plan_id === 'growth' ? 'WA Growth' : 'WA Starter',
+                    status: 'active',
+                    expires_at: null
+                };
+            }
         }
 
         const {
@@ -432,7 +462,7 @@ export async function getMyProfile(req: any, res: Response) {
 
         res.json({
             ...safeMember,
-            organization_id: orgId,
+            organization_id: orgId || member.organization_id,
             subscription
         });
     } catch (err: any) {

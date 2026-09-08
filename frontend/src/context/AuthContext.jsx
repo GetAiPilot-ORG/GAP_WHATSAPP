@@ -8,8 +8,14 @@ export const useAuth = () => useContext(AuthContext)
 // Map raw plan IDs → display names
 function resolvePlanName(plan) {
     if (!plan) return 'No active plan'
-    const p = plan.toLowerCase()
+    const p = String(plan).toLowerCase()
     if (p === 'free' || p === 'whatsapp_free' || p === '') return 'No active plan'
+    if (p.includes('max')) return 'GAP Max'
+    if (p.includes('all_in_one') || p.includes('bundle')) return 'GAP Max'
+    if (p.includes('pro')) return 'GAP Pro'
+    if (p.includes('growth')) return 'GAP Growth'
+    if (p.includes('core')) return 'GAP Core'
+    if (p.includes('starter')) return 'GAP Starter'
     return plan
 }
 
@@ -43,7 +49,7 @@ export function AuthProvider({ children }) {
 
                     if (data?.subscription) {
                         const expiresAt = data.subscription.expires_at ? new Date(data.subscription.expires_at).getTime() : 0;
-                        const isSubActive = expiresAt > Date.now();
+                        const isSubActive = !data.subscription.expires_at || expiresAt > Date.now() || data.subscription.status === 'active';
                         let resolvedPlan = isSubActive
                             ? (data.subscription.plan_label || data.subscription.plan_id || 'GAP Max')
                             : 'No active plan';
@@ -65,13 +71,14 @@ export function AuthProvider({ children }) {
             // Fallback for direct owners if endpoint is loading or unreachable
             const { data: sub } = await supabase
                 .from('app_user_subscriptions')
-                .select('plan_id, plan_label, expires_at')
+                .select('plan_id, plan_label, expires_at, status')
                 .eq('user_id', sessionUser.id)
                 .maybeSingle();
 
-            const isSubActive = sub?.expires_at ? new Date(sub.expires_at) > new Date() : false;
+            const expiresAt = sub?.expires_at ? new Date(sub.expires_at).getTime() : 0;
+            const isSubActive = sub ? (!sub.expires_at || expiresAt > Date.now() || sub.status === 'active') : false;
             let resolvedPlan = isSubActive
-                ? (sub?.plan_label || sub?.plan_id || 'No active plan')
+                ? (sub?.plan_label || sub?.plan_id || 'GAP Max')
                 : 'No active plan';
             const resolvedStatus = isSubActive ? 'active' : (sub ? 'expired' : 'inactive');
             resolvedPlan = resolvePlanName(resolvedPlan);
@@ -97,8 +104,6 @@ export function AuthProvider({ children }) {
         const profileKey = `${userId}:${loginType || 'owner'}:${token}`
         if (fetchedForProfileKey.current === profileKey && userRole !== null) return
         fetchedForProfileKey.current = profileKey
-        setUserRole(null)
-        setMemberProfile(null)
         setIsProfileLoading(true)
         try {
             const res = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api/team/my-profile`, {
@@ -113,12 +118,12 @@ export function AuthProvider({ children }) {
                 setUserRole(role)
                 setMemberProfile(data)
 
-                // If this is an agent or team member, inherit the organization's subscription status
+                // Inherit the organization's subscription status
                 if (data?.subscription) {
                     const expiresAt = data.subscription.expires_at ? new Date(data.subscription.expires_at).getTime() : 0
-                    const isSubActive = expiresAt > Date.now()
+                    const isSubActive = !data.subscription.expires_at || expiresAt > Date.now() || data.subscription.status === 'active'
                     let resolvedPlan = isSubActive
-                        ? (data.subscription.plan_label || data.subscription.plan_id || 'No active plan')
+                        ? (data.subscription.plan_label || data.subscription.plan_id || 'GAP Max')
                         : 'No active plan'
                     const resolvedStatus = isSubActive ? 'active' : (data.subscription ? 'expired' : 'inactive')
                     resolvedPlan = resolvePlanName(resolvedPlan)
@@ -126,7 +131,7 @@ export function AuthProvider({ children }) {
                     setUser(prev => prev ? {
                         ...prev,
                         plan: resolvedPlan,
-                        subscription_status: resolvedStatus,
+                        subscription_status: role === 'agent' ? 'active' : resolvedStatus,
                         subscription_checked: true,
                         role: role
                     } : null)

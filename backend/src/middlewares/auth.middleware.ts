@@ -3,6 +3,18 @@ import { supabase } from '../config/supabase.js';
 export async function checkSubscription(orgId: string): Promise<boolean> {
     if (!supabase) return true; // Debug mode fallback
     try {
+        // 1. Check organization row directly
+        const { data: org } = await supabase
+            .from('organizations')
+            .select('plan_id, plan_status, is_active')
+            .eq('id', orgId)
+            .maybeSingle();
+
+        if (org && org.is_active && (org.plan_status === 'active' || org.plan_status === 'trial')) {
+            return true;
+        }
+
+        // 2. Check organization owner
         const { data: ownerMember, error: ownerErr } = await supabase
             .from('organization_members')
             .select('user_id')
@@ -10,32 +22,33 @@ export async function checkSubscription(orgId: string): Promise<boolean> {
             .eq('role', 'owner')
             .maybeSingle();
 
-        if (ownerErr || !ownerMember) {
-            console.warn(`[Subscription Check] No owner found for org ${orgId}`);
-            return false;
+        const targetUserId = ownerMember?.user_id;
+
+        let sub: any = null;
+        if (targetUserId) {
+            const { data: s } = await supabase
+                .from('app_user_subscriptions')
+                .select('plan_id, plan_label, expires_at, status')
+                .eq('user_id', targetUserId)
+                .maybeSingle();
+            sub = s;
         }
 
-        const { data: sub, error: subErr } = await supabase
-            .from('app_user_subscriptions')
-            .select('plan_id, expires_at')
-            .eq('user_id', ownerMember.user_id)
-            .maybeSingle();
-
-        if (subErr || !sub) {
-            console.warn(`[Subscription Check] No subscription found for user ${ownerMember.user_id}`);
-            return false;
+        if (!sub) {
+            // Fallback: If org is active or no subscription explicitly restricting, allow access
+            return org?.is_active ?? true;
         }
 
         const expiresAt = sub.expires_at ? new Date(sub.expires_at).getTime() : 0;
-        const isActive = expiresAt > Date.now();
+        const isActive = sub.status === 'active' || !sub.expires_at || expiresAt > Date.now();
         if (!isActive) return false;
 
-        const plan = String(sub.plan_id || '').toLowerCase();
-        const isWhatsAppPlan = plan.includes('whatsapp') || plan.includes('all_in_one') || plan.includes('bundle') || plan.includes('ultimate') || plan.includes('starter') || plan.includes('growth') || plan.includes('pro');
+        const plan = `${sub.plan_id || ''} ${sub.plan_label || ''}`.toLowerCase();
+        const isWhatsAppPlan = plan.includes('whatsapp') || plan.includes('all_in_one') || plan.includes('bundle') || plan.includes('ultimate') || plan.includes('starter') || plan.includes('growth') || plan.includes('pro') || plan.includes('gap') || plan.includes('max') || plan.includes('core') || plan.includes('trial') || plan.includes('enterprise');
         return isWhatsAppPlan;
     } catch (err: any) {
         console.error(`[Subscription Check] Error checking subscription for org ${orgId}:`, err.message);
-        return false;
+        return true;
     }
 }
 
