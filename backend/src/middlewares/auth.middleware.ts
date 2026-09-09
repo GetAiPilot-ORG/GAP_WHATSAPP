@@ -23,7 +23,6 @@ export async function checkSubscription(orgId: string): Promise<boolean> {
             .maybeSingle();
 
         const targetUserId = ownerMember?.user_id;
-
         let sub: any = null;
         if (targetUserId) {
             const { data: s } = await supabase
