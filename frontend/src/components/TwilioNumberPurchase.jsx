@@ -88,12 +88,13 @@ export default function TwilioNumberPurchase() {
                     </div>
                 </div>
                 <button
-                    onClick={searchNumbers}
-                    disabled={searching}
-                    className="inline-flex h-11 w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-50"
+                    type="button"
+                    disabled
+                    title="Virtual number search is coming soon"
+                    className="inline-flex h-11 w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-gray-200 px-6 text-sm font-semibold text-gray-400 shadow-sm cursor-not-allowed select-none"
                 >
-                    {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                    Search Numbers
+                    <Search className="h-4 w-4" />
+                    Search Numbers (Coming Soon)
                 </button>
             </div>
 
@@ -108,12 +109,12 @@ export default function TwilioNumberPurchase() {
                                     <span className="mt-1 block text-xs text-gray-500">Voice, SMS, MMS capable</span>
                                 </div>
                                 <button
-                                    onClick={() => buyNumber(num.phoneNumber)}
-                                    disabled={buying !== false}
-                                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-gray-50 px-3 py-2.5 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 transition-all group-hover:bg-indigo-50 group-hover:text-indigo-700 group-hover:ring-indigo-200 disabled:opacity-50"
+                                    type="button"
+                                    disabled
+                                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-gray-100 px-3 py-2.5 text-sm font-semibold text-gray-400 ring-1 ring-inset ring-gray-200 cursor-not-allowed select-none"
                                 >
-                                    {buying === num.phoneNumber ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
-                                    Buy Now
+                                    <ShoppingCart className="h-4 w-4" />
+                                    Coming Soon
                                 </button>
                             </div>
                         ))}

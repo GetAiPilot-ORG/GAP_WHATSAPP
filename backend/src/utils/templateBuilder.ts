@@ -3,6 +3,137 @@ import { validateWhatsappTemplatePayload, type TemplateValidationIssue } from '.
 export const TEMPLATE_TYPES = ['DEFAULT', 'CATALOG', 'FLOW', 'AUTHENTICATION', 'CALL_PERMISSION_REQUEST'] as const;
 export type TemplateType = typeof TEMPLATE_TYPES[number];
 
+// These entries are still returned by Meta's template library, but their old
+// component/button definitions cannot be cloned. Create them through Meta's
+// current authentication template model instead.
+export const LEGACY_AUTH_LIBRARY_TEMPLATE_NAMES = new Set([
+  'delivery_code_1',
+  'delivery_code_2',
+  'delivery_code_3',
+  'delivery_code_4',
+  'delivery_code_5',
+  'delivery_code_6',
+  'login_code',
+  'in_person_banking_user_verification',
+  'temporary_password',
+  'verify_account',
+  'verify_account_2',
+  'verify_password_recovery',
+  'verify_code',
+  'verify_otp_usecase',
+  'verify_code_1',
+  'verify_transaction_1',
+  'verify_transaction_2',
+  'verify_transaction_3',
+  'verify_transaction_4',
+  'verify_transfer_1',
+]);
+
+export function isLegacyAuthLibraryTemplate(name: unknown) {
+  return LEGACY_AUTH_LIBRARY_TEMPLATE_NAMES.has(String(name || '').trim().toLowerCase());
+}
+
+export const UNAVAILABLE_BOUNDARY_LIBRARY_TEMPLATE_NAMES = new Set([
+  'crisis_response_1',
+  'crisis_response_2',
+  'card_transaction_alert_1',
+  'card_transaction_alert_2',
+  'delivery_confirmation_3',
+  'delivery_confirmation_4',
+  'delivery_update_2',
+  'disbursement_voucher_1',
+  'health_awareness_1',
+  'health_emergency_2',
+  'identity_compliance_1',
+  'order_canceled_1',
+  'order_canceled_2',
+  'payment_notice_2',
+  'payment_notice_3',
+  'purchase_transaction_alert',
+  'severe_weather_alert_2',
+]);
+
+export function isUnavailableBoundaryLibraryTemplate(name: unknown) {
+  return UNAVAILABLE_BOUNDARY_LIBRARY_TEMPLATE_NAMES.has(String(name || '').trim().toLowerCase());
+}
+
+export const UNAVAILABLE_PAYMENT_LIBRARY_TEMPLATE_NAMES = new Set([
+  'payment_overdue_5',
+  'payment_overdue_6',
+  'payment_overdue_7',
+  'payment_reminder_5',
+  'payment_reminder_6',
+  'payment_reminder_7',
+  'payment_reminder_8',
+  'payment_recharge_reminder_01',
+]);
+
+export function isUnavailablePaymentLibraryTemplate(name: unknown) {
+  return UNAVAILABLE_PAYMENT_LIBRARY_TEMPLATE_NAMES.has(String(name || '').trim().toLowerCase());
+}
+
+export const UNAVAILABLE_FOOTER_LIMIT_LIBRARY_TEMPLATE_NAMES = new Set([
+  'shipment_confirmation_1',
+]);
+
+export function isUnavailableFooterLimitLibraryTemplate(name: unknown) {
+  return UNAVAILABLE_FOOTER_LIMIT_LIBRARY_TEMPLATE_NAMES.has(String(name || '').trim().toLowerCase());
+}
+
+export const UNAVAILABLE_DEPRECATED_LIBRARY_TEMPLATE_NAMES = new Set([
+  'back_on_whatsapp',
+]);
+
+export function isUnavailableDeprecatedLibraryTemplate(name: unknown) {
+  return UNAVAILABLE_DEPRECATED_LIBRARY_TEMPLATE_NAMES.has(String(name || '').trim().toLowerCase());
+}
+
+export function getLibraryTemplateUnavailabilityInfo(name: unknown) {
+  const clean = String(name || '').trim().toLowerCase();
+
+  if (UNAVAILABLE_BOUNDARY_LIBRARY_TEMPLATE_NAMES.has(clean)) {
+    return {
+      unavailable: true,
+      code: 'META_LIBRARY_TEMPLATE_UNAVAILABLE',
+      reason: 'Meta rejects this legacy template because its message starts or ends with a variable.',
+      badge: 'Boundary variable issue',
+      meta_error_code: 2388299,
+    };
+  }
+
+  if (UNAVAILABLE_PAYMENT_LIBRARY_TEMPLATE_NAMES.has(clean)) {
+    return {
+      unavailable: true,
+      code: 'WHATSAPP_PAYMENTS_REQUIRED',
+      reason: 'Requires WhatsApp Payments setup and an eligible payment provider.',
+      badge: 'Payments setup required',
+      meta_error_code: null,
+    };
+  }
+
+  if (UNAVAILABLE_FOOTER_LIMIT_LIBRARY_TEMPLATE_NAMES.has(clean)) {
+    return {
+      unavailable: true,
+      code: 'FOOTER_LIMIT_EXCEEDED',
+      reason: "Meta's library definition exceeds the 60-character limit for footers.",
+      badge: 'Footer limit exceeded',
+      meta_error_code: null,
+    };
+  }
+
+  if (UNAVAILABLE_DEPRECATED_LIBRARY_TEMPLATE_NAMES.has(clean)) {
+    return {
+      unavailable: true,
+      code: 'DEACTIVATED_BY_META',
+      reason: 'This template has been deprecated or deactivated by Meta.',
+      badge: 'Deactivated by Meta',
+      meta_error_code: null,
+    };
+  }
+
+  return null;
+}
+
 type BuildInput = {
   name: string;
   category: string;

@@ -8,8 +8,14 @@ export const useAuth = () => useContext(AuthContext)
 // Map raw plan IDs → display names
 function resolvePlanName(plan) {
     if (!plan) return 'No active plan'
-    const p = plan.toLowerCase()
+    const p = String(plan).toLowerCase()
     if (p === 'free' || p === 'whatsapp_free' || p === '') return 'No active plan'
+    if (p.includes('max')) return 'GAP Max'
+    if (p.includes('all_in_one') || p.includes('bundle')) return 'GAP Max'
+    if (p.includes('pro')) return 'GAP Pro'
+    if (p.includes('growth')) return 'GAP Growth'
+    if (p.includes('core')) return 'GAP Core'
+    if (p.includes('starter')) return 'GAP Starter'
     return plan
 }
 
@@ -26,46 +32,63 @@ export function AuthProvider({ children }) {
 
     const fetchUserProfile = useCallback(async (sessionUser) => {
         try {
-            // Find organization owner to get their subscription status
-            const { data: member } = await supabase
-                .from('organization_members')
-                .select('organization_id')
-                .eq('user_id', sessionUser.id)
-                .maybeSingle()
+            const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token;
+            if (token) {
+                const res = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api/team/my-profile`, {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'X-Auth-Portal': loginType || 'owner'
+                    }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    const role = data?.role || (loginType === 'agent' ? 'agent' : 'owner');
+                    setUserRole(role);
+                    setMemberProfile(data);
 
-            let ownerId = sessionUser.id
-            if (member?.organization_id) {
-                const { data: ownerMember } = await supabase
-                    .from('organization_members')
-                    .select('user_id')
-                    .eq('organization_id', member.organization_id)
-                    .eq('role', 'owner')
-                    .maybeSingle()
-                if (ownerMember?.user_id) {
-                    ownerId = ownerMember.user_id
+                    if (data?.subscription) {
+                        const expiresAt = data.subscription.expires_at ? new Date(data.subscription.expires_at).getTime() : 0;
+                        const isSubActive = !data.subscription.expires_at || expiresAt > Date.now() || data.subscription.status === 'active';
+                        let resolvedPlan = isSubActive
+                            ? (data.subscription.plan_label || data.subscription.plan_id || 'GAP Max')
+                            : 'No active plan';
+                        const resolvedStatus = isSubActive ? 'active' : (data.subscription ? 'expired' : 'inactive');
+                        resolvedPlan = resolvePlanName(resolvedPlan);
+
+                        setUser(prev => prev ? {
+                            ...prev,
+                            plan: resolvedPlan,
+                            subscription_status: role === 'agent' ? 'active' : resolvedStatus,
+                            subscription_checked: true,
+                            role: role
+                        } : null);
+                        return;
+                    }
                 }
             }
 
+            // Fallback for direct owners if endpoint is loading or unreachable
             const { data: sub } = await supabase
                 .from('app_user_subscriptions')
-                .select('plan_id, plan_label, expires_at')
-                .eq('user_id', ownerId)
-                .maybeSingle()
+                .select('plan_id, plan_label, expires_at, status')
+                .eq('user_id', sessionUser.id)
+                .maybeSingle();
 
-            const isSubActive = sub?.expires_at ? new Date(sub.expires_at) > new Date() : false
+            const expiresAt = sub?.expires_at ? new Date(sub.expires_at).getTime() : 0;
+            const isSubActive = sub ? (!sub.expires_at || expiresAt > Date.now() || sub.status === 'active') : false;
             let resolvedPlan = isSubActive
-                ? (sub?.plan_label || sub?.plan_id || 'No active plan')
-                : 'No active plan'
-            const resolvedStatus = isSubActive ? 'active' : (sub ? 'expired' : 'inactive')
+                ? (sub?.plan_label || sub?.plan_id || 'GAP Max')
+                : 'No active plan';
+            const resolvedStatus = isSubActive ? 'active' : (sub ? 'expired' : 'inactive');
+            resolvedPlan = resolvePlanName(resolvedPlan);
 
-            resolvedPlan = resolvePlanName(resolvedPlan)
-
-            setUser(prev => prev ? { ...prev, plan: resolvedPlan, subscription_status: resolvedStatus, subscription_checked: true } : null)
+            setUser(prev => prev ? { ...prev, plan: resolvedPlan, subscription_status: resolvedStatus, subscription_checked: true } : null);
         } catch (err) {
-            console.error('[AUTH] fetchUserProfile error:', err)
-            setUser(prev => prev ? { ...prev, subscription_checked: true } : null)
+            console.error('[AUTH] fetchUserProfile error:', err);
+            setUser(prev => prev ? { ...prev, subscription_checked: true } : null);
         }
-    }, [])
+    }, [loginType]);
 
     const refreshProfile = useCallback(async () => {
         const { data: { session: currentSession } } = await supabase.auth.getSession()
@@ -81,8 +104,6 @@ export function AuthProvider({ children }) {
         const profileKey = `${userId}:${loginType || 'owner'}:${token}`
         if (fetchedForProfileKey.current === profileKey && userRole !== null) return
         fetchedForProfileKey.current = profileKey
-        setUserRole(null)
-        setMemberProfile(null)
         setIsProfileLoading(true)
         try {
             const res = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api/team/my-profile`, {
@@ -96,15 +117,34 @@ export function AuthProvider({ children }) {
                 const role = data?.role || (loginType === 'agent' ? 'agent' : 'owner')
                 setUserRole(role)
                 setMemberProfile(data)
+
+                // Inherit the organization's subscription status
+                if (data?.subscription) {
+                    const expiresAt = data.subscription.expires_at ? new Date(data.subscription.expires_at).getTime() : 0
+                    const isSubActive = !data.subscription.expires_at || expiresAt > Date.now() || data.subscription.status === 'active'
+                    let resolvedPlan = isSubActive
+                        ? (data.subscription.plan_label || data.subscription.plan_id || 'GAP Max')
+                        : 'No active plan'
+                    const resolvedStatus = isSubActive ? 'active' : (data.subscription ? 'expired' : 'inactive')
+                    resolvedPlan = resolvePlanName(resolvedPlan)
+
+                    setUser(prev => prev ? {
+                        ...prev,
+                        plan: resolvedPlan,
+                        subscription_status: role === 'agent' ? 'active' : resolvedStatus,
+                        subscription_checked: true,
+                        role: role
+                    } : null)
+                }
             } else {
                 const errorData = await res.json().catch(() => ({}))
                 console.warn("Failed to resolve profile role:", res.status, errorData?.error || res.statusText)
-                setUserRole('agent')
+                setUserRole(loginType === 'agent' ? 'agent' : 'owner')
                 setMemberProfile(null)
             }
         } catch (e) {
             console.error("Failed to fetch member profile", e)
-            setUserRole('agent')
+            setUserRole(loginType === 'agent' ? 'agent' : 'owner')
             setMemberProfile(null)
         } finally {
             setIsProfileLoading(false)

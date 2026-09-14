@@ -37,7 +37,7 @@ const statusLabels = {
 
 export default function WhatsAppNumberPage() {
     const { user, apiCall } = useAuth()
-    const [activeTab, setActiveTab] = useState('instant')
+    const [activeTab, setActiveTab] = useState('assisted')
     const [form, setForm] = useState(() => ({
         ...initialForm,
         business_name: user?.user_metadata?.organization_name || '',
@@ -142,7 +142,7 @@ export default function WhatsAppNumberPage() {
                 </div>
                 <h1 className="text-2xl font-bold tracking-tight text-gray-950 sm:text-4xl">Set up your WhatsApp number</h1>
                 <p className="mx-auto mt-2 sm:mt-4 max-w-2xl text-xs sm:text-base leading-relaxed text-gray-600">
-                    Get a fresh virtual number instantly for WhatsApp Cloud API, or request our team's assistance for a guided onboarding experience.
+                    Get a fresh virtual number for WhatsApp Cloud API, or request our team's assistance for a guided onboarding experience.
                 </p>
                 <div className="mt-4 flex items-center justify-center gap-4">
                     <Link to="/whatsapp-connect" className="inline-flex items-center text-xs sm:text-sm font-semibold text-indigo-600 hover:text-indigo-500">
@@ -155,13 +155,17 @@ export default function WhatsAppNumberPage() {
             <div data-tour="number-tabs" className="flex justify-center mt-6">
                 <div className="inline-flex rounded-xl bg-gray-200/60 p-1 sm:p-1.5 shadow-inner">
                     <button
-                        onClick={() => setActiveTab('instant')}
-                        className={`flex items-center gap-1.5 rounded-lg px-3 py-2 sm:px-6 sm:py-2.5 text-xs sm:text-sm font-bold transition-all ${activeTab === 'instant' ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-900/5' : 'text-gray-500 hover:text-gray-900'}`}
+                        type="button"
+                        disabled
+                        title="Twilio instant setup is currently unavailable"
+                        className="flex items-center gap-1.5 rounded-lg px-3 py-2 sm:px-6 sm:py-2.5 text-xs sm:text-sm font-bold text-gray-400 cursor-not-allowed select-none"
                     >
                         <Zap className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         Instant Setup (Twilio)
+                        <span className="rounded-full bg-gray-300 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">Coming Soon</span>
                     </button>
                     <button
+                        type="button"
                         onClick={() => setActiveTab('assisted')}
                         className={`flex items-center gap-1.5 rounded-lg px-3 py-2 sm:px-6 sm:py-2.5 text-xs sm:text-sm font-bold transition-all ${activeTab === 'assisted' ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-900/5' : 'text-gray-500 hover:text-gray-900'}`}
                     >

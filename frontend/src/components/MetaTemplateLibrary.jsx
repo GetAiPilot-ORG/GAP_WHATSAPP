@@ -202,13 +202,20 @@ export default function MetaTemplateLibrary({
                 ) : filteredTemplates.length ? (
                     <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                         {filteredTemplates.map((template) => (
-                            <article key={template.id} className="group overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#9bcaf3] hover:shadow-[0_12px_28px_rgba(15,23,42,0.09)]">
-                                <button onClick={() => onUse(template)} className="block w-full p-3 text-left">
+                            <article key={template.id} className={`group relative overflow-hidden rounded-lg border bg-white shadow-sm transition duration-200 ${template.availability === 'UNAVAILABLE' ? 'border-slate-200 opacity-70' : 'border-slate-200 hover:-translate-y-0.5 hover:border-[#9bcaf3] hover:shadow-[0_12px_28px_rgba(15,23,42,0.09)]'}`}>
+                                {template.availability === 'UNAVAILABLE' ? (
+                                    <span title={template.unavailable_reason} className="absolute right-2 top-2 z-20 rounded-full bg-slate-800 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wide text-white">{template.unavailable_badge || 'Unavailable'}</span>
+                                ) : null}
+                                <button disabled={template.availability === 'UNAVAILABLE'} onClick={() => onUse(template)} className="block w-full p-3 text-left disabled:cursor-not-allowed">
                                     <MessagePreview template={template} />
                                 </button>
                                 <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-white px-3 py-2.5">
                                     <span className="min-w-0 truncate text-[10px] font-medium text-slate-500">{template.name}</span>
-                                    <button onClick={() => onUse(template)} className="shrink-0 text-[10px] font-semibold text-[#0070d1] hover:underline">{template.source === 'meta_library' ? 'Import' : 'Customize'}</button>
+                                    {template.availability === 'UNAVAILABLE' ? (
+                                        <span title={template.unavailable_reason} className="shrink-0 text-[10px] font-semibold text-slate-400">{template.unavailable_badge || 'Unavailable'}</span>
+                                    ) : (
+                                        <button onClick={() => onUse(template)} className="shrink-0 text-[10px] font-semibold text-[#0070d1] hover:underline">{template.source === 'meta_library' ? 'Import' : 'Customize'}</button>
+                                    )}
                                 </div>
                             </article>
                         ))}

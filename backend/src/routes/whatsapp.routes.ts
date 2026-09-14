@@ -17,12 +17,15 @@ import {
   createTemplate,
   deleteTemplate,
   getTemplateLibrary,
+  recordOnboardingEvent,
 } from "../controllers/whatsapp.controller.js";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
 // Base path: /api/whatsapp
+
+router.post("/onboarding-events", authMiddleware, recordOnboardingEvent);
 
 router.get("/number-requests", authMiddleware, getNumberRequests);
 router.post("/number-requests", authMiddleware, createNumberRequest);
@@ -55,13 +58,5 @@ router.post(
   createTemplate,
 );
 router.delete("/templates/:name", authMiddleware, deleteTemplate);
-
-router.get("/debug-library", async (req: any, res: any) => {
-  const { supabase } = require("../config/supabase.js");
-  const { data } = await supabase.from("w_wa_accounts").select("organization_id").limit(1).single();
-  req.organization_id = data?.organization_id;
-  const { getTemplateLibrary } = require("../controllers/whatsapp.controller.js");
-  return getTemplateLibrary(req, res);
-});
 
 export default router;

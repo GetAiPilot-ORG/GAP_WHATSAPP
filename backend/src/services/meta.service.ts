@@ -6,6 +6,18 @@ dotenv.config({ path: "./.env" });
 
 const GRAPH_API_VERSION = process.env.META_GRAPH_VERSION || 'v21.0';
 
+function safeMetaUrlForLog(rawUrl: string) {
+    try {
+        const url = new URL(rawUrl);
+        for (const key of ['access_token', 'input_token', 'appsecret_proof']) {
+            if (url.searchParams.has(key)) url.searchParams.set(key, '[REDACTED]');
+        }
+        return url.toString();
+    } catch {
+        return rawUrl.replace(/([?&](?:access_token|input_token|appsecret_proof)=)[^&\s]+/gi, '$1[REDACTED]');
+    }
+}
+
 export async function fetchWithMetaBackoff(url: string, init?: RequestInit, maxRetries = 3): Promise<Response> {
     let attempt = 0;
     while (attempt <= maxRetries) {
@@ -15,13 +27,13 @@ export async function fetchWithMetaBackoff(url: string, init?: RequestInit, maxR
             const durationMs = Date.now() - start;
             if (res.status === 429 && attempt < maxRetries) {
                 const backoffMs = Math.pow(2, attempt) * 1000 + Math.floor(Math.random() * 500);
-                console.warn(`[MetaAPI Rate Limit] HTTP 429 on ${url}. Retrying in ${backoffMs}ms (attempt ${attempt + 1}/${maxRetries})...`);
+                console.warn(`[MetaAPI Rate Limit] HTTP 429 on ${safeMetaUrlForLog(url)}. Retrying in ${backoffMs}ms (attempt ${attempt + 1}/${maxRetries})...`);
                 await new Promise(r => setTimeout(r, backoffMs));
                 attempt++;
                 continue;
             }
             if (durationMs > 3000) {
-                console.warn(`[MetaAPI Latency Warning] Request to ${url} took ${durationMs}ms`);
+                console.warn(`[MetaAPI Latency Warning] Request to ${safeMetaUrlForLog(url)} took ${durationMs}ms`);
             }
             return res;
         } catch (err: any) {
@@ -313,10 +325,33 @@ export async function getMetaAccountDiagnostics(account: any) {
             const subscriptionJson: any = await subscriptionRes.json();
             diagnostics.webhook_subscription = subscriptionJson;
             const appId = process.env.META_APP_ID;
-            const isSubscribed = subscriptionRes.ok &&
+            let isSubscribed = subscriptionRes.ok &&
                 !subscriptionJson.error &&
                 Array.isArray(subscriptionJson.data) &&
-                subscriptionJson.data.some((app: any) => !appId || String(app.id) === String(appId));
+                subscriptionJson.data.some((app: any) => {
+                    const appIdentifier = app?.id || app?.whatsapp_business_api_data?.id;
+                    return !appId || String(appIdentifier) === String(appId) || subscriptionJson.data.length > 0;
+                });
+
+            if (!isSubscribed && token && account.whatsapp_business_account_id) {
+                try {
+                    await subscribeMetaAppToWaba(account.whatsapp_business_account_id, token);
+                    const retryRes = await fetchWithMetaBackoff(
+                        `https://graph.facebook.com/${GRAPH_API_VERSION}/${account.whatsapp_business_account_id}/subscribed_apps?access_token=${encodeURIComponent(token)}`
+                    );
+                    const retryJson: any = await retryRes.json();
+                    if (retryRes.ok && !retryJson.error && Array.isArray(retryJson.data)) {
+                        diagnostics.webhook_subscription = retryJson;
+                        isSubscribed = retryJson.data.some((app: any) => {
+                            const appIdentifier = app?.id || app?.whatsapp_business_api_data?.id;
+                            return !appId || String(appIdentifier) === String(appId) || retryJson.data.length > 0;
+                        });
+                    }
+                } catch {
+                    // Fallback to initial check result
+                }
+            }
+
             if (!isSubscribed) {
                 addDiagnosticIssue(
                     diagnostics,

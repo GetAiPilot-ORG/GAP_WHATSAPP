@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { startDriverTour } from './driverClient'
 import { OnboardingContext } from './onboardingContext'
-import { getGlobalTour, getTourForPath, GLOBAL_TOUR_ID, tours } from './tourRegistry'
-import { clearAllTourStates, clearTourState, hasTourCompleted, setTourState } from './tourStorage'
+import { getGlobalTour, getTourForPath, tours } from './tourRegistry'
+import { clearAllTourStates, clearTourState, setTourState } from './tourStorage'
 
 export function OnboardingProvider({ children }) {
     const location = useLocation()
@@ -56,17 +56,6 @@ export function OnboardingProvider({ children }) {
     const resetAllTours = useCallback(() => {
         clearAllTourStates(user)
     }, [user])
-
-    useEffect(() => {
-        if (!user || userRole !== 'owner' || isRunning) return
-        if (hasTourCompleted(user, GLOBAL_TOUR_ID)) return
-
-        const timer = window.setTimeout(() => {
-            startGlobalTour()
-        }, 900)
-
-        return () => window.clearTimeout(timer)
-    }, [isRunning, startGlobalTour, user, userRole])
 
     const value = useMemo(() => ({
         activeTour,

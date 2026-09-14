@@ -26,6 +26,7 @@ import { useDialog } from '../context/DialogContext'
 import { useWhatsAppAccounts } from '../context/WhatsAppAccountContext'
 import { formatINRFromPaise } from '../config/whatsappPricing'
 import TourButton from '../onboarding/TourButton'
+import WhatsAppMessagingGuideModal from '../components/WhatsAppMessagingGuideModal'
 import { loadFacebookSDK } from '../services/facebookSdkLoader'
 
 const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
@@ -50,6 +51,7 @@ export default function WhatsAppConnect() {
     const [manualError, setManualError] = useState('')
     const [diagnostics, setDiagnostics] = useState({})
     const [diagnosticsLoadingId, setDiagnosticsLoadingId] = useState(null)
+    const [isGuideModalOpen, setIsGuideModalOpen] = useState(false)
     const [hasIntegrationConsent, setHasIntegrationConsent] = useState(() => {
         if (import.meta.env.VITE_ENABLE_COOKIE_CONSENT !== 'true') return true
         try {
@@ -369,13 +371,64 @@ export default function WhatsAppConnect() {
                             </>
                         )}
                     </button>
-                    <Link
-                        to="/whatsapp-number"
-                        className="inline-flex min-h-9 sm:min-h-10 items-center justify-center gap-2 rounded-full border border-gray-200 bg-white px-4 sm:px-5 text-xs sm:text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50"
+                    <button
+                        type="button"
+                        disabled
+                        title="Virtual number service is coming soon"
+                        className="inline-flex min-h-9 sm:min-h-10 items-center justify-center gap-2 rounded-full border border-gray-200 bg-gray-100 px-4 sm:px-5 text-xs sm:text-sm font-semibold text-gray-400 cursor-not-allowed select-none"
                     >
                         <PhoneCall className="h-4 w-4" />
                         I need a new number
-                    </Link>
+                        <span className="rounded-full bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">Coming Soon</span>
+                    </button>
+                </div>
+            </section>
+
+            {/* Meta WhatsApp Rules & Messaging Guide Banner */}
+            <section className="overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50/80 via-teal-50/40 to-white p-4 sm:p-6 shadow-sm">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="max-w-3xl">
+                        <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1 text-xs font-bold text-white shadow-xs">
+                            <Sparkles className="h-3.5 w-3.5 text-emerald-200" />
+                            Official WhatsApp Messaging Rules
+                        </div>
+                        <h2 className="mt-3 text-base sm:text-xl font-bold text-gray-950">
+                            How messaging works after connecting your number
+                        </h2>
+                        <p className="mt-1.5 text-xs sm:text-sm leading-relaxed text-gray-600">
+                            Meta WhatsApp Cloud API has specific rules: You can only send freeform text messages within the <strong>24-Hour Customer Care Window</strong> after a customer texts you. To initiate a chat with a new contact, an approved <strong>Template Message</strong> is required.
+                        </p>
+                        <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                            <div className="rounded-xl border border-emerald-100 bg-white/90 p-3 shadow-2xs">
+                                <div className="text-xs font-bold text-emerald-900">1. Inbound 24h Window</div>
+                                <div className="mt-1 text-[11px] text-gray-600">Customer texts you &rarr; 24 hours of unlimited free chat opens.</div>
+                            </div>
+                            <div className="rounded-xl border border-blue-100 bg-white/90 p-3 shadow-2xs">
+                                <div className="text-xs font-bold text-blue-900">2. Template Outreach</div>
+                                <div className="mt-1 text-[11px] text-gray-600">Reaching new contacts requires a Meta-approved Template.</div>
+                            </div>
+                            <div className="rounded-xl border border-purple-100 bg-white/90 p-3 shadow-2xs">
+                                <div className="text-xs font-bold text-purple-900">3. Inbound QR / Link</div>
+                                <div className="mt-1 text-[11px] text-gray-600">Share your wa.me link &amp; QR code so users message you first.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex flex-col sm:flex-row lg:flex-col gap-2 shrink-0">
+                        <button
+                            type="button"
+                            onClick={() => setIsGuideModalOpen(true)}
+                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-emerald-700 transition-colors"
+                        >
+                            <Sparkles className="h-4 w-4 text-emerald-200" />
+                            Open Messaging Manual
+                        </button>
+                        <Link
+                            to="/templates"
+                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-xs sm:text-sm font-semibold text-gray-700 shadow-2xs hover:bg-gray-50 transition-colors"
+                        >
+                            Manage Templates &rarr;
+                        </Link>
+                    </div>
                 </div>
             </section>
 
@@ -586,13 +639,15 @@ export default function WhatsAppConnect() {
                     <div className="mt-3.5 rounded-xl border border-blue-100 bg-blue-50 p-3 sm:p-4 text-xs sm:text-sm leading-5 sm:leading-6 text-blue-900">
                         Official process me number ownership/OTP, business details aur Meta policy approval required hota hai. Hum isko guided service ke form me manage karenge.
                     </div>
-                    <Link
-                        to="/whatsapp-number"
-                        className="mt-3.5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gray-950 px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold text-white hover:bg-gray-800"
+                    <button
+                        type="button"
+                        disabled
+                        title="Number request is coming soon"
+                        className="mt-3.5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gray-200 px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold text-gray-400 cursor-not-allowed select-none"
                     >
                         Request new number
-                        <ArrowRight className="h-4 w-4" />
-                    </Link>
+                        <span className="rounded-full bg-gray-300 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">Coming Soon</span>
+                    </button>
                 </div>
             </section>
 
@@ -632,10 +687,16 @@ export default function WhatsAppConnect() {
                                         <Smartphone className="h-4 w-4" />
                                         {isSdkLoading ? 'Enabling...' : hasIntegrationConsent ? 'Connect now' : 'Enable & Connect'}
                                     </button>
-                                    <Link to="/whatsapp-number" className="inline-flex items-center justify-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-gray-800 hover:bg-gray-50">
+                                    <button
+                                        type="button"
+                                        disabled
+                                        title="Virtual number service is coming soon"
+                                        className="inline-flex items-center justify-center gap-2 rounded-full border border-gray-200 bg-gray-100 px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-gray-400 cursor-not-allowed select-none"
+                                    >
                                         <PhoneCall className="h-4 w-4" />
                                         New number
-                                    </Link>
+                                        <span className="rounded-full bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">Coming Soon</span>
+                                    </button>
                                 </div>
                             </div>
                         )}
@@ -734,6 +795,7 @@ export default function WhatsAppConnect() {
                 <InfoBox title="Why templates are needed?" text="Customer ko first message ya broadcast bhejne ke liye Meta-approved templates required hote hain. Customer reply kare to normal service conversation open hoti hai." />
                 <InfoBox title="What if I am not technical?" text="Recommended Meta signup button use karein. Manual token section ko ignore kar sakte hain unless support team specifically bole." />
             </section>
+            <WhatsAppMessagingGuideModal isOpen={isGuideModalOpen} onClose={() => setIsGuideModalOpen(false)} />
         </div>
     )
 }

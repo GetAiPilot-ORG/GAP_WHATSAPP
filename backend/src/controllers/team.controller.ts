@@ -76,8 +76,14 @@ export async function getMembers(req: any, res: Response) {
                 onlineTimeToday += diffSecs;
             }
 
+            const {
+                invite_temp_password_encrypted,
+                invite_token_hash,
+                ...safeMember
+            } = member;
+
             return {
-                ...member,
+                ...safeMember,
                 invite_status: getMemberInviteState(member),
                 active_chats_count: member.user_id ? (activeChatsMap[member.user_id] || 0) : 0,
                 last_active_at: lastActiveAt,
@@ -252,8 +258,7 @@ export async function acceptInvite(req: any, res: Response) {
             .update({
                 is_active: true,
                 invite_accepted_at: new Date().toISOString(),
-                invite_token_hash: null,
-                invite_temp_password_encrypted: null
+                invite_token_hash: null
             })
             .eq('id', member.id);
 
@@ -290,7 +295,12 @@ export async function resendInvite(req: any, res: Response) {
 
         const inviteToken = createInviteToken();
         const inviteExpiresAt = getInviteExpiryDate();
-        const temporaryPassword = createTemporaryPassword();
+        
+        // Retain the custom password originally configured for this member
+        const existingPassword = member.invite_temp_password_encrypted
+            ? decryptToken(member.invite_temp_password_encrypted)
+            : null;
+        const temporaryPassword = req.body?.password || existingPassword || createTemporaryPassword();
 
         const { error: authErr } = await supabase.auth.admin.updateUserById(member.user_id, {
             password: temporaryPassword,
@@ -385,14 +395,76 @@ export async function deleteMember(req: any, res: Response) {
 
 export async function getMyProfile(req: any, res: Response) {
     try {
-        const { data, error } = await supabase
+        const orgId = req.organization_id;
+        let { data: member, error } = await supabase
             .from('organization_members')
             .select('*')
             .eq('user_id', req.user.id)
+            .eq('organization_id', orgId)
             .maybeSingle();
 
         if (error) throw error;
-        res.json(data);
+        if (!member) {
+            // Fallback: check any membership for this user
+            const { data: anyMember } = await supabase
+                .from('organization_members')
+                .select('*')
+                .eq('user_id', req.user.id)
+                .maybeSingle();
+            if (anyMember) {
+                member = anyMember;
+            } else {
+                return res.status(404).json({ error: 'Member profile not found in this organization' });
+            }
+        }
+
+        // Fetch subscription info from organization owner or requesting user
+        const { data: ownerMember } = await supabase
+            .from('organization_members')
+            .select('user_id')
+            .eq('organization_id', orgId)
+            .eq('role', 'owner')
+            .maybeSingle();
+
+        let subscription: any = null;
+        const targetUserId = ownerMember?.user_id || req.user.id;
+        if (targetUserId) {
+            const { data: sub } = await supabase
+                .from('app_user_subscriptions')
+                .select('plan_id, plan_label, expires_at, status')
+                .eq('user_id', targetUserId)
+                .maybeSingle();
+            subscription = sub;
+        }
+
+        // Also fallback to organization plan if subscription in app_user_subscriptions is missing
+        if (!subscription && orgId) {
+            const { data: org } = await supabase
+                .from('organizations')
+                .select('plan_id, plan_status, is_active')
+                .eq('id', orgId)
+                .maybeSingle();
+            if (org && (org.plan_status === 'active' || org.plan_status === 'trial')) {
+                subscription = {
+                    plan_id: org.plan_id || 'starter',
+                    plan_label: org.plan_id === 'pro' ? 'WA Pro' : org.plan_id === 'growth' ? 'WA Growth' : 'WA Starter',
+                    status: 'active',
+                    expires_at: null
+                };
+            }
+        }
+
+        const {
+            invite_temp_password_encrypted,
+            invite_token_hash,
+            ...safeMember
+        } = member;
+
+        res.json({
+            ...safeMember,
+            organization_id: orgId || member.organization_id,
+            subscription
+        });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
     }

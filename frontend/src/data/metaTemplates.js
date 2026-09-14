@@ -11,7 +11,7 @@ export const META_TEMPLATES_LIBRARY = [
       {
         type: 'BODY',
         text: 'Hi {{1}}, Your new account has been created successfully. Please verify {{2}} to complete your profile.',
-        example: { body_text: [['John', 'email/phone number']] }
+        example: { body_text: [['John', 'john.doe@example.com']] }
       }
     ]
   },

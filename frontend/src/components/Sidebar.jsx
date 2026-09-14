@@ -74,8 +74,7 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
     const [isHovered, setIsHovered] = useState(false)
     const [isOrgMenuOpen, setIsOrgMenuOpen] = useState(false)
     const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
-    const { accounts: waAccounts } = useWhatsAppAccounts()
-    const [selectedWaAccount, setSelectedWaAccount] = useState(() => localStorage.getItem(SELECTED_WA_ACCOUNT_KEY) || 'All')
+    const { accounts: waAccounts, selectedAccountId, selectedAccount, setSelectedAccount } = useWhatsAppAccounts()
     const { isInstallable, promptInstall } = usePwaInstall()
     const { permissionStatus, isSubscribed, subscribeToPush } = usePush()
 
@@ -99,10 +98,10 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
     })
 
     const selectedAccountLabel = useMemo(() => {
-        if (selectedWaAccount === 'All') return 'GAP WhatsApp Pilot'
-        const account = waAccounts.find(item => String(getAccountSwitchKey(item)) === String(selectedWaAccount))
+        if (!selectedAccountId || selectedAccountId === 'All') return 'GAP WhatsApp Pilot'
+        const account = selectedAccount || waAccounts.find(item => String(getAccountSwitchKey(item)) === String(selectedAccountId) || String(item.id) === String(selectedAccountId))
         return account?.name || account?.display_phone_number || account?.phone_number_id || 'Selected account'
-    }, [selectedWaAccount, waAccounts])
+    }, [selectedAccountId, selectedAccount, waAccounts])
     const shouldHighlightConnect = isOwner && waAccounts.length === 0
 
     const isActive = (href) => {
@@ -138,9 +137,7 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
 
     const selectWaAccount = (accountId) => {
         const next = accountId || 'All'
-        setSelectedWaAccount(next)
-        localStorage.setItem(SELECTED_WA_ACCOUNT_KEY, next)
-        window.dispatchEvent(new CustomEvent('selected-wa-account-change', { detail: { accountId: next } }))
+        setSelectedAccount(next)
         setIsOrgMenuOpen(false)
     }
 
@@ -188,29 +185,32 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
                                     onClick={() => selectWaAccount('All')}
                                     className={clsx(
                                         'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-gray-50',
-                                        selectedWaAccount === 'All' ? 'bg-[#f5f7fa] font-semibold text-black' : 'text-gray-700'
+                                        (!selectedAccountId || selectedAccountId === 'All') ? 'bg-[#f5f7fa] font-semibold text-black' : 'text-gray-700'
                                     )}
                                 >
                                     <Blocks className="h-4 w-4 text-gray-500" />
                                     All WhatsApp accounts
                                 </button>
-                                {waAccounts.map(account => (
-                                    <button
-                                        key={account.id}
-                                        type="button"
-                                        onClick={() => selectWaAccount(getAccountSwitchKey(account))}
-                                        className={clsx(
-                                            'flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-gray-50',
-                                            String(selectedWaAccount) === String(getAccountSwitchKey(account)) ? 'bg-[#f5f7fa] font-semibold text-black' : 'text-gray-700'
-                                        )}
-                                    >
-                                        <Smartphone className="mt-0.5 h-4 w-4 shrink-0 text-gray-500" />
-                                        <span className="min-w-0">
-                                            <span className="block truncate">{account.name || account.display_phone_number || 'WhatsApp account'}</span>
-                                            <span className="block truncate text-xs font-normal text-gray-500">{account.display_phone_number || account.phone_number_id || ''}</span>
-                                        </span>
-                                    </button>
-                                ))}
+                                {waAccounts.map(account => {
+                                    const isSelected = String(selectedAccountId) === String(account.id) || String(selectedAccountId) === String(getAccountSwitchKey(account))
+                                    return (
+                                        <button
+                                            key={account.id}
+                                            type="button"
+                                            onClick={() => selectWaAccount(account.id)}
+                                            className={clsx(
+                                                'flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-gray-50',
+                                                isSelected ? 'bg-[#f5f7fa] font-semibold text-black' : 'text-gray-700'
+                                            )}
+                                        >
+                                            <Smartphone className="mt-0.5 h-4 w-4 shrink-0 text-gray-500" />
+                                            <span className="min-w-0">
+                                                <span className="block truncate">{account.name || account.display_phone_number || 'WhatsApp account'}</span>
+                                                <span className="block truncate text-xs font-normal text-gray-500">{account.display_phone_number || account.phone_number_id || ''}</span>
+                                            </span>
+                                        </button>
+                                    )
+                                })}
                                 {isOwner ? (
                                     <button
                                         type="button"
@@ -407,25 +407,28 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
                                 <button
                                     type="button"
                                     onClick={() => selectWaAccount('All')}
-                                    className={clsx('flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm', selectedWaAccount === 'All' ? 'bg-white font-semibold text-black' : 'text-gray-700')}
+                                    className={clsx('flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm', (!selectedAccountId || selectedAccountId === 'All') ? 'bg-white font-semibold text-black' : 'text-gray-700')}
                                 >
                                     <Blocks className="h-4 w-4 text-gray-500" />
                                     All WhatsApp accounts
                                 </button>
-                                {waAccounts.map(account => (
-                                    <button
-                                        key={account.id}
-                                        type="button"
-                                        onClick={() => selectWaAccount(getAccountSwitchKey(account))}
-                                        className={clsx('mt-1 flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left text-sm', String(selectedWaAccount) === String(getAccountSwitchKey(account)) ? 'bg-white font-semibold text-black' : 'text-gray-700')}
-                                    >
-                                        <Smartphone className="mt-0.5 h-4 w-4 shrink-0 text-gray-500" />
-                                        <span className="min-w-0">
-                                            <span className="block truncate">{account.name || account.display_phone_number || 'WhatsApp account'}</span>
-                                            <span className="block truncate text-xs font-normal text-gray-500">{account.display_phone_number || account.phone_number_id || ''}</span>
-                                        </span>
-                                    </button>
-                                ))}
+                                {waAccounts.map(account => {
+                                    const isSelected = String(selectedAccountId) === String(account.id) || String(selectedAccountId) === String(getAccountSwitchKey(account))
+                                    return (
+                                        <button
+                                            key={account.id}
+                                            type="button"
+                                            onClick={() => selectWaAccount(account.id)}
+                                            className={clsx('mt-1 flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left text-sm', isSelected ? 'bg-white font-semibold text-black' : 'text-gray-700')}
+                                        >
+                                            <Smartphone className="mt-0.5 h-4 w-4 shrink-0 text-gray-500" />
+                                            <span className="min-w-0">
+                                                <span className="block truncate">{account.name || account.display_phone_number || 'WhatsApp account'}</span>
+                                                <span className="block truncate text-xs font-normal text-gray-500">{account.display_phone_number || account.phone_number_id || ''}</span>
+                                            </span>
+                                        </button>
+                                    )
+                                })}
                             </div>
                         ) : null}
 

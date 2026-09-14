@@ -29,8 +29,11 @@ import {
     UserRound,
     X,
     MessageSquareText,
+    Sparkles,
+    Info,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import WhatsAppMessagingGuideModal from '../components/WhatsAppMessagingGuideModal'
 import { useAuth } from '../context/AuthContext'
 import { useDialog } from '../context/DialogContext'
 
@@ -153,6 +156,7 @@ export default function Contacts() {
     const [isDeleteAllModalOpen, setIsDeleteAllModalOpen] = useState(false)
     const [deleteAllConfirmName, setDeleteAllConfirmName] = useState('')
     const [deleteAllConfirmText, setDeleteAllConfirmText] = useState('')
+    const [isGuideModalOpen, setIsGuideModalOpen] = useState(false)
     const actionMenuRef = useRef(null)
 
     useEffect(() => {
@@ -969,6 +973,22 @@ export default function Contacts() {
                     ))}
                 </div>
 
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 rounded-xl border border-emerald-200/80 bg-emerald-50/60 p-3 sm:px-4 text-xs sm:text-sm text-emerald-950">
+                    <div className="flex items-center gap-2.5">
+                        <Sparkles className="h-4 w-4 shrink-0 text-emerald-600" />
+                        <span>
+                            <strong>Meta WhatsApp Rule:</strong> Reaching out to contacts who haven&apos;t texted you in the last 24 hours requires sending an approved <strong>Template Message</strong>.
+                        </span>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setIsGuideModalOpen(true)}
+                        className="inline-flex shrink-0 items-center gap-1 font-bold text-emerald-700 hover:text-emerald-800 underline"
+                    >
+                        <Info className="h-3.5 w-3.5" />
+                        How it works
+                    </button>
+                </div>
 
                 {(contactsError || saveMutation.error || deleteMutation.error || deleteAllMutation.error) ? (
                     <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -1605,6 +1625,7 @@ export default function Contacts() {
                     </div>
                 </div>
             )}
+            <WhatsAppMessagingGuideModal isOpen={isGuideModalOpen} onClose={() => setIsGuideModalOpen(false)} />
         </div>
     )
 }

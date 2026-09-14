@@ -26,14 +26,15 @@ async function fetchMaintenanceStatus() {
     });
 
     if (!res.ok) {
-      throw new Error("Failed to fetch status");
+      statusCache = { data: null, expiresAt: Date.now() + CACHE_TTL_MS };
+      return null;
     }
 
     const data = await res.json();
     statusCache = { data, expiresAt: Date.now() + CACHE_TTL_MS };
     return data;
   } catch (err) {
-    console.error("Maintenance check failed:", err);
+    statusCache = { data: null, expiresAt: Date.now() + CACHE_TTL_MS };
     return null; // Fail-open
   }
 }
