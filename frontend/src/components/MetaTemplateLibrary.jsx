@@ -41,11 +41,10 @@ function SelectField({ label, icon: Icon, value, options, onChange }) {
                 type="button"
                 onClick={() => setIsOpen((open) => !open)}
                 aria-expanded={isOpen}
-                className={`flex h-11 w-full items-center gap-2.5 rounded-lg border bg-white px-3.5 text-left text-sm font-medium outline-none transition ${
-                    isOpen
+                className={`flex h-11 w-full items-center gap-2.5 rounded-lg border bg-white px-3.5 text-left text-sm font-medium outline-none transition ${isOpen
                         ? 'border-[#0070d1] text-slate-900 ring-2 ring-[#0070d1]/10'
                         : 'border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-                }`}
+                    }`}
             >
                 {createElement(Icon, { className: `h-4 w-4 shrink-0 ${isOpen ? 'text-[#0070d1]' : 'text-slate-400'}` })}
                 <span className="min-w-0 flex-1 truncate">
@@ -74,11 +73,10 @@ function SelectField({ label, icon: Icon, value, options, onChange }) {
                                         onChange(option.value)
                                         setIsOpen(false)
                                     }}
-                                    className={`flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left text-sm transition ${
-                                        isSelected
+                                    className={`flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left text-sm transition ${isSelected
                                             ? 'bg-[#eef7ff] font-semibold text-[#0064b7]'
                                             : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                                    }`}
+                                        }`}
                                 >
                                     <span className="truncate">{option.label}</span>
                                     {isSelected ? <Check className="h-4 w-4 shrink-0" /> : null}
@@ -96,7 +94,7 @@ function MessagePreview({ template }) {
     const header = template.components?.find((component) => component.type === 'HEADER')?.text || ''
     const body = template.components?.find((component) => component.type === 'BODY')?.text || ''
     const buttons = template.components?.find((component) => component.type === 'BUTTONS')?.buttons || []
-    
+
     // Fallback for Meta template library where components are not returned
     const displayBody = body || `Template: ${template.name.replace(/_/g, ' ')}\n\n(Preview content not provided by Meta. Import to view full content.)`
     const parts = displayBody.split(/(\{\{\d+\}\})/g)
@@ -157,14 +155,14 @@ export default function MetaTemplateLibrary({
             <div className="mx-auto max-w-[1680px]">
                 <header className="meta-library-header overflow-hidden rounded-2xl text-white shadow-[0_18px_45px_rgba(7,27,46,0.14)]">
                     <div className="relative flex min-h-[260px] flex-col justify-between px-5 py-6 sm:min-h-[300px] sm:px-8 sm:py-8 lg:px-10">
-                       
+
                     </div>
                 </header>
 
                 <section className="relative z-20 mx-2 -mt-1 rounded-xl border border-slate-200 bg-white p-3 shadow-[0_12px_35px_rgba(15,23,42,0.07)] sm:mx-5 sm:-mt-4 sm:p-4">
                     <div className="flex gap-2 overflow-x-auto pb-1">
                         {Object.entries(categoryLabels).map(([value, label]) => (
-                            <button key={value} onClick={() => setTopic(value)} className={`whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold transition ${topic === value ? 'bg-[#0070d1] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                            <button key={value} onClick={() => setTopic(value)} className={`shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold transition ${topic === value ? 'bg-[#0070d1] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
                                 {topic === value ? <Check className="mr-1.5 inline h-3.5 w-3.5" /> : null}{label}
                             </button>
                         ))}

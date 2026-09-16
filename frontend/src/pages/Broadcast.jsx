@@ -1213,7 +1213,7 @@ const renderLivePreview = () => {
                                     fetchRecipientReport(expandedCampaignId, 1);
                                 }
                             }}
-                            className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-[#0064b7] transition-all hover:bg-[#eef7ff] hover:border-[#b9dcfb] active:scale-95 shadow-xs disabled:opacity-75 cursor-pointer"
+                            className="flex shrink-0 whitespace-nowrap items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-[#0064b7] transition-all hover:bg-[#eef7ff] hover:border-[#b9dcfb] active:scale-95 shadow-xs disabled:opacity-75 cursor-pointer"
                         >
                             <RotateCw className={`w-4 h-4 ${isLoadingHistory ? 'animate-spin' : ''}`} />
                             <span>Refresh</span>
