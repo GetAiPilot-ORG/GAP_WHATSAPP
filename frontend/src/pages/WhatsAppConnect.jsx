@@ -460,44 +460,44 @@ export default function WhatsAppConnect() {
             </section>
 
             {activeConnections.length === 0 && (
-            <section className="grid grid-cols-1 gap-1.5 md:gap-4 md:grid-cols-3">
-                <GuideCard
-                    icon={Building2}
-                    title="Before you start"
-                    stepNumber={1}
-                    isExpanded={activeAccordion === 0}
-                    onToggle={() => setActiveAccordion(prev => prev === 0 ? -1 : 0)}
-                    items={[
-                        'Facebook/Meta admin login ready rakhein.',
-                        'Business name, website and email accurate honi chahiye.',
-                        'Number par SMS/call OTP receive kar paana zaroori hai.',
-                    ]}
-                />
-                <GuideCard
-                    icon={BadgeCheck}
-                    title="Meta will verify"
-                    stepNumber={2}
-                    isExpanded={activeAccordion === 1}
-                    onToggle={() => setActiveAccordion(prev => prev === 1 ? -1 : 1)}
-                    items={[
-                        'Business portfolio select ya create hoga.',
-                        'WhatsApp Business Account and phone number link hoga.',
-                        'Some accounts may need Meta review before full sending.',
-                    ]}
-                />
-                <GuideCard
-                    icon={MessageSquareText}
-                    title="After connection"
-                    stepNumber={3}
-                    isExpanded={activeAccordion === 2}
-                    onToggle={() => setActiveAccordion(prev => prev === 2 ? -1 : 2)}
-                    items={[
-                        'Dashboard zero values real message data se replace honge.',
-                        'Templates, broadcasts, live chat and flows unlock honge.',
-                        'Diagnostics batayega number send-ready hai ya kya pending hai.',
-                    ]}
-                />
-            </section>
+                <section className="grid grid-cols-1 gap-1.5 md:gap-4 md:grid-cols-3">
+                    <GuideCard
+                        icon={Building2}
+                        title="Before you start"
+                        stepNumber={1}
+                        isExpanded={activeAccordion === 0}
+                        onToggle={() => setActiveAccordion(prev => prev === 0 ? -1 : 0)}
+                        items={[
+                            'Facebook/Meta admin login ready rakhein.',
+                            'Business name, website and email accurate honi chahiye.',
+                            'Number par SMS/call OTP receive kar paana zaroori hai.',
+                        ]}
+                    />
+                    <GuideCard
+                        icon={BadgeCheck}
+                        title="Meta will verify"
+                        stepNumber={2}
+                        isExpanded={activeAccordion === 1}
+                        onToggle={() => setActiveAccordion(prev => prev === 1 ? -1 : 1)}
+                        items={[
+                            'Business portfolio select ya create hoga.',
+                            'WhatsApp Business Account and phone number link hoga.',
+                            'Some accounts may need Meta review before full sending.',
+                        ]}
+                    />
+                    <GuideCard
+                        icon={MessageSquareText}
+                        title="After connection"
+                        stepNumber={3}
+                        isExpanded={activeAccordion === 2}
+                        onToggle={() => setActiveAccordion(prev => prev === 2 ? -1 : 2)}
+                        items={[
+                            'Dashboard zero values real message data se replace honge.',
+                            'Templates, broadcasts, live chat and flows unlock honge.',
+                            'Diagnostics batayega number send-ready hai ya kya pending hai.',
+                        ]}
+                    />
+                </section>
             )}
 
             {activeConnections.length > 0 && (
@@ -1034,18 +1034,18 @@ function AccountCard({ account, diagnostics, loading, onCheck, onReconnect, onDi
                 </span>
             </div>
 
-            <div className="flex items-center gap-4 mb-4 text-xs font-medium text-gray-600">
+            <div className="flex flex-wrap items-center gap-y-2 gap-x-4 mb-4 text-xs font-medium text-gray-600">
                 <div className="flex items-center gap-1.5 border-r border-gray-200 pr-4">
-                    <span className="uppercase text-[10px] font-bold text-gray-400">Messaging:</span>
-                    <span className="text-gray-900">{messagingStatus}</span>
+                    <span className="uppercase text-[10px] font-bold text-gray-400 whitespace-nowrap">Messaging:</span>
+                    <span className="text-gray-900 whitespace-nowrap">{messagingStatus}</span>
                 </div>
                 <div className="flex items-center gap-1.5 border-r border-gray-200 pr-4">
-                    <span className="uppercase text-[10px] font-bold text-gray-400">Templates:</span>
-                    <span className="text-gray-900">{account.connection_type === 'qr_session' ? 'N/A' : templateStatus}</span>
+                    <span className="uppercase text-[10px] font-bold text-gray-400 whitespace-nowrap">Templates:</span>
+                    <span className="text-gray-900 whitespace-nowrap">{account.connection_type === 'qr_session' ? 'N/A' : templateStatus}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                    <span className="uppercase text-[10px] font-bold text-gray-400">API:</span>
-                    <span className="text-gray-900">{account.connection_type === 'qr_session' ? 'QR' : 'Cloud'}</span>
+                    <span className="uppercase text-[10px] font-bold text-gray-400 whitespace-nowrap">API:</span>
+                    <span className="text-gray-900 whitespace-nowrap">{account.connection_type === 'qr_session' ? 'QR' : 'Cloud'}</span>
                 </div>
             </div>
 

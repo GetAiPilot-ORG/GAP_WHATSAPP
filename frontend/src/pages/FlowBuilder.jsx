@@ -403,7 +403,7 @@ export default function FlowBuilder() {
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.7fr)]">
                 {/* Which number will this flow run on Card */}
-                <GlowCard 
+                <GlowCard
                     className="rounded-none border border-zinc-200 bg-[#f8f9fa] p-5 flex flex-col md:flex-row md:items-stretch gap-6 transition-all duration-300 hover:shadow-[0_8px_30px_rgba(0,0,0,0.02)] relative overflow-hidden group"
                     glowColor="rgba(0, 0, 0, 0.03)"
                 >
@@ -463,7 +463,7 @@ export default function FlowBuilder() {
                 </GlowCard>
 
                 {/* Connected access types Card */}
-                <GlowCard 
+                <GlowCard
                     className="fb-premium-card p-6 flex flex-col justify-between relative overflow-hidden group"
                     glowColor="rgba(0, 112, 209, 0.04)"
                 >
@@ -474,7 +474,7 @@ export default function FlowBuilder() {
                         </div>
                         <div className="flex flex-col gap-3">
                             {/* Meta API Row */}
-                            <motion.div 
+                            <motion.div
                                 whileTap={{ scale: 0.985 }}
                                 transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                                 className="flex items-center justify-between border border-zinc-200 rounded-none p-3 bg-zinc-50/30 hover:bg-zinc-50/80 transition-all duration-200 group/row cursor-pointer relative overflow-hidden"
@@ -499,7 +499,7 @@ export default function FlowBuilder() {
                             </motion.div>
 
                             {/* QR Session Row */}
-                            <motion.div 
+                            <motion.div
                                 whileTap={{ scale: 0.985 }}
                                 transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                                 className="flex items-center justify-between border border-zinc-200 rounded-none p-3 bg-zinc-50/30 hover:bg-zinc-50/80 transition-all duration-200 group/row cursor-pointer relative overflow-hidden"
@@ -530,7 +530,7 @@ export default function FlowBuilder() {
             {/* Stats Cards */}
             <div className="grid grid-cols-3 gap-[1px] bg-zinc-200 border border-zinc-200 shadow-sm">
                 {/* Total Flows */}
-                <GlowCard 
+                <GlowCard
                     className="stat-card-anim rounded-none bg-white p-5 hover:bg-zinc-50/50 transition-colors flex flex-col justify-between"
                     glowColor="rgba(59, 130, 246, 0.08)"
                 >
@@ -545,7 +545,7 @@ export default function FlowBuilder() {
                 </GlowCard>
 
                 {/* Active Flows */}
-                <GlowCard 
+                <GlowCard
                     className="stat-card-anim rounded-none bg-white p-5 hover:bg-zinc-50/50 transition-colors flex flex-col justify-between"
                     glowColor="rgba(16, 185, 129, 0.08)"
                 >
@@ -560,7 +560,7 @@ export default function FlowBuilder() {
                 </GlowCard>
 
                 {/* Messages Sent */}
-                <GlowCard 
+                <GlowCard
                     className="stat-card-anim rounded-none bg-white p-5 hover:bg-zinc-50/50 transition-colors flex flex-col justify-between"
                     glowColor="rgba(139, 92, 246, 0.08)"
                 >
@@ -582,8 +582,8 @@ export default function FlowBuilder() {
                     const IconComp = theme.icon;
 
                     return (
-                        <GlowCard 
-                            key={flow.id} 
+                        <GlowCard
+                            key={flow.id}
                             className="flow-card-anim flex flex-col rounded-none border border-zinc-200 bg-gradient-to-b from-white to-zinc-50/20 p-6 hover:-translate-y-0.5 hover:border-zinc-350 hover:shadow-[0_12px_36px_rgba(0,0,0,0.03)] transition-all duration-300 group relative overflow-hidden"
                             glowColor="rgba(0, 0, 0, 0.03)"
                         >
@@ -715,7 +715,7 @@ export default function FlowBuilder() {
                     className="flow-card-anim flex flex-col items-center justify-center border-2 border-dashed border-zinc-200 hover:border-zinc-350 rounded-none bg-zinc-50/20 hover:bg-zinc-50 p-6 text-center min-h-[200px] sm:min-h-[240px] transition-all group cursor-pointer hover:shadow-[0_8px_30px_rgba(0,0,0,0.015)]"
                 >
                     <div className="relative z-10 w-full h-full flex flex-col items-center justify-center">
-                        <motion.div 
+                        <motion.div
                             whileHover={{ scale: 1.08 }}
                             whileTap={{ scale: 0.95 }}
                             className="h-10 w-10 rounded-full bg-white group-hover:bg-zinc-50 flex items-center justify-center border border-zinc-200 group-hover:border-zinc-300 text-zinc-400 group-hover:text-zinc-650 transition-colors shadow-sm"
@@ -753,7 +753,7 @@ export default function FlowBuilder() {
 
             <AnimatePresence>
                 {runsModalFlow && (
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
@@ -806,8 +806,8 @@ export default function FlowBuilder() {
                                                         <td className="px-4 py-3 text-gray-700">{run.started_at ? new Date(run.started_at).toLocaleString() : '-'}</td>
                                                         <td className="px-4 py-3">
                                                             <span className={`rounded-none border px-2 py-0.5 text-xs font-semibold ${run.status === 'completed' ? 'border-green-200 bg-green-50/50 text-green-700' :
-                                                                    run.status === 'failed' ? 'border-red-200 bg-red-50/50 text-red-700' :
-                                                                        'border-blue-200 bg-blue-50/50 text-blue-700'
+                                                                run.status === 'failed' ? 'border-red-200 bg-red-50/50 text-red-700' :
+                                                                    'border-blue-200 bg-blue-50/50 text-blue-700'
                                                                 }`}>
                                                                 {run.status}
                                                             </span>
@@ -856,7 +856,7 @@ export default function FlowBuilder() {
             {/* Create Flow Modal */}
             <AnimatePresence>
                 {showCreateModal && (
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
@@ -870,7 +870,7 @@ export default function FlowBuilder() {
                             setNewFlowAccountIds([]);
                         }}
                     >
-                        <motion.div 
+                        <motion.div
                             initial={{ scale: 0.95, y: 15, opacity: 0 }}
                             animate={{ scale: 1, y: 0, opacity: 1 }}
                             exit={{ scale: 0.95, y: 15, opacity: 0 }}
@@ -1041,23 +1041,23 @@ function TemplateGalleryModal({
     const [isFillDetailsOpen, setIsFillDetailsOpen] = useState(false);
     const [isAboutOpen, setIsAboutOpen] = useState(false);
 
-    return (
-        <motion.div 
+    return createPortal(
+        <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.25 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-0 sm:p-4 backdrop-blur-sm animate-fade-in"
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-0 backdrop-blur-sm animate-fade-in"
             onClick={onClose}
         >
             {/* Mobile View (< md) */}
-            <motion.div 
+            <motion.div
                 initial={{ y: "100%" }}
                 animate={{ y: 0 }}
                 exit={{ y: "100%" }}
                 transition={{ type: "spring", stiffness: 350, damping: 30 }}
                 onClick={(e) => e.stopPropagation()}
-                className="md:hidden flex h-full w-full flex-col overflow-hidden bg-gray-50"
+                className="md:hidden absolute inset-0 flex flex-col overflow-hidden bg-gray-50"
             >
                 {/* Header */}
                 <div className="bg-white border-b border-gray-200 px-4 py-3 flex flex-col gap-2.5 shrink-0">
@@ -1088,9 +1088,9 @@ function TemplateGalleryModal({
                                     <button onClick={() => setIsMobileSearchExpanded(true)} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg">
                                         <Search className="h-4 w-4" />
                                     </button>
-                                    <motion.button 
+                                    <motion.button
                                         whileTap={{ scale: 0.9 }}
-                                        onClick={onClose} 
+                                        onClick={onClose}
                                         className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg ml-0.5"
                                     >
                                         <X className="h-4.5 w-4.5" />
@@ -1268,7 +1268,7 @@ function TemplateGalleryModal({
             </motion.div>
 
             {/* Desktop View (>= md) */}
-            <motion.div 
+            <motion.div
                 initial={{ scale: 0.95, y: 15, opacity: 0 }}
                 animate={{ scale: 1, y: 0, opacity: 1 }}
                 exit={{ scale: 0.95, y: 15, opacity: 0 }}
@@ -1287,9 +1287,9 @@ function TemplateGalleryModal({
                                 <h2 className="mt-1 text-xl font-light text-black sm:text-2xl">Start from a proven flow</h2>
                                 <p className="mt-1 text-sm leading-5 text-gray-500">Choose a workflow, fill details, and generate a ready-to-edit draft.</p>
                             </div>
-                            <motion.button 
+                            <motion.button
                                 whileTap={{ scale: 0.9 }}
-                                onClick={onClose} 
+                                onClick={onClose}
                                 className="rounded-full p-2 text-gray-500 hover:bg-gray-100 hover:text-black cursor-pointer"
                             >
                                 <X className="h-5 w-5" />
@@ -1441,7 +1441,8 @@ function TemplateGalleryModal({
                     </div>
                 </div>
             </motion.div>
-        </motion.div>
+        </motion.div>,
+        document.body
     );
 }
 

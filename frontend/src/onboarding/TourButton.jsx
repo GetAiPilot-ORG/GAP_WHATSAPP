@@ -55,7 +55,7 @@ export default function TourButton({ className = '', compact = false }) {
                 ) : null}
 
                 {open ? (
-                    <div className="absolute left-0 sm:left-auto right-0 sm:right-0 z-[9999] mt-3 w-[290px] overflow-hidden rounded-2xl border border-[var(--fp-border)] bg-[var(--fp-card)] p-2 shadow-[0_16px_40px_rgba(0,0,0,0.12)] animate-in fade-in zoom-in-95 duration-200">
+                    <div className="fixed left-1/2 top-[80px] -translate-x-1/2 sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:translate-x-0 z-[9999] mt-3 w-[calc(100vw-32px)] sm:w-[290px] max-w-[320px] overflow-hidden rounded-2xl border border-[var(--fp-border)] bg-[var(--fp-card)] p-2 shadow-[0_16px_40px_rgba(0,0,0,0.12)] animate-in fade-in zoom-in-95 duration-200">
                         <button
                             type="button"
                             onClick={() => {

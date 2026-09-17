@@ -1546,12 +1546,12 @@ function CreateTemplateModal({ isOpen, onClose, onSuccess, apiCall, initialData,
                         </div>
                     </div>
                 </div>
-                <div className="mt-5 flex items-center justify-between">
+                <div className="mt-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-0">
                     <p className="text-xs text-slate-500">{usesAuthenticationModel ? 'Official Meta authentication template' : 'Official Meta library template'}</p>
-                    <div className="flex gap-2">
-                        <button onClick={closeModal} className="h-10 rounded-full border border-slate-300 px-5 text-sm font-semibold text-slate-700">Cancel</button>
-                        <button onClick={handleSubmit} disabled={!canSubmit || isSubmitting} className="inline-flex h-10 items-center gap-2 rounded-full bg-[#0070d1] px-5 text-sm font-semibold text-white disabled:opacity-50">
-                            {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />} Import template
+                    <div className="flex gap-2 w-full sm:w-auto self-end">
+                        <button onClick={closeModal} className="flex flex-1 sm:flex-none min-h-[40px] items-center justify-center rounded-full border border-slate-300 px-5 text-sm font-semibold text-slate-700">Cancel</button>
+                        <button onClick={handleSubmit} disabled={!canSubmit || isSubmitting} className="inline-flex flex-1 sm:flex-none min-h-[40px] items-center justify-center gap-2 rounded-full bg-[#0070d1] px-5 text-sm font-semibold text-white disabled:opacity-50">
+                            {isSubmitting && <Loader2 className="shrink-0 h-4 w-4 animate-spin" />} <span className="whitespace-nowrap">Import template</span>
                         </button>
                     </div>
                 </div>

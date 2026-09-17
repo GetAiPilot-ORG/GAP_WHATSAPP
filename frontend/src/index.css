@@ -896,3 +896,41 @@
 .react-datepicker__time-list::-webkit-scrollbar-track {
   background: transparent;
 }
+
+@media (max-width: 639px) {
+  .react-datepicker-popper {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    width: 320px !important;
+    z-index: 9999 !important;
+  }
+  .react-datepicker {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+  }
+  .react-datepicker__month-container {
+    width: 100% !important;
+  }
+  .react-datepicker__time-container {
+    width: 100% !important;
+    border-left: none !important;
+    border-top: 1px solid var(--fp-border) !important;
+  }
+  .react-datepicker__time-list {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 160px !important;
+    overflow-y: auto !important;
+    padding: 0 !important;
+  }
+  .react-datepicker__time-list-item {
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+}
+
