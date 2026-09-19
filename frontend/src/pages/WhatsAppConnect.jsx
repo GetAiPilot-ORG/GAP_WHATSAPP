@@ -1,4 +1,4 @@
-import { createElement, useEffect, useMemo, useState } from 'react'
+import { createElement, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
     AlertCircle,
@@ -52,6 +52,7 @@ export default function WhatsAppConnect() {
     const [diagnostics, setDiagnostics] = useState({})
     const [diagnosticsLoadingId, setDiagnosticsLoadingId] = useState(null)
     const [isGuideModalOpen, setIsGuideModalOpen] = useState(false)
+    const capturedMetaSessionRef = useRef(null)
     const [hasIntegrationConsent, setHasIntegrationConsent] = useState(() => {
         if (import.meta.env.VITE_ENABLE_COOKIE_CONSENT !== 'true') return true
         try {
@@ -71,6 +72,26 @@ export default function WhatsAppConnect() {
     const isLocalHost = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
     const isSecureForMetaLogin = window.location.protocol === 'https:' || isLocalHost
     const activeConnections = useMemo(() => accounts, [accounts])
+
+    useEffect(() => {
+        const handleMetaMessage = (event) => {
+            if (!event.origin || (!event.origin.includes('facebook.com') && !event.origin.includes('fb.com'))) return
+            try {
+                const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
+                if (data?.type === 'WA_EMBEDDED_SIGNUP') {
+                    const sessionData = data.data || {}
+                    if (sessionData.phone_number_id || sessionData.waba_id) {
+                        capturedMetaSessionRef.current = {
+                            phone_number_id: sessionData.phone_number_id || null,
+                            waba_id: sessionData.waba_id || null,
+                        }
+                    }
+                }
+            } catch {}
+        }
+        window.addEventListener('message', handleMetaMessage)
+        return () => window.removeEventListener('message', handleMetaMessage)
+    }, [])
 
     useEffect(() => {
         if (!session?.access_token) return
@@ -183,13 +204,19 @@ export default function WhatsAppConnect() {
         setEmbedStatus('saving')
         setEmbedError('')
         try {
+            const payload = {
+                code: response.authResponse.code,
+                phone_number_id: capturedMetaSessionRef.current?.phone_number_id || undefined,
+                waba_id: capturedMetaSessionRef.current?.waba_id || undefined,
+            }
             const res = await fetch(`${API_BASE}/wa/connect/callback`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-                body: JSON.stringify({ code: response.authResponse.code }),
+                body: JSON.stringify(payload),
             })
             const data = await res.json().catch(() => ({}))
             if (!res.ok) throw new Error(data.error || 'Connection failed')
+            capturedMetaSessionRef.current = null
             setEmbedStatus('saved')
             setEmbedError('')
             await fetchAccounts()

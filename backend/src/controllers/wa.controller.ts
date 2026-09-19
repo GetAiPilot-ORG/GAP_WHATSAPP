@@ -45,7 +45,7 @@ export async function connectStart(req: any, res: Response) {
 }
 
 export async function connectCallback(req: any, res: Response) {
-    const { code, waba_id } = req.body;
+    const { code, waba_id, phone_number_id: requestedPhoneNumberId } = req.body;
 
     if (!code) return res.status(400).json({ error: "Missing code" });
 
@@ -83,19 +83,18 @@ export async function connectCallback(req: any, res: Response) {
         const insertedAccounts = [];
         const discoveryErrors: string[] = [];
 
-        const wabaDiscoveryUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/me/assigned_whatsapp_business_accounts?access_token=${encodeURIComponent(finalToken)}`;
-        const wabaRes = await fetch(wabaDiscoveryUrl);
-        const wabaData: any = await wabaRes.json();
+        let discoveredWabaIds: { id: string }[] = [];
+        if (waba_id) {
+            discoveredWabaIds = [{ id: String(waba_id).trim() }];
+        } else {
+            const wabaDiscoveryUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/me/assigned_whatsapp_business_accounts?access_token=${encodeURIComponent(finalToken)}`;
+            const wabaRes = await fetch(wabaDiscoveryUrl);
+            const wabaData: any = await wabaRes.json();
 
-        if (!wabaRes.ok || wabaData.error) {
-            return res.status(400).json({
-                error: getMetaErrorMessage(wabaData, 'Meta could not list WhatsApp Business Accounts. Make sure the logged-in admin granted WhatsApp permissions.')
-            });
+            if (Array.isArray(wabaData?.data) && wabaData.data.length) {
+                discoveredWabaIds = wabaData.data;
+            }
         }
-
-        const discoveredWabaIds = Array.isArray(wabaData.data) && wabaData.data.length
-            ? wabaData.data
-            : (waba_id ? [{ id: waba_id }] : []);
 
         if (discoveredWabaIds.length === 0) {
             return res.status(400).json({
@@ -120,8 +119,32 @@ export async function connectCallback(req: any, res: Response) {
                 continue;
             }
 
-            if (numData.data?.length) {
-                for (const item of numData.data) {
+            let candidateNumbers = Array.isArray(numData.data) ? numData.data : [];
+
+            // If a specific phone_number_id was selected during embedded signup, only connect that single number
+            if (requestedPhoneNumberId) {
+                candidateNumbers = candidateNumbers.filter((item: any) => String(item.id) === String(requestedPhoneNumberId).trim());
+
+                // Fallback: If not found in WABA list, fetch the specific phone number directly
+                if (candidateNumbers.length === 0) {
+                    try {
+                        const directNumUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/${encodeURIComponent(String(requestedPhoneNumberId).trim())}?fields=id,display_phone_number,verified_name,quality_rating,code_verification_status&access_token=${encodeURIComponent(finalToken)}`;
+                        const directRes = await fetch(directNumUrl);
+                        const directData: any = await directRes.json();
+                        if (directRes.ok && directData?.id) {
+                            candidateNumbers = [directData];
+                        }
+                    } catch (e: any) {
+                        console.warn('[ConnectCallback] Direct phone number fetch error:', e.message);
+                    }
+                }
+            } else if (candidateNumbers.length > 1) {
+                // If multiple numbers exist but none was specifically requested, only connect the first number to prevent unwanted multi-number flood
+                candidateNumbers = [candidateNumbers[0]];
+            }
+
+            if (candidateNumbers.length) {
+                for (const item of candidateNumbers) {
                     const phone_number_id = item.id;
                     const display_phone_number = item.display_phone_number;
 
