@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { BACKEND_URL } from '../config/api'
 import {
     ArrowRight,
     CheckCircle2,
@@ -36,7 +37,7 @@ export default function AgentLogin() {
             const token = data?.session?.access_token
             if (!token) throw new Error('Could not verify this team member session.')
 
-            const profileRes = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api/team/my-profile`, {
+            const profileRes = await fetch(`${BACKEND_URL}/api/team/my-profile`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                     'X-Auth-Portal': 'agent'

@@ -38,9 +38,7 @@ import { useAuth } from '../context/AuthContext'
 import { useDialog } from '../context/DialogContext'
 
 import DiceBearAvatar from '../components/DiceBearAvatar'
-
-const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
-const API_BASE = `${BACKEND_BASE}/api`
+import { BACKEND_URL as BACKEND_BASE, API_BASE } from '../config/api'
 
 const FIELD_GROUPS = [
     {

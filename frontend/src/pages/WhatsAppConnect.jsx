@@ -28,9 +28,7 @@ import { formatINRFromPaise } from '../config/whatsappPricing'
 import TourButton from '../onboarding/TourButton'
 import WhatsAppMessagingGuideModal from '../components/WhatsAppMessagingGuideModal'
 import { loadFacebookSDK } from '../services/facebookSdkLoader'
-
-const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
-const API_BASE = `${API_URL}/api`
+import { BACKEND_URL as API_URL, API_BASE } from '../config/api'
 const META_APP_ID = import.meta.env.VITE_META_APP_ID || '1459710399100167'
 const META_CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID || '1108075894853600'
 const META_EMBEDDED_SIGNUP_VERSION = import.meta.env.VITE_META_EMBEDDED_SIGNUP_VERSION || 'v4'

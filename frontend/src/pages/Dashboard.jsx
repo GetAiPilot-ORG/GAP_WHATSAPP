@@ -53,11 +53,9 @@ import { supabase } from '../supabaseClient'
 import { formatINRFromPaise } from '../config/whatsappPricing'
 import { dismissSetupWelcome, getSetupGuidePreference, setSetupGoal, setSetupGuideDismissed } from '../onboarding/setupStorage'
 import { trackOnboardingEvent } from '../onboarding/onboardingAnalytics'
+import { BACKEND_URL as BACKEND_BASE, API_BASE } from '../config/api'
 
 gsap.registerPlugin(useGSAP)
-
-const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
-const API_BASE = `${BACKEND_BASE}/api`
 
 const ranges = [
     { label: 'Today', value: 'today' },

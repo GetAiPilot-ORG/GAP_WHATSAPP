@@ -9,6 +9,7 @@ import { formatINRFromPaise } from '../config/whatsappPricing'
 import { MESSAGING_TIERS, getMessagingTierLabel, isCurrentTier } from '../utils/messagingLimits'
 import DateTimePicker from '../components/DateTimePicker'
 import Modal from '../components/Modal'
+import { BACKEND_URL as API_URL } from '../config/api'
 
 const STEPS = [
     { id: 1, name: 'Setup', icon: LayoutGrid },
@@ -16,8 +17,6 @@ const STEPS = [
     { id: 3, name: 'Message', icon: FileText },
     { id: 4, name: 'Review', icon: Check },
 ]
-
-const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
 
 function parseVars(components) {
     const body = components?.find(c => c.type === 'BODY')?.text || ''

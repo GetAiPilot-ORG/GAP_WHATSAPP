@@ -16,8 +16,7 @@ import {
     getMonthlyEquivalent,
     getPlanPrice,
 } from '../config/whatsappPricing'
-
-const API_BASE = `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api`
+import { API_BASE } from '../config/api'
 
 function normalizePlanFeatures(plan) {
     if (Array.isArray(plan?.features)) return plan.features

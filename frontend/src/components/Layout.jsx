@@ -8,6 +8,7 @@ import { OnboardingProvider } from '../onboarding/OnboardingProvider'
 import TourButton from '../onboarding/TourButton'
 import { formatINRFromPaise } from '../config/whatsappPricing'
 import { supabase } from '../supabaseClient'
+import { API_BASE } from '../config/api'
 
 const NIGHT_LIGHT_KEY = 'gap_night_light_enabled'
 
@@ -107,7 +108,7 @@ export default function Layout() {
     const fetchNotifications = async () => {
         if (!user) return;
         try {
-            const res = await apiCall(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api/billing/notifications`);
+            const res = await apiCall(`${API_BASE}/billing/notifications`);
             if (res.ok) {
                 const data = await res.json();
                 if (data?.notifications) {
@@ -177,7 +178,7 @@ export default function Layout() {
         let active = true;
         const fetchWallet = async () => {
             try {
-                const res = await apiCall(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api/billing/wallet`);
+                const res = await apiCall(`${API_BASE}/billing/wallet`);
                 if (res.ok) {
                     const data = await res.json();
                     if (active && data?.wallet) {
@@ -206,7 +207,7 @@ export default function Layout() {
         const fetchProfileBilling = async () => {
             setIsLoadingProfileBilling(true);
             try {
-                const res = await apiCall(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api/billing/overview`);
+                const res = await apiCall(`${API_BASE}/billing/overview`);
                 if (res.ok && active) {
                     const data = await res.json();
                     setProfileBilling(data);
