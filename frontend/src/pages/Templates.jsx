@@ -14,9 +14,9 @@ import { placeholderCopy, suggestTemplateCategory } from '../utils/templateAppro
 import { gsap } from 'gsap'
 import { useGSAP } from '@gsap/react'
 
-gsap.registerPlugin(useGSAP)
+import { BACKEND_URL as API_URL } from '../config/api';
 
-const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+gsap.registerPlugin(useGSAP)
 const BACKEND_BASE = API_URL.replace(/\/api$/, '');
 const socket = io(BACKEND_BASE, {
     withCredentials: true,

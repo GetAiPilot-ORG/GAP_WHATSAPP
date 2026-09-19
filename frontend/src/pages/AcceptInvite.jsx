@@ -2,8 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AlertCircle, CheckCircle2, Loader2, UserCheck } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-
-const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
+import { BACKEND_URL as BACKEND_BASE } from '../config/api'
 
 export default function AcceptInvite() {
     const [status, setStatus] = useState('loading')

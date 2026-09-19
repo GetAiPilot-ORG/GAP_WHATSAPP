@@ -17,6 +17,7 @@ import TourButton from '../onboarding/TourButton'
 import WhatsAppMessagingGuideModal from '../components/WhatsAppMessagingGuideModal'
 import { supabase } from '../supabaseClient'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { BACKEND_URL as BACKEND_BASE } from '../config/api'
 
 function DiceBearAvatar({ seed, className }) {
     const colorClass = getAvatarColor(seed);
@@ -42,8 +43,6 @@ function DiceBearAvatar({ seed, className }) {
         </div>
     );
 }
-
-const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
 // Connect to backend
 const socket = io(BACKEND_BASE, {

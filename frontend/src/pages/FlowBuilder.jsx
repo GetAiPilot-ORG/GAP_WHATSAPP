@@ -13,6 +13,7 @@ import { useDialog } from '../context/DialogContext';
 import { useWhatsAppAccounts } from '../context/WhatsAppAccountContext';
 import { notify } from '../services/notificationService';
 import { FLOW_TEMPLATE_CATEGORIES, FLOW_TEMPLATES, buildFlowFromTemplate } from '../components/flow-builder/flowTemplates';
+import { BACKEND_URL as API_URL } from '../config/api';
 
 
 function FlowBuilderLoading() {
@@ -65,8 +66,6 @@ export default function FlowBuilder() {
     const [templateStarStats, setTemplateStarStats] = useState({});
     const { accounts: waAccounts, isLoading: waAccountsLoading } = useWhatsAppAccounts();
     const [selectedWaAccount, setSelectedWaAccount] = useState(() => localStorage.getItem('selected_wa_account_id') || 'All');
-
-    const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
     const filteredTemplates = useMemo(() => {
         const query = templateQuery.trim().toLowerCase();

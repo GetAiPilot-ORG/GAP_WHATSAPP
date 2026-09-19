@@ -31,10 +31,7 @@ import {
 import { useAuth } from '../context/AuthContext'
 import { useDialog } from '../context/DialogContext'
 import { FALLBACK_PLANS } from '../config/whatsappPricing'
-
-
-const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
-const API_BASE = `${BACKEND_BASE}/api`
+import { BACKEND_URL as BACKEND_BASE, API_BASE } from '../config/api'
 
 const MODELS = [
     { value: 'gpt-4o-mini', label: 'GPT-4o Mini', helper: 'Fast support replies' },

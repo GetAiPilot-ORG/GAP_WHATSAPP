@@ -4,8 +4,7 @@ import { AlertCircle, CheckCircle, Loader2, LogOut } from 'lucide-react';
 import QRCode from "react-qr-code";
 import { useAuth } from '../context/AuthContext';
 import Modal from './Modal';
-
-const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+import { BACKEND_URL as BACKEND_BASE } from '../config/api';
 
 // Connect to backend
 const socket = io(BACKEND_BASE, {

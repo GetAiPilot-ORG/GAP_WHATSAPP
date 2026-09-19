@@ -12,12 +12,11 @@ import Login from './pages/Login'
 import AgentLogin from './pages/AgentLogin'
 import Signup from './pages/Signup'
 import Dashboard from './pages/Dashboard'
-import PrivacyPolicy from './pages/PrivacyPolicy'
 import SSOLogin from './pages/SSOLogin'
 import AcceptInvite from './pages/AcceptInvite'
 import PaymentSuccessPage from './pages/PaymentSuccessPage'
 import WhatsAppRedirect from './pages/WhatsAppRedirect'
-import CookieConsent from './components/CookieConsent'
+import CookieConsent from './components/UserPreferencesConsent'
 import PwaUpdater from './components/PwaUpdater'
 import { PushProvider } from './context/PushContext'
 import { MaintenanceGuard } from './components/MaintenanceGuard'
@@ -39,6 +38,7 @@ const WhatsAppConnect = lazy(() => import('./pages/WhatsAppConnect'))
 const WhatsAppNumberPage = lazy(() => import('./pages/WhatsAppNumberPage'))
 const WhatsAppLinkGenerator = lazy(() => import('./pages/WhatsAppLinkGenerator'))
 const ScheduledMeetings = lazy(() => import('./pages/ScheduledMeetings'))
+const PrivacyPolicy = lazy(() => import('./pages/LegalPrivacyNotice'))
 
 const PageFallback = () => (
   <div className="flex h-[60vh] w-full items-center justify-center">
@@ -84,7 +84,7 @@ export default function App() {
                       <Route path="/" element={<HomePage />} />
                       <Route path="/terms" element={<TermsOfService />} />
                       <Route path="/login" element={<Login />} />
-                      <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                      <Route path="/privacy-policy" element={<Suspense fallback={<PageFallback />}><PrivacyPolicy /></Suspense>} />
                       <Route path="/agent-login" element={<AgentLogin />} />
                       <Route path="/accept-invite" element={<AcceptInvite />} />
                       <Route path="/signup" element={<Signup />} />
