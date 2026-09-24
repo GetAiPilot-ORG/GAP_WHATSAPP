@@ -7,6 +7,10 @@ const resolveBackendUrl = () => {
     const isBrowser = typeof window !== 'undefined';
     const isLocal = isBrowser && ['localhost', '127.0.0.1'].includes(window.location.hostname);
 
+    if (isBrowser && isLocal && window.location.protocol === 'https:') {
+        return window.location.origin;
+    }
+
     if (envUrl) {
         // If envUrl accidentally contains localhost but the user is on a live site, use live backend
         if (isBrowser && !isLocal && (envUrl.includes('localhost') || envUrl.includes('127.0.0.1'))) {

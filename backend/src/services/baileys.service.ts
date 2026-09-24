@@ -318,7 +318,8 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                 if (updErr) {
                                     console.error('Failed to update reactions (did you run the migration?)', updErr);
                                 } else if (!isHistorySync) {
-                                    io.emit('message_updated', {
+                                    io.to(`org:${orgId}`).emit('message_updated', {
+                                        organization_id: orgId,
                                         conversation_id: target.conversation_id,
                                         message_id: target.id,
                                         wa_message_id: targetWaId,
@@ -501,7 +502,10 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
 
                     // 4) Emit only realtime (not history sync)
                     if (!isHistorySync) {
-                        io.emit("new_message", {
+                        io.to(`org:${orgId}`).emit("new_message", {
+                            organization_id: orgId,
+                            wa_account_id: waAccountId,
+                            phone_number_id: myPhone,
                             from: contactWaId,
                             name: threadName || senderName,
                             text: captionText,
@@ -564,11 +568,22 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                             },
                                         } as any);
 
-                                        io.emit("new_message", {
-                                            from: myPhone, phone: contactWaId, text: flowResult.output,
-                                            sender: 'agent', conversation_id: conv.id, contact_id: contact.id, message_id: storedBotReply?.id || null,
-                                            wa_message_id: botWaMessageId, created_at: storedBotReply?.created_at || new Date().toISOString(),
-                                            connectedAccount: myPhone, type: 'text', is_bot_reply: true,
+                                        io.to(`org:${orgId}`).emit("new_message", {
+                                            organization_id: orgId,
+                                            wa_account_id: waAccountId,
+                                            phone_number_id: myPhone,
+                                            from: myPhone,
+                                            phone: contactWaId,
+                                            text: flowResult.output,
+                                            sender: 'agent',
+                                            conversation_id: conv.id,
+                                            contact_id: contact.id,
+                                            message_id: storedBotReply?.id || null,
+                                            wa_message_id: botWaMessageId,
+                                            created_at: storedBotReply?.created_at || new Date().toISOString(),
+                                            connectedAccount: myPhone,
+                                            type: 'text',
+                                            is_bot_reply: true,
                                             metadata: storedBotReply?.metadata || { flow_name: flowResult.flow_name, flow_id: flowResult.flow_id },
                                         });
 
@@ -621,7 +636,10 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                                     },
                                                 } as any);
 
-                                                io.emit('new_message', {
+                                                io.to(`org:${orgId}`).emit('new_message', {
+                                                    organization_id: orgId,
+                                                    wa_account_id: waAccountId,
+                                                    phone_number_id: myPhone,
                                                     from: myPhone,
                                                     phone: contactWaId,
                                                     text: preview,
@@ -682,6 +700,9 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                                 if (botResult?.reply) {
                                                     console.log(`🤖 Bot "${botResult.agent?.name}" replying via Baileys to: "${captionText.substring(0, 50)}..."`);
                                                     let replyText = botResult.reply;
+                                                    const isFallback = replyText.startsWith("[FALLBACK]");
+                                                    replyText = replyText.replace("[FALLBACK]", "").trim();
+
                                                     try {
                                                         const trimmed = replyText.trim();
                                                         const firstBrace = trimmed.indexOf("{");
@@ -718,7 +739,10 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                                     } as any);
 
                                                     // Emit the bot reply to frontend
-                                                    io.emit("new_message", {
+                                                    io.to(`org:${orgId}`).emit("new_message", {
+                                                        organization_id: orgId,
+                                                        wa_account_id: waAccountId,
+                                                        phone_number_id: myPhone,
                                                         from: myPhone,
                                                         phone: contactWaId,
                                                         text: replyText,
@@ -793,20 +817,20 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                 else if (statusRaw >= 4) newStatus = 'read';
 
                 if (newStatus && update.key.id) {
-                    // Update DB
-                    const orgId = await ensureDefaultOrganizationId();
+                    const orgId = organization_id || await ensureDefaultOrganizationId();
                     if (orgId) {
                         await supabase.from('w_messages')
                             .update({ status: newStatus })
                             .eq('wa_message_id', update.key.id);
-                    }
 
-                    // Emit to frontend
-                    io.emit("message_status_update", {
-                        wa_message_id: update.key.id,
-                        status: newStatus
-                    });
-                    console.log(`Updated status for ${update.key.id} -> ${newStatus}`);
+                        // Emit to frontend org room
+                        io.to(`org:${orgId}`).emit("message_status_update", {
+                            organization_id: orgId,
+                            wa_message_id: update.key.id,
+                            status: newStatus
+                        });
+                        console.log(`Updated status for ${update.key.id} -> ${newStatus}`);
+                    }
                 }
             }
         });
@@ -815,21 +839,15 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
             const { connection, lastDisconnect, qr } = update;
 
             if (qr) {
-                // Always cache QR, but only emit if the frontend explicitly requested it.
                 latestQrBySession.set(sessionId, { qr, createdAt: Date.now() });
 
-                const requested = Boolean(
-                    socket?.data?.qrRequestedSessions &&
-                    typeof socket.data.qrRequestedSessions?.has === 'function' &&
-                    socket.data.qrRequestedSessions.has(sessionId)
-                );
-
-                if (requested) {
-                    socket.emit("qr", qr);
-                    console.log("QR Code sent to client");
+                socket?.emit?.("qr", qr);
+                if (organization_id) {
+                    io.to(`org:${organization_id}`).emit("qr", qr);
                 } else {
-                    console.log("QR generated but not requested; cached for later");
+                    io.emit("qr", qr);
                 }
+                console.log(`[Baileys] QR Code emitted for session: ${sessionId}`);
                 initializingSessions.delete(sessionId); // Unlock on QR (user needs to scan)
             }
 
@@ -922,34 +940,42 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                     }
                 }
             } else if (connection === "open") {
-                console.log("âœ… WhatsApp connection established successfully");
+                console.log("✅ WhatsApp connection established successfully");
                 initializingSessions.delete(sessionId); // Unlock
                 reconnectAttempts.delete(sessionId); // Reset on successful connect
-                socket.emit("status", "connected");
+                const orgId = organization_id || await ensureDefaultOrganizationId();
+                socket?.emit?.("status", "connected");
+                if (orgId) {
+                    io.to(`org:${orgId}`).emit("status", "connected");
+                } else {
+                    io.emit("status", "connected");
+                }
 
-                // âœ… Emit connected account info immediately
+                // Emit connected account info immediately
                 const connectedJid = sock.user?.id || "";
                 const connectedAccount = connectedJid ? connectedJid.split(':')[0] : null;
 
-                const orgId = organization_id || await ensureDefaultOrganizationId();
                 if (connectedAccount && orgId) {
-                    // âœ… UPSERT into wa_accounts so we have a valid ID for FKs
                     try {
                         await supabase.from('w_wa_accounts').upsert({
                             organization_id: orgId,
                             phone_number_id: connectedAccount,
                             display_phone_number: connectedAccount, // Use phone as display name defaults
                             status: 'connected',
-                            // waba_id: null // Not available in Baileys
                         }, { onConflict: 'phone_number_id' });
-                        console.log(`âœ… Upserted wa_account for ${connectedAccount}`);
+                        console.log(`✅ Upserted wa_account for ${connectedAccount}`);
                     } catch (err) {
                         console.error("Failed to upsert wa_account:", err);
                     }
                 }
 
                 if (connectedAccount) {
-                    socket.emit("connected_account", connectedAccount);
+                    socket?.emit?.("connected_account", connectedAccount);
+                    if (orgId) {
+                        io.to(`org:${orgId}`).emit("connected_account", connectedAccount);
+                    } else {
+                        io.emit("connected_account", connectedAccount);
+                    }
                 }
             }
         });
