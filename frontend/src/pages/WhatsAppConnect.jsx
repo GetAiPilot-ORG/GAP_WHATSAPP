@@ -86,7 +86,7 @@ export default function WhatsAppConnect() {
                         }
                     }
                 }
-            } catch {}
+            } catch { }
         }
         window.addEventListener('message', handleMetaMessage)
         return () => window.removeEventListener('message', handleMetaMessage)
