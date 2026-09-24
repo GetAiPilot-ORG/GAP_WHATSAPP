@@ -1,3 +1,4 @@
+import InfoHelp from '../components/InfoHelp'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
@@ -860,9 +861,7 @@ export default function Contacts() {
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between relative">
                     <div className="flex items-start justify-between w-full lg:w-auto z-10 relative">
                         <div>
-                            <h1 className="text-2xl font-bold text-gray-950 flex items-center gap-2">
-                                Contacts
-                            </h1>
+                            <div className="flex items-center gap-2"><h1 className="text-2xl font-bold text-gray-950 flex items-center gap-2">Contacts</h1><InfoHelp text="Manage customer audience phone numbers, custom data fields, and WhatsApp segmentation tags." /></div>
                             <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-gray-500">Manage customer profiles, account ownership, and tags.</p>
                         </div>
                     </div>

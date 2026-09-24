@@ -47,6 +47,7 @@ import {
     Eye,
     X,
 } from 'lucide-react'
+import InfoHelp from '../components/InfoHelp'
 import { useAuth } from '../context/AuthContext'
 import { useWhatsAppAccounts } from '../context/WhatsAppAccountContext'
 import { supabase } from '../supabaseClient'
@@ -385,6 +386,7 @@ export default function Dashboard() {
                         detail={`${rangeLabel} synced volume`}
                         accentColor="#2563eb"
                         loading={isLoading}
+                        info="Total volume of inbound customer inquiries and outbound bot/agent replies processed during the selected timeframe."
                     />
                     <MetricCard
                         icon={Users}
@@ -393,6 +395,7 @@ export default function Dashboard() {
                         detail="Incoming customer messages"
                         accentColor="#10b981"
                         loading={isLoading}
+                        info="Incoming messages initiated by new and existing leads reaching your WhatsApp Business numbers."
                     />
                     <MetricCard
                         icon={Bot}
@@ -401,6 +404,7 @@ export default function Dashboard() {
                         detail={`${fmt(model.metrics.aiAgent)} AI / ${fmt(model.metrics.humanAgent)} Team`}
                         accentColor="#8b5cf6"
                         loading={isLoading}
+                        info="Total automated replies handled by AI agents combined with manual agent responses from your live chat team."
                     />
                     <MetricCard
                         icon={AlertTriangle}
@@ -410,6 +414,7 @@ export default function Dashboard() {
                         warning={model.failedRate > 5}
                         accentColor="#ef4444"
                         loading={isLoading}
+                        info="Percentage and count of undelivered messages caused by Meta API rate limits, inactive numbers, or template formatting errors."
                     />
                 </section>
 
@@ -435,6 +440,7 @@ export default function Dashboard() {
                     <Panel
                         title="System Health"
                         subtitle="Current accounts, inbox, and automation status."
+                        info="Monitors your connected WhatsApp Business phone numbers, active bot sessions, and unread inbox queues."
                         action={
                             <span className="p-1.5 rounded-md bg-gray-50 border border-gray-200 text-gray-500">
                                 <Gauge className="h-3.5 w-3.5" />
@@ -457,7 +463,7 @@ export default function Dashboard() {
                                             <Smartphone className="h-3.5 w-3.5" />
                                         </span>
                                         <div>
-                                            <p className="text-xs font-bold text-gray-900">WhatsApp Accounts</p>
+                                            <div className="flex items-center gap-1.5"><p className="text-xs font-bold text-gray-900">WhatsApp Accounts</p><InfoHelp text="Registered and connected WhatsApp Business phone numbers currently transmitting and receiving webhooks." /></div>
                                             <p className="text-[10px] text-gray-500">Connected phone channels</p>
                                         </div>
                                     </div>
@@ -516,30 +522,36 @@ export default function Dashboard() {
                                 )}
                             </div>
 
-                            <HealthRow icon={MessageSquareText} label="Conversations" value={fmt(model.conversations.total)} active />
-                            <HealthRow icon={Bot} label="Bot Active Chats" value={fmt(model.conversations.botActive)} active />
-                            <HealthRow icon={FileText} label="AI Summaries Ready" value={fmt(model.conversations.summariesReady)} active />
+                            <HealthRow icon={MessageSquareText} label="Conversations" value={fmt(model.conversations.total)} active info="Total unique customer chat threads currently maintained in the database." />
+                            <HealthRow icon={Bot} label="Bot Active Chats" value={fmt(model.conversations.botActive)} active info="Active customer conversations currently handled by AI bot automation without human intervention." />
+                            <HealthRow icon={FileText} label="AI Summaries Ready" value={fmt(model.conversations.summariesReady)} active info="Conversations that have generated real-time AI conversation summaries, intent detection, and key insights." />
                             <HealthRow
                                 icon={AlertTriangle}
                                 label="Unread Messages"
                                 value={fmt(model.conversations.unread)}
                                 active={n(model.conversations.unread) === 0}
+                                info="Incoming customer messages awaiting review or response in your live agent inbox."
                             />
                         </div>
                     </Panel>
 
-                    <Panel title="Contact & Automation Readiness" subtitle="Customer profiles and active flows.">
+                    <Panel
+                        title="Contact & Automation Readiness"
+                        subtitle="Customer profiles and active flows."
+                        info="Live status of synchronized CRM contacts, active flow automation engines, and AI generated summary notes."
+                    >
                         <div className="grid grid-cols-2 gap-2.5">
-                            <MiniStat icon={Users} label="Total Contacts" value={fmt(model.contacts.total)} />
-                            <MiniStat icon={UserRoundCheck} label="Saved Contacts" value={fmt(model.contacts.saved)} />
-                            <MiniStat icon={Workflow} label="Flow Automations" value={`${fmt(model.automation.publishedFlows)} / ${fmt(model.automation.flows)}`} />
-                            <MiniStat icon={TrendingUp} label="AI Notes" value={fmt(model.automation.notesGenerated)} />
+                            <MiniStat icon={Users} label="Total Contacts" value={fmt(model.contacts.total)} info="Total audience phone numbers stored and synced across your WhatsApp database." />
+                            <MiniStat icon={UserRoundCheck} label="Saved Contacts" value={fmt(model.contacts.saved)} info="Contacts verified and linked with complete customer profile details." />
+                            <MiniStat icon={Workflow} label="Flow Automations" value={`${fmt(model.automation.publishedFlows)} / ${fmt(model.automation.flows)}`} info="Published automated multi-step chat flows running out of total drafted workflows." />
+                            <MiniStat icon={TrendingUp} label="AI Notes" value={fmt(model.automation.notesGenerated)} info="Real-time contextual intelligence notes generated by AI bots for sales and support leads." />
                         </div>
                     </Panel>
 
                     <Panel
                         title="Quick Actions"
                         subtitle="Shortcuts for daily operations."
+                        info="Quick navigation shortcuts to access Live Chat, manage AI bots, launch campaigns, or connect WhatsApp numbers."
                         action={
                             <span className="p-1.5 rounded-md bg-blue-50 border border-blue-100 text-blue-600">
                                 <Zap className="h-3.5 w-3.5" />
@@ -565,7 +577,11 @@ export default function Dashboard() {
 
                 {/* Real-time Activity & Campaigns Section */}
                 <section className="dash-section grid grid-cols-1 gap-5 xl:grid-cols-[1.3fr_0.7fr]">
-                    <Panel title="Recent Activity" subtitle="Latest real message logs synced from WhatsApp.">
+                    <Panel
+                        title="Recent Activity"
+                        subtitle="Latest real message logs synced from WhatsApp."
+                        info="Live real-time feed of recent inbound and outbound message events synced directly from Meta Cloud webhooks."
+                    >
                         <div className="space-y-2.5">
                             {isLoading ? (
                                 Array.from({ length: 4 }).map((_, index) => <SkeletonRow key={index} />)
@@ -577,7 +593,11 @@ export default function Dashboard() {
                         </div>
                     </Panel>
 
-                    <Panel title="Latest Campaigns" subtitle="Broadcast records from database.">
+                    <Panel
+                        title="Latest Campaigns"
+                        subtitle="Broadcast records from database."
+                        info="History of scheduled and dispatched broadcast campaigns along with total recipient contact count."
+                    >
                         <div className="space-y-2.5">
                             {model.campaigns.latest?.length ? (
                                 model.campaigns.latest.map((campaign) => <CampaignRow key={campaign.id} campaign={campaign} />)
@@ -824,7 +844,7 @@ function Header({ range, setRange, isFetching, refetch, freshness }) {
                     <Grid2X2 className="h-3.5 w-3.5" />
                     Command Center
                 </div>
-                <h1 className="mt-0.5 text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Dashboard</h1>
+                <div className="flex items-center gap-1.5 mt-0.5"><h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Dashboard</h1><InfoHelp text="Real-time WhatsApp Business operations center for monitoring incoming customer messages, automated replies, delivery health, and Meta Cloud API spend." /></div>
                 <p className="mt-0.5 text-xs text-gray-500">Real-time WhatsApp performance, customer readiness, and automation health.</p>
             </div>
 
@@ -872,7 +892,7 @@ function BillingOverviewStrip({ overview }) {
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto]">
             <div className="group relative rounded-lg border border-gray-200 bg-white p-4 shadow-2xs hover:border-gray-300 hover:shadow-xs transition-all duration-200 ease-out flex flex-col justify-between h-full min-h-[110px] antialiased">
                 <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold tracking-wider text-gray-500">Wallet Balance</span>
+                    <div className="flex items-center gap-1.5"><span className="text-xs font-semibold tracking-wider text-gray-500">Wallet Balance</span><InfoHelp text="Prepaid balance in Indian Rupees (INR) automatically deducted in real time for Meta WhatsApp conversation charges." /></div>
                     <div className="h-7 w-7 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100 shrink-0">
                         <Wallet className="h-3.5 w-3.5" />
                     </div>
@@ -889,7 +909,7 @@ function BillingOverviewStrip({ overview }) {
 
             <div className="group relative rounded-lg border border-gray-200 bg-white p-4 shadow-2xs hover:border-gray-300 hover:shadow-xs transition-all duration-200 ease-out flex flex-col justify-between h-full min-h-[110px] antialiased">
                 <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold tracking-wider text-gray-500">This Month Spend</span>
+                    <div className="flex items-center gap-1.5"><span className="text-xs font-semibold tracking-wider text-gray-500">This Month Spend</span><InfoHelp text="Cumulative monthly spending across all WhatsApp marketing, utility, authentication, and service message categories." /></div>
                     <div className="h-7 w-7 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100 shrink-0">
                         <TrendingUp className="h-3.5 w-3.5" />
                     </div>
@@ -906,7 +926,7 @@ function BillingOverviewStrip({ overview }) {
 
             <div className="group relative rounded-lg border border-gray-200 bg-white p-4 shadow-2xs hover:border-gray-300 hover:shadow-xs transition-all duration-200 ease-out flex flex-col justify-between h-full min-h-[110px] antialiased">
                 <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold tracking-wider text-gray-500">Marketing / Utility</span>
+                    <div className="flex items-center gap-1.5"><span className="text-xs font-semibold tracking-wider text-gray-500">Marketing / Utility</span><InfoHelp text="Financial and volume distribution between promotional broadcast campaigns and transactional/utility notifications." /></div>
                     <div className="h-7 w-7 rounded-md bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shrink-0">
                         <BarChart3 className="h-3.5 w-3.5" />
                     </div>
@@ -932,12 +952,12 @@ function BillingOverviewStrip({ overview }) {
     )
 }
 
-function Panel({ title, subtitle, action, children }) {
+function Panel({ title, subtitle, action, info, children }) {
     return (
         <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-2xs">
             <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
                 <div>
-                    <h2 className="text-xs sm:text-sm font-bold text-gray-900 tracking-tight">{title}</h2>
+                    <div className="flex items-center gap-1.5"><h2 className="text-xs sm:text-sm font-bold text-gray-900 tracking-tight">{title}</h2>{info && <InfoHelp text={info} />}</div>
                     {subtitle ? <p className="mt-0.5 text-[11px] text-gray-500">{subtitle}</p> : null}
                 </div>
                 {action}
@@ -947,16 +967,11 @@ function Panel({ title, subtitle, action, children }) {
     )
 }
 
-function MetricCard({ icon, label, value, detail, warning, accentColor, loading }) {
+function MetricCard({ icon, label, value, detail, warning, accentColor, loading, info }) {
     return (
         <div className="dash-kpi-card group relative rounded-lg border border-gray-200 bg-white p-4 shadow-2xs hover:border-gray-300 hover:shadow-xs transition-all duration-200 ease-out flex flex-col justify-between h-full min-h-[110px] antialiased">
             <div className="flex items-center justify-between gap-2">
-                <span
-                    className="text-xs font-extrabold tracking-wider"
-                    style={{ color: '#1e293b' }}
-                >
-                    {label}
-                </span>
+                <div className="flex items-center gap-1.5 min-w-0"><span className="text-xs font-extrabold tracking-wider truncate" style={{ color: '#1e293b' }}>{label}</span>{info && <InfoHelp text={info} />}</div>
                 <div
                     className={`h-7 w-7 rounded-md flex items-center justify-center shrink-0 ${warning ? 'bg-red-50 text-red-500 border border-red-100' : 'bg-gray-50 text-gray-600 border border-gray-100'}`}
                     style={!warning && accentColor ? { backgroundColor: `${accentColor}12`, color: accentColor } : {}}
@@ -1241,6 +1256,7 @@ function UsagePerformanceDashboard({ model, range, rangeLabel, loading, overview
         {
             title: 'Replies Handled',
             description: 'AI + human responses',
+            info: 'Detailed distribution of customer chats handled autonomously by AI agents versus live human support representatives.',
             value: `${fmt(n(model.metrics.aiAgent) + n(model.metrics.humanAgent))}`,
             detail: `${fmt(model.metrics.aiAgent)} AI / ${fmt(model.metrics.humanAgent)} team`,
             series: requestSeries,
@@ -1251,6 +1267,7 @@ function UsagePerformanceDashboard({ model, range, rangeLabel, loading, overview
         {
             title: 'Broadcast Output',
             description: 'Campaign messages sent',
+            info: 'Total campaign broadcast messages dispatched to targeted customer lists via Meta Cloud API.',
             value: fmt(model.campaigns.sent),
             detail: `${fmt(model.campaigns.failed)} failed broadcast messages`,
             series: readSeries,
@@ -1261,6 +1278,7 @@ function UsagePerformanceDashboard({ model, range, rangeLabel, loading, overview
         {
             title: 'Delivery Rate',
             description: 'Successfully delivered',
+            info: 'Percentage of sent WhatsApp messages that were successfully acknowledged and delivered to customer handsets.',
             value: `${pct(model.deliveryRate)}`,
             detail: `${fmt(model.delivered)} messages delivered`,
             series: requestSeries,
@@ -1271,6 +1289,7 @@ function UsagePerformanceDashboard({ model, range, rangeLabel, loading, overview
         {
             title: 'Read Rate',
             description: 'Recipient engagement',
+            info: 'Percentage of delivered messages that were opened and read by recipients who have read receipts enabled.',
             value: `${pct(model.readRate)}`,
             detail: `${fmt(model.read)} messages read`,
             series: readSeries,
@@ -1288,9 +1307,7 @@ function UsagePerformanceDashboard({ model, range, rangeLabel, loading, overview
             <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-2xs hover:border-gray-300 transition-all">
                 <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
                     <div>
-                        <p className="text-xs font-bold text-gray-900 tracking-wider">
-                            Message Status Composition
-                        </p>
+                        <div className="flex items-center gap-1.5"><p className="text-xs font-bold text-gray-900 tracking-wider">Message Status Composition</p><InfoHelp text="Interactive breakdown of message delivery lifecycle: Delivered (Unread), Read by recipient, Pending delivery queue, and Failed attempts." /></div>
                         <p className="text-[11px] text-gray-500 font-medium">
                             Interactive 3D real-time performance breakdown
                         </p>
@@ -1381,7 +1398,7 @@ function CustomLineTooltip({ active, payload }) {
     return null
 }
 
-function UsageCapabilityCard({ title, value, detail, description, series, color, gradientId, icon, compact }) {
+function UsageCapabilityCard({ title, value, detail, description, series, color, gradientId, icon, compact, info }) {
     const data = series ? series.map((val, i) => ({ name: i, value: n(val) })) : []
     const cardRef = useRef(null)
 
@@ -1397,10 +1414,7 @@ function UsageCapabilityCard({ title, value, detail, description, series, color,
         return (
             <div ref={cardRef} className="rounded-lg border border-gray-200 bg-white shadow-2xs hover:border-gray-300 hover:shadow-xs transition-all flex flex-col h-full overflow-hidden">
                 {/* Top: icon + title row */}
-                <div className="px-3 pt-2.5 flex items-center gap-1.5">
-                    {icon ? createElement(icon, { className: 'h-3 w-3 shrink-0', style: { color } }) : null}
-                    <h3 className="text-[10px] font-extrabold tracking-wider truncate" style={{ color: '#94a3b8' }}>{title}</h3>
-                </div>
+                <div className="px-3 pt-2.5 flex items-center justify-between gap-1.5"><div className="flex items-center gap-1.5 min-w-0">{icon ? createElement(icon, { className: 'h-3 w-3 shrink-0', style: { color } }) : null}<h3 className="text-[10px] font-extrabold tracking-wider truncate" style={{ color: '#94a3b8' }}>{title}</h3></div>{info && <InfoHelp text={info} />}</div>
                 {/* Middle: value + description and detail */}
                 <div className="px-3 pt-1 pb-0">
                     <p className="text-[28px] font-black tracking-tight tabular-nums leading-none" style={{ color: '#0f172a' }}>{value}</p>
@@ -1449,10 +1463,7 @@ function UsageCapabilityCard({ title, value, detail, description, series, color,
     return (
         <div ref={cardRef} className="rounded-lg border border-gray-200 bg-white p-4 shadow-2xs hover:border-gray-300 transition-all flex items-center justify-between min-h-[105px]">
             <div className="space-y-1">
-                <div className="flex items-center gap-1.5">
-                    {icon ? createElement(icon, { className: 'h-3.5 w-3.5', style: { color } }) : null}
-                    <h3 className="text-xs font-bold text-gray-900 tracking-tight">{title}</h3>
-                </div>
+                <div className="flex items-center gap-1.5">{icon ? createElement(icon, { className: 'h-3.5 w-3.5', style: { color } }) : null}<h3 className="text-xs font-bold text-gray-900 tracking-tight">{title}</h3>{info && <InfoHelp text={info} />}</div>
                 <p className="text-2xl font-black text-gray-900 tracking-tight tabular-nums">{value}</p>
                 <p className="card-desc text-[11px] text-gray-500 font-medium">{detail}</p>
             </div>
@@ -1484,26 +1495,24 @@ function UsageCapabilityCard({ title, value, detail, description, series, color,
     )
 }
 
-function HealthRow({ icon, label, value, active }) {
+function HealthRow({ icon, label, value, active, info }) {
     return (
         <div className="flex items-center justify-between gap-2.5 rounded-lg bg-white border border-gray-200 px-3 py-2 shadow-2xs">
             <div className="flex min-w-0 items-center gap-2">
                 <span className={`rounded-md p-1 ${active ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
                     {createElement(icon, { className: 'h-3.5 w-3.5' })}
                 </span>
-                <span className="truncate text-xs font-semibold text-gray-800">{label}</span>
+                <span className="truncate text-xs font-semibold text-gray-800">{label}</span>{info && <InfoHelp text={info} />}
             </div>
             <span className="shrink-0 text-xs font-bold text-gray-900 tabular-nums">{value}</span>
         </div>
     )
 }
 
-function MiniStat({ icon, label, value }) {
+function MiniStat({ icon, label, value, info }) {
     return (
         <div className="rounded-lg bg-white border border-gray-200 p-3 shadow-2xs">
-            <span className="mb-1.5 flex h-6 w-6 items-center justify-center rounded-md bg-gray-50 border border-gray-200 text-gray-700">
-                {createElement(icon, { className: 'h-3.5 w-3.5' })}
-            </span>
+            <div className="flex items-center justify-between mb-1.5"><span className="flex h-6 w-6 items-center justify-center rounded-md bg-gray-50 border border-gray-200 text-gray-700">{createElement(icon, { className: 'h-3.5 w-3.5' })}</span>{info && <InfoHelp text={info} />}</div>
             <p className="text-[10px] font-bold tracking-wider text-gray-500">{label}</p>
             <p className="mt-0.5 text-base font-bold text-gray-900 tabular-nums">{value}</p>
         </div>

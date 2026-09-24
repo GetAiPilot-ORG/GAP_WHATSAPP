@@ -1,3 +1,4 @@
+import InfoHelp from '../components/InfoHelp'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -656,7 +657,7 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
         <div className="space-y-5 px-4 pb-8 sm:px-6 lg:px-8">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                    <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-slate-950">Message Templates</h1>
+                    <div className="flex items-center gap-1.5"><h1 className="text-[22px] font-semibold tracking-[-0.02em] text-slate-950">Message Templates</h1><InfoHelp text="Meta Cloud API approved message templates for broadcasts, proactive alerts, and utility notifications." /></div>
                     <p className="mt-1 text-[13px] text-slate-500">Manage your WhatsApp message templates</p>
                 </div>
                 <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end">
