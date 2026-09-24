@@ -1,3 +1,4 @@
+import InfoHelp from '../components/InfoHelp'
 import { useEffect, useMemo, useRef, useState, Fragment } from 'react'
 import { gsap } from 'gsap'
 import { useGSAP } from '@gsap/react'
@@ -400,7 +401,7 @@ export default function BotAgents() {
                                 <Sparkle size={14} weight="fill" className="text-blue-600" />
                                 WhatsApp AI setup
                             </div>
-                            <h1 className="mt-3 text-2xl font-semibold leading-tight text-gray-950 sm:text-3xl">Bot Agents</h1>
+                            <div className="flex items-center gap-2 mt-3"><h1 className="text-2xl font-semibold leading-tight text-gray-950 sm:text-3xl">Bot Agents</h1><InfoHelp text="AI-powered chatbot assistants trained on your business documents to automate customer replies 24/7." /></div>
                             <p className="mt-2 text-sm leading-6 text-gray-600">Aapke WhatsApp ke liye trained assistant. Pehle docs add karo, phir ek agent create karo, aur auto replies on kar do.</p>
                         </div>
                         <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:flex-wrap sm:items-center sm:w-auto">
@@ -455,10 +456,10 @@ export default function BotAgents() {
                 ) : null}
 
                 <div className="grid grid-cols-2 gap-[1px] lg:grid-cols-4 bg-zinc-200 border border-zinc-200" ref={statsContainerRef}>
-                    <StatCard icon={Robot} label="Agents" value={stats.total} helper="Total trained bots" />
-                    <StatCard icon={Check} label="Active" value={stats.active} helper="Replying now" />
-                    <StatCard icon={ShieldCheck} label="Auto reply ready" value={stats.unknown} helper="New chats covered" />
-                    <StatCard icon={Database} label="Trained text" value={stats.trainedChars.toLocaleString()} helper="Knowledge used" />
+                    <StatCard icon={Robot} label="Agents" value={stats.total} helper="Total trained bots" info="Total AI chatbot agents created and configured in your workspace." />
+                    <StatCard icon={Check} label="Active" value={stats.active} helper="Replying now" info="Agents currently turned ON and actively replying to customer messages." />
+                    <StatCard icon={ShieldCheck} label="Auto reply ready" value={stats.unknown} helper="New chats covered" info="Agents configured to autonomously answer new and unknown customer inquiries." />
+                    <StatCard icon={Database} label="Trained text" value={stats.trainedChars.toLocaleString()} helper="Knowledge used" info="Total characters of knowledge base documentation indexed for AI context." />
                 </div>
 
                 <div className="grid gap-4 xl:grid-cols-[1fr_320px] 2xl:grid-cols-[1fr_360px]">
@@ -871,7 +872,7 @@ function ApiKeyModal({ apiKey, setApiKey, configured, isSaving, onClose, onSave 
         </div>
     )
 }
-function StatCard({ icon, label, value, helper }) {
+function StatCard({ icon, label, value, helper, info }) {
     const IconComponent = icon
     return (
         <div className="stat-card-item rounded-none bg-white p-5">

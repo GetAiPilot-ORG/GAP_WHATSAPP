@@ -1,3 +1,4 @@
+import InfoHelp from '../components/InfoHelp'
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Send, Users, FileText, Calendar, Check, ArrowRight, LayoutGrid, Loader2, RotateCw, Clock, Trash2, ChevronDown, ChevronUp, Upload, Link as LinkIcon, Info, Wallet, Pause, Play, Phone, MessageSquare, ShieldCheck, TrendingUp, Search, X, Megaphone } from 'lucide-react'
@@ -1141,7 +1142,7 @@ const renderLivePreview = () => {
         <div className="mx-auto w-full max-w-[1600px] space-y-6 md:space-y-8 px-4 sm:px-6 lg:px-8 pb-16">
             <div className="flex flex-wrap gap-4 md:items-center justify-between">
                 <div>
-                    <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Broadcasts</h1>
+                    <div className="flex items-center gap-1.5"><h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Broadcasts</h1><InfoHelp text="Design, schedule, and track bulk WhatsApp broadcast campaigns to reach your contacts via Meta Cloud API." /></div>
                     <p className="text-xs md:text-sm text-gray-500 mt-1 md:mt-2 max-w-lg leading-relaxed">Design, schedule, and track bulk message campaigns for your audience.</p>
                 </div>
 

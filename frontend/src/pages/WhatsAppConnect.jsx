@@ -1,3 +1,4 @@
+import InfoHelp from '../components/InfoHelp'
 import { createElement, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
@@ -85,7 +86,7 @@ export default function WhatsAppConnect() {
                         }
                     }
                 }
-            } catch {}
+            } catch { }
         }
         window.addEventListener('message', handleMetaMessage)
         return () => window.removeEventListener('message', handleMetaMessage)
@@ -419,6 +420,7 @@ export default function WhatsAppConnect() {
                         </div>
                         <h2 className="mt-3 text-base sm:text-xl font-bold text-gray-950">
                             How messaging works after connecting your number
+                            <InfoHelp text="Meta WhatsApp Cloud API enforces a 24-hour customer service window for freeform chat and template approval for business-initiated conversations." />
                         </h2>
                         <p className="mt-1.5 text-xs sm:text-sm leading-relaxed text-gray-600">
                             Meta WhatsApp Cloud API has specific rules: You can only send freeform text messages within the <strong>24-Hour Customer Care Window</strong> after a customer texts you. To initiate a chat with a new contact, an approved <strong>Template Message</strong> is required.

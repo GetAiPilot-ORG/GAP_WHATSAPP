@@ -1,3 +1,4 @@
+import InfoHelp from '../components/InfoHelp'
 import { useEffect, useMemo, useState } from 'react'
 import {
     AlertCircle, Check, ChevronDown, CreditCard, Hexagon, Loader2,
@@ -594,6 +595,7 @@ export default function BillingPage() {
                                         <img src="/images/money.png" alt="Money" className="h-6 w-6 object-contain" />
                                     </span>
                                     Recharge Message Wallet
+                                    <InfoHelp text="Prepaid INR balance used in real time to pay Meta's per-conversation charges for marketing, utility, and service messages." />
                                 </h2>
                                 <p className="mt-1 text-[11px] sm:text-sm text-indigo-200/80 leading-snug sm:leading-relaxed max-w-xl line-clamp-2 sm:line-clamp-none">
                                     Marketing, utility aur authentication message charges wallet se deduct honge. Campaign launch se pehle enough balance rakho.
@@ -799,7 +801,7 @@ export default function BillingPage() {
                 <section data-tour="billing-plans" className="rounded-xl border border-gray-200 bg-white p-5">
                     <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div>
-                            <h2 className="text-base font-semibold text-gray-950">Subscription Plans</h2>
+                            <div className="flex items-center gap-1.5"><h2 className="text-base font-semibold text-gray-950">Subscription Plans</h2><InfoHelp text="Platform access subscription covering AI bot limits, contact limits, and multi-agent seats. Message conversation costs are billed separately via the wallet." /></div>
                             <p className="mt-1 text-sm text-gray-500">Plan access ke liye hai. WhatsApp message spend wallet/recharge se alag chalega.</p>
                         </div>
                         <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:items-end">
