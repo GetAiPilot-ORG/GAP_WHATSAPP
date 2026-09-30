@@ -1,5 +1,4 @@
-const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
-const API_BASE = `${BACKEND_BASE}/api`
+import { API_BASE } from '../config/api'
 
 export async function trackOnboardingEvent({ user, accountId, event, metadata = {} }) {
     if (!user?.id || !event) return

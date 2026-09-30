@@ -283,7 +283,8 @@ export async function addReaction(req: any, res: Response) {
 
         if (updErr) throw updErr;
 
-        io.emit('message_updated', {
+        io.to(`org:${orgId}`).emit('message_updated', {
+            organization_id: orgId,
             conversation_id: message.conversation_id,
             message_id: message.id,
             wa_message_id: message.wa_message_id,
@@ -430,7 +431,10 @@ export async function sendMessage(req: any, res: Response) {
             preview: text
         });
 
-        io.emit('new_message', {
+        io.to(`org:${orgId}`).emit('new_message', {
+            organization_id: orgId,
+            wa_account_id: conv.wa_account_id,
+            phone_number_id: conv.account?.phone_number_id,
             from: toPhone,
             text,
             quoted: quotedMessage,
@@ -752,7 +756,10 @@ export async function sendMediaMessage(req: any, res: Response) {
             preview,
         });
 
-        io.emit("new_message", {
+        const targetRoom = orgId ? `org:${orgId}` : null;
+        const msgPayload = {
+            organization_id: orgId,
+            wa_account_id: conv.wa_account_id,
             from: conv.contact.wa_id,
             text: caption || preview,
             sender: "agent",
@@ -781,7 +788,13 @@ export async function sendMediaMessage(req: any, res: Response) {
                         ? Math.max(0, Math.round(duration_seconds))
                         : null,
             }
-        });
+        };
+
+        if (targetRoom) {
+            io.to(targetRoom).emit("new_message", msgPayload);
+        } else {
+            io.emit("new_message", msgPayload);
+        }
 
         res.json({
             success: true,

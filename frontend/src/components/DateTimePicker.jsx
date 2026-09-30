@@ -15,11 +15,6 @@ const CustomInput = forwardRef(({ value, onClick, placeholder, className }, ref)
             className={`w-full rounded-lg border py-2.5 pl-9 pr-4 text-sm outline-none transition-all focus:ring-2 focus:ring-[#0070d1]/10 ${className}`}
             readOnly
         />
-        {value && (
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-                <Clock className="h-4 w-4 text-[#0064b7]" />
-            </div>
-        )}
     </div>
 ));
 

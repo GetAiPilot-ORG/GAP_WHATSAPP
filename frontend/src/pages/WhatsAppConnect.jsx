@@ -1,4 +1,5 @@
-import { createElement, useEffect, useMemo, useState } from 'react'
+import InfoHelp from '../components/InfoHelp'
+import { createElement, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
     AlertCircle,
@@ -27,9 +28,7 @@ import { formatINRFromPaise } from '../config/whatsappPricing'
 import TourButton from '../onboarding/TourButton'
 import WhatsAppMessagingGuideModal from '../components/WhatsAppMessagingGuideModal'
 import { loadFacebookSDK } from '../services/facebookSdkLoader'
-
-const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
-const API_BASE = `${API_URL}/api`
+import { BACKEND_URL as API_URL, API_BASE } from '../config/api'
 const META_APP_ID = import.meta.env.VITE_META_APP_ID || '1459710399100167'
 const META_CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID || '1108075894853600'
 const META_EMBEDDED_SIGNUP_VERSION = import.meta.env.VITE_META_EMBEDDED_SIGNUP_VERSION || 'v4'
@@ -51,6 +50,7 @@ export default function WhatsAppConnect() {
     const [diagnostics, setDiagnostics] = useState({})
     const [diagnosticsLoadingId, setDiagnosticsLoadingId] = useState(null)
     const [isGuideModalOpen, setIsGuideModalOpen] = useState(false)
+    const capturedMetaSessionRef = useRef(null)
     const [hasIntegrationConsent, setHasIntegrationConsent] = useState(() => {
         if (import.meta.env.VITE_ENABLE_COOKIE_CONSENT !== 'true') return true
         try {
@@ -70,6 +70,26 @@ export default function WhatsAppConnect() {
     const isLocalHost = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
     const isSecureForMetaLogin = window.location.protocol === 'https:' || isLocalHost
     const activeConnections = useMemo(() => accounts, [accounts])
+
+    useEffect(() => {
+        const handleMetaMessage = (event) => {
+            if (!event.origin || (!event.origin.includes('facebook.com') && !event.origin.includes('fb.com'))) return
+            try {
+                const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
+                if (data?.type === 'WA_EMBEDDED_SIGNUP') {
+                    const sessionData = data.data || {}
+                    if (sessionData.phone_number_id || sessionData.waba_id) {
+                        capturedMetaSessionRef.current = {
+                            phone_number_id: sessionData.phone_number_id || null,
+                            waba_id: sessionData.waba_id || null,
+                        }
+                    }
+                }
+            } catch { }
+        }
+        window.addEventListener('message', handleMetaMessage)
+        return () => window.removeEventListener('message', handleMetaMessage)
+    }, [])
 
     useEffect(() => {
         if (!session?.access_token) return
@@ -182,13 +202,19 @@ export default function WhatsAppConnect() {
         setEmbedStatus('saving')
         setEmbedError('')
         try {
+            const payload = {
+                code: response.authResponse.code,
+                phone_number_id: capturedMetaSessionRef.current?.phone_number_id || undefined,
+                waba_id: capturedMetaSessionRef.current?.waba_id || undefined,
+            }
             const res = await fetch(`${API_BASE}/wa/connect/callback`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-                body: JSON.stringify({ code: response.authResponse.code }),
+                body: JSON.stringify(payload),
             })
             const data = await res.json().catch(() => ({}))
             if (!res.ok) throw new Error(data.error || 'Connection failed')
+            capturedMetaSessionRef.current = null
             setEmbedStatus('saved')
             setEmbedError('')
             await fetchAccounts()
@@ -391,6 +417,7 @@ export default function WhatsAppConnect() {
                         </div>
                         <h2 className="mt-3 text-base sm:text-xl font-bold text-gray-950">
                             How messaging works after connecting your number
+                            <InfoHelp text="Meta WhatsApp Cloud API enforces a 24-hour customer service window for freeform chat and template approval for business-initiated conversations." />
                         </h2>
                         <p className="mt-1.5 text-xs sm:text-sm leading-relaxed text-gray-600">
                             Meta WhatsApp Cloud API has specific rules: You can only send freeform text messages within the <strong>24-Hour Customer Care Window</strong> after a customer texts you. To initiate a chat with a new contact, an approved <strong>Template Message</strong> is required.
@@ -429,44 +456,44 @@ export default function WhatsAppConnect() {
             </section>
 
             {activeConnections.length === 0 && (
-            <section className="grid grid-cols-1 gap-1.5 md:gap-4 md:grid-cols-3">
-                <GuideCard
-                    icon={Building2}
-                    title="Before you start"
-                    stepNumber={1}
-                    isExpanded={activeAccordion === 0}
-                    onToggle={() => setActiveAccordion(prev => prev === 0 ? -1 : 0)}
-                    items={[
-                        'Facebook/Meta admin login ready rakhein.',
-                        'Business name, website and email accurate honi chahiye.',
-                        'Number par SMS/call OTP receive kar paana zaroori hai.',
-                    ]}
-                />
-                <GuideCard
-                    icon={BadgeCheck}
-                    title="Meta will verify"
-                    stepNumber={2}
-                    isExpanded={activeAccordion === 1}
-                    onToggle={() => setActiveAccordion(prev => prev === 1 ? -1 : 1)}
-                    items={[
-                        'Business portfolio select ya create hoga.',
-                        'WhatsApp Business Account and phone number link hoga.',
-                        'Some accounts may need Meta review before full sending.',
-                    ]}
-                />
-                <GuideCard
-                    icon={MessageSquareText}
-                    title="After connection"
-                    stepNumber={3}
-                    isExpanded={activeAccordion === 2}
-                    onToggle={() => setActiveAccordion(prev => prev === 2 ? -1 : 2)}
-                    items={[
-                        'Dashboard zero values real message data se replace honge.',
-                        'Templates, broadcasts, live chat and flows unlock honge.',
-                        'Diagnostics batayega number send-ready hai ya kya pending hai.',
-                    ]}
-                />
-            </section>
+                <section className="grid grid-cols-1 gap-1.5 md:gap-4 md:grid-cols-3">
+                    <GuideCard
+                        icon={Building2}
+                        title="Before you start"
+                        stepNumber={1}
+                        isExpanded={activeAccordion === 0}
+                        onToggle={() => setActiveAccordion(prev => prev === 0 ? -1 : 0)}
+                        items={[
+                            'Facebook/Meta admin login ready rakhein.',
+                            'Business name, website and email accurate honi chahiye.',
+                            'Number par SMS/call OTP receive kar paana zaroori hai.',
+                        ]}
+                    />
+                    <GuideCard
+                        icon={BadgeCheck}
+                        title="Meta will verify"
+                        stepNumber={2}
+                        isExpanded={activeAccordion === 1}
+                        onToggle={() => setActiveAccordion(prev => prev === 1 ? -1 : 1)}
+                        items={[
+                            'Business portfolio select ya create hoga.',
+                            'WhatsApp Business Account and phone number link hoga.',
+                            'Some accounts may need Meta review before full sending.',
+                        ]}
+                    />
+                    <GuideCard
+                        icon={MessageSquareText}
+                        title="After connection"
+                        stepNumber={3}
+                        isExpanded={activeAccordion === 2}
+                        onToggle={() => setActiveAccordion(prev => prev === 2 ? -1 : 2)}
+                        items={[
+                            'Dashboard zero values real message data se replace honge.',
+                            'Templates, broadcasts, live chat and flows unlock honge.',
+                            'Diagnostics batayega number send-ready hai ya kya pending hai.',
+                        ]}
+                    />
+                </section>
             )}
 
             {activeConnections.length > 0 && (
@@ -1003,18 +1030,18 @@ function AccountCard({ account, diagnostics, loading, onCheck, onReconnect, onDi
                 </span>
             </div>
 
-            <div className="flex items-center gap-4 mb-4 text-xs font-medium text-gray-600">
+            <div className="flex flex-wrap items-center gap-y-2 gap-x-4 mb-4 text-xs font-medium text-gray-600">
                 <div className="flex items-center gap-1.5 border-r border-gray-200 pr-4">
-                    <span className="uppercase text-[10px] font-bold text-gray-400">Messaging:</span>
-                    <span className="text-gray-900">{messagingStatus}</span>
+                    <span className="uppercase text-[10px] font-bold text-gray-400 whitespace-nowrap">Messaging:</span>
+                    <span className="text-gray-900 whitespace-nowrap">{messagingStatus}</span>
                 </div>
                 <div className="flex items-center gap-1.5 border-r border-gray-200 pr-4">
-                    <span className="uppercase text-[10px] font-bold text-gray-400">Templates:</span>
-                    <span className="text-gray-900">{account.connection_type === 'qr_session' ? 'N/A' : templateStatus}</span>
+                    <span className="uppercase text-[10px] font-bold text-gray-400 whitespace-nowrap">Templates:</span>
+                    <span className="text-gray-900 whitespace-nowrap">{account.connection_type === 'qr_session' ? 'N/A' : templateStatus}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                    <span className="uppercase text-[10px] font-bold text-gray-400">API:</span>
-                    <span className="text-gray-900">{account.connection_type === 'qr_session' ? 'QR' : 'Cloud'}</span>
+                    <span className="uppercase text-[10px] font-bold text-gray-400 whitespace-nowrap">API:</span>
+                    <span className="text-gray-900 whitespace-nowrap">{account.connection_type === 'qr_session' ? 'QR' : 'Cloud'}</span>
                 </div>
             </div>
 

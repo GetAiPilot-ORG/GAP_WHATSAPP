@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { FLOW_TEMPLATES } from './flowTemplates';
 import { notify } from '../../services/notificationService';
+import { BACKEND_URL as API_URL } from '../../config/api';
 
 export default function NodeConfigPanel({ node, onClose, onSave }) {
     const [config, setConfig] = useState(node?.data?.config || {});
@@ -581,7 +582,6 @@ function ButtonConfig({ config, updateConfig }) {
 }
 
 function TemplateConfig({ config, updateConfig }) {
-    const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
     const { apiCall, session } = useAuth();
     const [templates, setTemplates] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -1072,14 +1072,6 @@ function WhatsAppFlowConfig({ config, updateConfig }) {
 }
 
 function AppointmentConfig({ config, updateConfig }) {
-    const getApiUrl = () => {
-        if (import.meta.env.VITE_BACKEND_URL) return import.meta.env.VITE_BACKEND_URL;
-        if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-            return 'http://localhost:3001';
-        }
-        return 'https://wb.getaipilot.in';
-    };
-    const API_URL = getApiUrl();
     const auth = useAuth() || {};
     const [googleStatus, setGoogleStatus] = useState({ connected: false, connectedEmail: '' });
     const [loadingGoogle, setLoadingGoogle] = useState(false);

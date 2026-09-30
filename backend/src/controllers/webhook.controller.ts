@@ -699,8 +699,8 @@ export async function handleWebhook(req: any, res: Response) {
 
     // 1. Identify Organization & Account
     const phone_number_id = metadata?.phone_number_id;
-    let organization_id = null;
-    let wa_account_id = null;
+    let organization_id: string | null = null;
+    let wa_account_id: string | null = null;
 
     if (phone_number_id && supabase) {
       webhookLog("account.lookup.start", {
@@ -927,6 +927,16 @@ export async function handleWebhook(req: any, res: Response) {
         });
       }
 
+      if (!organization_id || !wa_account_id) {
+        webhookError("account.missing", new Error("Missing organization_id or wa_account_id"), {
+          requestId,
+          phone_number_id,
+          organization_id,
+          wa_account_id,
+        });
+        continue;
+      }
+
       // A. Upsert Contact
       webhookLog("contact.upsert.start", {
         requestId,
@@ -1039,6 +1049,9 @@ export async function handleWebhook(req: any, res: Response) {
       // D. Emit Realtime
       // Emit to org room
       io.to(`org:${organization_id}`).emit("new_message", {
+        organization_id,
+        wa_account_id,
+        phone_number_id,
         from,
         phone: from,
         text,
@@ -1052,7 +1065,7 @@ export async function handleWebhook(req: any, res: Response) {
         created_at: storedInbound?.created_at || new Date().toISOString(),
         status: "delivered",
         name: profileName,
-        connectedAccount: metadata?.display_phone_number,
+        connectedAccount: metadata?.display_phone_number || phone_number_id,
         type,
         ...(enrichedContent?.media_url
           ? { media_url: enrichedContent.media_url }
@@ -1195,7 +1208,10 @@ export async function handleWebhook(req: any, res: Response) {
                   }
 
                   // EMIT UPDATE TO FRONTEND
-                  io.emit("message_updated", {
+                  io.to(`org:${organization_id}`).emit("message_updated", {
+                    organization_id,
+                    wa_account_id,
+                    conversation_id: conv.id,
                     message_id: storedInbound.id,
                     content: finalMediaContent,
                   });
@@ -1381,7 +1397,10 @@ export async function handleWebhook(req: any, res: Response) {
             automation_source: "ai_agent",
           } as any);
 
-          io.emit("new_message", {
+          io.to(`org:${organization_id}`).emit("new_message", {
+            organization_id,
+            wa_account_id,
+            phone_number_id,
             from: metadata?.display_phone_number || phone_number_id,
             phone: from,
             text: autoReplyText,
@@ -1391,7 +1410,7 @@ export async function handleWebhook(req: any, res: Response) {
             message_id: storedBotReply?.id || null,
             wa_message_id: botWaMessageId,
             created_at: storedBotReply?.created_at || new Date().toISOString(),
-            connectedAccount: metadata?.display_phone_number,
+            connectedAccount: metadata?.display_phone_number || phone_number_id,
             type: "text",
             is_bot_reply: true,
           });
@@ -1467,7 +1486,10 @@ export async function handleWebhook(req: any, res: Response) {
                 },
               } as any);
 
-              io.emit("new_message", {
+              io.to(`org:${organization_id}`).emit("new_message", {
+                organization_id,
+                wa_account_id,
+                phone_number_id,
                 from: metadata?.display_phone_number || phone_number_id,
                 phone: from,
                 text: flowResult.output,
@@ -1478,7 +1500,7 @@ export async function handleWebhook(req: any, res: Response) {
                 wa_message_id: botWaMessageId,
                 created_at:
                   storedBotReply?.created_at || new Date().toISOString(),
-                connectedAccount: metadata?.display_phone_number,
+                connectedAccount: metadata?.display_phone_number || phone_number_id,
                 type: "text",
                 is_bot_reply: true,
               });
@@ -1528,7 +1550,10 @@ export async function handleWebhook(req: any, res: Response) {
                 },
               } as any);
 
-              io.emit("new_message", {
+              io.to(`org:${organization_id}`).emit("new_message", {
+                organization_id,
+                wa_account_id,
+                phone_number_id,
                 from: metadata?.display_phone_number || phone_number_id,
                 phone: from,
                 text: body,
@@ -1539,7 +1564,7 @@ export async function handleWebhook(req: any, res: Response) {
                 wa_message_id: botWaMessageId,
                 created_at:
                   storedBotReply?.created_at || new Date().toISOString(),
-                connectedAccount: metadata?.display_phone_number,
+                connectedAccount: metadata?.display_phone_number || phone_number_id,
                 type: "interactive",
                 is_bot_reply: true,
               });
@@ -1588,7 +1613,10 @@ export async function handleWebhook(req: any, res: Response) {
                 },
               } as any);
 
-              io.emit("new_message", {
+              io.to(`org:${organization_id}`).emit("new_message", {
+                organization_id,
+                wa_account_id,
+                phone_number_id,
                 from: metadata?.display_phone_number || phone_number_id,
                 phone: from,
                 text: body,
@@ -1598,7 +1626,7 @@ export async function handleWebhook(req: any, res: Response) {
                 message_id: storedBotReply?.id || null,
                 wa_message_id: botWaMessageId,
                 created_at: storedBotReply?.created_at || new Date().toISOString(),
-                connectedAccount: metadata?.display_phone_number,
+                connectedAccount: metadata?.display_phone_number || phone_number_id,
                 type: "interactive",
                 is_bot_reply: true,
               });
@@ -1661,7 +1689,10 @@ export async function handleWebhook(req: any, res: Response) {
                     },
                   } as any);
 
-                  io.emit("new_message", {
+                  io.to(`org:${organization_id}`).emit("new_message", {
+                    organization_id,
+                    wa_account_id,
+                    phone_number_id,
                     from: metadata?.display_phone_number || phone_number_id,
                     phone: from,
                     text: preview,
@@ -1672,7 +1703,7 @@ export async function handleWebhook(req: any, res: Response) {
                     wa_message_id: sentMedia.wa_message_id,
                     created_at:
                       storedBotMedia?.created_at || new Date().toISOString(),
-                    connectedAccount: metadata?.display_phone_number,
+                    connectedAccount: metadata?.display_phone_number || phone_number_id,
                     type: media.type,
                     media_url: sentMedia.media_url,
                     mime_type: sentMedia.mime_type,
@@ -2011,7 +2042,8 @@ export async function handleWebhook(req: any, res: Response) {
 
       // Refund is already handled asynchronously at the start of status loop execution if applicable
 
-      io.emit("message_status_update", {
+      io.to(`org:${organization_id}`).emit("message_status_update", {
+        organization_id,
         wa_message_id,
         status: newStatus,
         error_message: errorMessage,

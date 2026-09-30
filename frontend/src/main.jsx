@@ -1,10 +1,12 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import './components/flow-builder/flow-animations.css'
 import './index.css'
 import App from './App.jsx'
 import axios from 'axios'
+import { BACKEND_URL } from './config/api'
 
-const backendUrl = import.meta.env.VITE_BACKEND_URL || ''
+const backendUrl = BACKEND_URL
 
 const shouldSkipNgrokWarning = (resource) => {
   const url = typeof resource === 'string' ? resource : resource?.url

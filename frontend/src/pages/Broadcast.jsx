@@ -1,3 +1,4 @@
+import InfoHelp from '../components/InfoHelp'
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Send, Users, FileText, Calendar, Check, ArrowRight, LayoutGrid, Loader2, RotateCw, Clock, Trash2, ChevronDown, ChevronUp, Upload, Link as LinkIcon, Info, Wallet, Pause, Play, Phone, MessageSquare, ShieldCheck, TrendingUp, Search, X, Megaphone } from 'lucide-react'
@@ -9,6 +10,7 @@ import { formatINRFromPaise } from '../config/whatsappPricing'
 import { MESSAGING_TIERS, getMessagingTierLabel, isCurrentTier } from '../utils/messagingLimits'
 import DateTimePicker from '../components/DateTimePicker'
 import Modal from '../components/Modal'
+import { BACKEND_URL as API_URL } from '../config/api'
 
 const STEPS = [
     { id: 1, name: 'Setup', icon: LayoutGrid },
@@ -16,8 +18,6 @@ const STEPS = [
     { id: 3, name: 'Message', icon: FileText },
     { id: 4, name: 'Review', icon: Check },
 ]
-
-const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
 
 function parseVars(components) {
     const body = components?.find(c => c.type === 'BODY')?.text || ''
@@ -1142,7 +1142,7 @@ const renderLivePreview = () => {
         <div className="mx-auto w-full max-w-[1600px] space-y-6 md:space-y-8 px-4 sm:px-6 lg:px-8 pb-16">
             <div className="flex flex-wrap gap-4 md:items-center justify-between">
                 <div>
-                    <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Broadcasts</h1>
+                    <div className="flex items-center gap-1.5"><h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Broadcasts</h1><InfoHelp text="Design, schedule, and track bulk WhatsApp broadcast campaigns to reach your contacts via Meta Cloud API." /></div>
                     <p className="text-xs md:text-sm text-gray-500 mt-1 md:mt-2 max-w-lg leading-relaxed">Design, schedule, and track bulk message campaigns for your audience.</p>
                 </div>
 
@@ -1213,7 +1213,7 @@ const renderLivePreview = () => {
                                     fetchRecipientReport(expandedCampaignId, 1);
                                 }
                             }}
-                            className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-[#0064b7] transition-all hover:bg-[#eef7ff] hover:border-[#b9dcfb] active:scale-95 shadow-xs disabled:opacity-75 cursor-pointer"
+                            className="flex shrink-0 whitespace-nowrap items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-[#0064b7] transition-all hover:bg-[#eef7ff] hover:border-[#b9dcfb] active:scale-95 shadow-xs disabled:opacity-75 cursor-pointer"
                         >
                             <RotateCw className={`w-4 h-4 ${isLoadingHistory ? 'animate-spin' : ''}`} />
                             <span>Refresh</span>

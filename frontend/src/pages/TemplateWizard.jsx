@@ -6,8 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useWhatsAppAccounts } from '../context/WhatsAppAccountContext';
 import { useDialog } from '../context/DialogContext';
 import { META_LANGUAGES, getMetaLanguage } from '../data/metaLanguages';
-
-const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+import { BACKEND_URL as API_URL } from '../config/api';
 const fieldClass = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-100 disabled:text-slate-500';
 const initialForm = {
   category: 'MARKETING', templateType: 'DEFAULT', language: 'en_US', name: '',
@@ -317,7 +316,7 @@ export default function TemplateWizard() {
                 <h1 className="text-xl font-bold text-slate-950">Set up your template</h1>
                 <p className="mt-1 text-sm text-slate-600">Choose the purpose first. The editor will only show fields supported by Meta for that template type.</p>
                 <div className="mt-5 grid grid-cols-3 overflow-hidden rounded-lg border border-slate-300">
-                  {['MARKETING', 'UTILITY', 'AUTHENTICATION'].map(category => <button key={category} onClick={() => selectCategory(category)} className={`px-3 py-3 text-sm font-semibold ${form.category === category ? 'bg-blue-100 text-blue-800' : 'bg-white text-slate-700 hover:bg-slate-50'}`}>{category[0] + category.slice(1).toLowerCase()}</button>)}
+                  {['MARKETING', 'UTILITY', 'AUTHENTICATION'].map(category => <button key={category} onClick={() => selectCategory(category)} className={`px-1 sm:px-3 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold ${form.category === category ? 'bg-blue-100 text-blue-800' : 'bg-white text-slate-700 hover:bg-slate-50'}`}>{category === 'AUTHENTICATION' ? <><span className="hidden sm:inline">Authentication</span><span className="sm:hidden">Auth</span></> : category[0] + category.slice(1).toLowerCase()}</button>)}
                 </div>
                 <div className="mt-4 grid gap-2 md:grid-cols-2">
                   {TYPE_OPTIONS[form.category].map(([value, label, description]) => {
