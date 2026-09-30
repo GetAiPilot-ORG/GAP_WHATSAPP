@@ -19,6 +19,7 @@ import { upsertContact, sanitizeContactDisplayName, normalizeContactWaIdForStora
 import { getBotAgentReply } from './ai.service.js';
 import { performAutoAssignment } from './assignment.service.js';
 import { sendPushNotificationToOrg } from './push.service.js';
+import { transcribeAudioBuffer } from './voice.service.js';
 
 const botDebounceMap = new Map<string, NodeJS.Timeout>();
 const botLockMap = new Map<string, Promise<void>>();
@@ -470,8 +471,26 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                     buffer,
                                 });
 
+                                let transcript: string | null = null;
+                                if (msgType === 'audioMessage' && buffer) {
+                                    try {
+                                        transcript = await transcribeAudioBuffer({
+                                            buffer,
+                                            mimeType,
+                                            fileName,
+                                            organization_id: orgId,
+                                        });
+                                        if (transcript) {
+                                            captionText = transcript;
+                                        }
+                                    } catch (tErr) {
+                                        console.error('[Baileys] Voice transcription error:', tErr);
+                                    }
+                                }
+
                                 enrichedContent = {
-                                    text: captionText || null,
+                                    text: transcript ? `[Voice Note]: "${transcript}"` : (captionText || null),
+                                    transcript: transcript || null,
                                     media_url: uploaded.publicUrl,
                                     mime_type: mimeType,
                                     file_name: fileName,
@@ -531,10 +550,10 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                             });
                         }
 
-                        // Bot Auto-Reply for Baileys (only for inbound text messages)
-                        if (!isOutbound && normalizedType === 'text' && captionText) {
+                        // Bot Auto-Reply for Baileys (inbound text or transcribed audio messages)
+                        if (!isOutbound && (normalizedType === 'text' || normalizedType === 'audio') && captionText) {
                             try {
-                                console.log(`📥 [Baileys] Inbound text from ${contactWaId}: "${captionText}"`);
+                                console.log(`📥 [Baileys] Inbound ${normalizedType} from ${contactWaId}: "${captionText}"`);
                                 let flowConsumedMessage = false;
                                 const flowResult = await processFlowEngine(orgId, contact.id, conv.id, captionText, stored?.id || null, conv.wa_account_id || null);
 
