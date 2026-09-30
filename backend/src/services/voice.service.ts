@@ -78,7 +78,7 @@ export async function transcribeAudioBuffer(params: {
           'Authorization': `Token ${deepgramApiKey}`,
           'Content-Type': cleanMime || 'application/octet-stream',
         },
-        body: buffer,
+        body: buffer as any,
       });
 
       const data: any = await response.json().catch(() => ({}));
