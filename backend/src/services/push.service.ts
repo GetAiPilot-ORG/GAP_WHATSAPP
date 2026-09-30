@@ -1,3 +1,4 @@
+// @ts-ignore
 import webpush from 'web-push';
 import { supabase } from '../config/supabase.js';
 

@@ -5,6 +5,7 @@ import { AccountHealthService } from '../services/accountHealth.service.js';
 import { getMetaErrorMessage, getMetaAccountDiagnostics, toSafeWhatsappAccount, buildAccountReadinessSummary, subscribeMetaAppToWaba, normalizeMessagingLimitTier } from '../services/meta.service.js';
 import { enforceWhatsAppCloudNumberLimit } from '../services/billing.service.js';
 import { sessions } from '../services/whatsapp.service.js';
+import { bulkUpsertLocalTemplateSubmissions } from './whatsapp.controller.js';
 import * as fs from 'fs';
 import path from 'path';
 
@@ -233,6 +234,18 @@ export async function connectCallback(req: any, res: Response) {
                             diagnostics_summary: diagnostics.send_ready ? 'Cloud API send access verified.' : diagnostics.issues.join(', '),
                             diagnostics
                         });
+
+                        // Trigger background template sync from Meta for newly connected WABA
+                        fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${currentWabaId}/message_templates?fields=id,name,language,status,category,components,quality_score,rejected_reason&limit=250`, {
+                            headers: { Authorization: `Bearer ${finalToken}` }
+                        })
+                        .then(res => res.json())
+                        .then(async (json) => {
+                            if (json?.data && Array.isArray(json.data)) {
+                                await bulkUpsertLocalTemplateSubmissions(targetOrgId, data[0].id, currentWabaId, json.data);
+                            }
+                        })
+                        .catch(tErr => console.warn('[ConnectCallback] Background template sync error:', tErr.message));
                     }
                 }
             } else {

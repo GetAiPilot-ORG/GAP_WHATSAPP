@@ -869,6 +869,7 @@ export default function LiveChat() {
             mimeType,
             fileName,
             durationSeconds: Number.isFinite(Number(durationSeconds)) ? Number(durationSeconds) : null,
+            transcript: m.transcript ?? m.content?.transcript ?? null,
             sender: m.direction === 'outbound' ? 'agent' : 'user',
             time: format(createdAt, 'h:mm a'),
             type: m.type === 'note' ? 'note' : (m.type || 'text'),
@@ -1730,11 +1731,26 @@ export default function LiveChat() {
             const targetId = update?.message_id || null
             const targetWaId = update?.wa_message_id || null
             const nextReactions = Array.isArray(update?.reactions) ? update.reactions : null
-            if (!nextReactions) return
+            const nextContent = update?.content || null
+            if (!nextReactions && !nextContent) return
 
             setMessages(prev => prev.map(m => {
                 const match = (targetId && m.id === targetId) || (targetWaId && m.wa_message_id && m.wa_message_id === targetWaId)
-                return match ? { ...m, reactions: nextReactions } : m
+                if (!match) return m
+
+                const updated = { ...m }
+                if (nextReactions) {
+                    updated.reactions = nextReactions
+                }
+                if (nextContent) {
+                    updated.content = nextContent
+                    if (nextContent.media_url) updated.mediaUrl = nextContent.media_url
+                    if (nextContent.mime_type) updated.mimeType = nextContent.mime_type
+                    if (nextContent.file_name) updated.fileName = nextContent.file_name
+                    if (nextContent.transcript) updated.transcript = nextContent.transcript
+                    if (nextContent.text) updated.text = nextContent.text
+                }
+                return updated
             }))
         })
 
@@ -2369,6 +2385,7 @@ export default function LiveChat() {
             }
 
             if (t === 'audio') {
+                const transcriptText = msg.transcript || msg.content?.transcript || (typeof msg.text === 'string' && msg.text.startsWith('[Voice Note]:') ? msg.text.replace(/^\[Voice Note\]:\s*"?/i, '').replace(/"?$/, '') : null);
                 return (
                     <div className="space-y-2">
                         <AudioMessageBubble
@@ -2378,7 +2395,20 @@ export default function LiveChat() {
                             isMine={msg.sender === 'agent'}
                             status={msg.status}
                         />
-                        {msg.text ? <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p> : null}
+                        {transcriptText ? (
+                            <div className={`mt-1.5 p-2 rounded-lg border text-xs leading-relaxed ${
+                                msg.sender === 'agent' 
+                                    ? 'bg-green-700/10 border-green-300 text-green-950' 
+                                    : 'bg-gray-50 border-gray-200 text-gray-800'
+                            }`}>
+                                <div className="flex items-center gap-1 font-semibold text-[11px] text-gray-500 mb-0.5">
+                                    <span>🎙️ Voice Transcript</span>
+                                </div>
+                                <p className="italic">{transcriptText}</p>
+                            </div>
+                        ) : msg.text && msg.text !== '[Audio]' ? (
+                            <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                        ) : null}
                     </div>
                 )
             }
