@@ -7,10 +7,6 @@ const resolveBackendUrl = () => {
     const isBrowser = typeof window !== 'undefined';
     const isLocal = isBrowser && ['localhost', '127.0.0.1'].includes(window.location.hostname);
 
-    if (isBrowser && isLocal && window.location.protocol === 'https:') {
-        return window.location.origin;
-    }
-
     if (envUrl) {
         // If envUrl accidentally contains localhost but the user is on a live site, use live backend
         if (isBrowser && !isLocal && (envUrl.includes('localhost') || envUrl.includes('127.0.0.1'))) {
@@ -22,6 +18,11 @@ const resolveBackendUrl = () => {
     // When running on a live domain (e.g. wb.getaipilot.in, vercel, etc.) without explicit env var
     if (isBrowser && !isLocal) {
         return 'https://whatsapp.getaipilot.in';
+    }
+
+    // Fallback for local HTTPS dev when no explicit VITE_BACKEND_URL is provided (uses Vite proxy)
+    if (isBrowser && isLocal && window.location.protocol === 'https:') {
+        return window.location.origin;
     }
 
     return 'http://localhost:3001';
