@@ -4,6 +4,7 @@ import { decryptToken } from '../utils/crypto.js';
 import { derivePhoneForStorage } from '../utils/format.js';
 import { getMetaSendErrorMessage } from './meta.service.js';
 import { getActiveWhatsappRate, normalizeWhatsappBillingCategory, storeMessage, upsertConversation } from './messages.service.js';
+import { resolveContactFieldValue, resolveButtonUrlValue } from './broadcast.service.js';
 
 const PREPARE_BATCH_SIZE = 500;
 const DISPATCH_WINDOW = Number(process.env.BROADCAST_DISPATCH_WINDOW || 100);
@@ -31,15 +32,7 @@ export function renderRecipientPayload(campaign: any, contact: any, recipient: s
     const frozenVariables: Record<string, string> = {};
     for (const key of [...new Set<string>(variableKeys)]) {
         const field = mapping[key];
-        const value = field === 'name'
-            ? contact.custom_name || contact.name || ''
-            : field === 'phone'
-                ? recipient
-                : field === 'email'
-                    ? contact.email || ''
-                    : String(field || '').startsWith('field:')
-                        ? contact.custom_fields?.[String(field).slice(6)] ?? ''
-                        : String(field || '');
+        const value = resolveContactFieldValue(field, contact, recipient);
         frozenVariables[key] = String(value);
         renderedText = renderedText.replace(
             new RegExp(`\\{\\{\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\}\\}`, 'g'),
@@ -57,11 +50,17 @@ export function renderRecipientPayload(campaign: any, contact: any, recipient: s
     }
     if (parameters.length) components.push({ type: 'body', parameters });
 
+    const templateButtons = Array.isArray(mapping._template_buttons) ? mapping._template_buttons : [];
+    const addedButtonIndexes = new Set<string>();
     for (const key of Object.keys(mapping).filter((item) => /^_?button_url_\d+$/.test(item))) {
         const index = key.match(/(\d+)$/)?.[1];
-        const value = String(mapping[key] || '').trim();
-        if (index && value) {
-            components.push({ type: 'button', sub_type: 'url', index, parameters: [{ type: 'text', text: value }] });
+        if (index && !addedButtonIndexes.has(index)) {
+            const rawMapping = mapping[`_button_url_${index}`] || mapping[`button_url_${index}`] || mapping[key];
+            const value = resolveButtonUrlValue(rawMapping, contact, recipient, templateButtons, index);
+            if (value) {
+                components.push({ type: 'button', sub_type: 'url', index, parameters: [{ type: 'text', text: value }] });
+                addedButtonIndexes.add(index);
+            }
         }
     }
 
