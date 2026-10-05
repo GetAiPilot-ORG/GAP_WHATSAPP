@@ -8,9 +8,9 @@ export const useAuth = () => useContext(AuthContext)
 
 // Map raw plan IDs → display names
 function resolvePlanName(plan) {
-    if (!plan) return 'No active plan'
+    if (!plan) return 'Free Plan'
     const p = String(plan).toLowerCase()
-    if (p === 'free' || p === 'whatsapp_free' || p === '') return 'No active plan'
+    if (p === 'free' || p === 'whatsapp_free' || p === '' || p === 'free plan' || p === 'no active plan') return 'Free Plan'
     if (p.includes('max')) return 'GAP Max'
     if (p.includes('all_in_one') || p.includes('bundle')) return 'GAP Max'
     if (p.includes('pro')) return 'GAP Pro'
@@ -50,10 +50,10 @@ export function AuthProvider({ children }) {
 
                     if (data?.subscription) {
                         const expiresAt = data.subscription.expires_at ? new Date(data.subscription.expires_at).getTime() : 0;
-                        const isSubActive = !data.subscription.expires_at || expiresAt > Date.now() || data.subscription.status === 'active';
+                        const isSubActive = (data.subscription.status === 'active' || data.subscription.status === 'trial') && (!data.subscription.expires_at || expiresAt > Date.now());
                         let resolvedPlan = isSubActive
                             ? (data.subscription.plan_label || data.subscription.plan_id || 'GAP Max')
-                            : 'No active plan';
+                            : 'Free Plan';
                         const resolvedStatus = isSubActive ? 'active' : (data.subscription ? 'expired' : 'inactive');
                         resolvedPlan = resolvePlanName(resolvedPlan);
 
@@ -77,10 +77,10 @@ export function AuthProvider({ children }) {
                 .maybeSingle();
 
             const expiresAt = sub?.expires_at ? new Date(sub.expires_at).getTime() : 0;
-            const isSubActive = sub ? (!sub.expires_at || expiresAt > Date.now() || sub.status === 'active') : false;
+            const isSubActive = sub && (sub.status === 'active' || sub.status === 'trial') && (!sub.expires_at || expiresAt > Date.now());
             let resolvedPlan = isSubActive
                 ? (sub?.plan_label || sub?.plan_id || 'GAP Max')
-                : 'No active plan';
+                : 'Free Plan';
             const resolvedStatus = isSubActive ? 'active' : (sub ? 'expired' : 'inactive');
             resolvedPlan = resolvePlanName(resolvedPlan);
 
@@ -122,10 +122,10 @@ export function AuthProvider({ children }) {
                 // Inherit the organization's subscription status
                 if (data?.subscription) {
                     const expiresAt = data.subscription.expires_at ? new Date(data.subscription.expires_at).getTime() : 0
-                    const isSubActive = !data.subscription.expires_at || expiresAt > Date.now() || data.subscription.status === 'active'
+                    const isSubActive = (data.subscription.status === 'active' || data.subscription.status === 'trial') && (!data.subscription.expires_at || expiresAt > Date.now())
                     let resolvedPlan = isSubActive
                         ? (data.subscription.plan_label || data.subscription.plan_id || 'GAP Max')
-                        : 'No active plan'
+                        : 'Free Plan'
                     const resolvedStatus = isSubActive ? 'active' : (data.subscription ? 'expired' : 'inactive')
                     resolvedPlan = resolvePlanName(resolvedPlan)
 
