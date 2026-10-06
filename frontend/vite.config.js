@@ -5,6 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { VitePWA } from 'vite-plugin-pwa'
+import legacy from '@vitejs/plugin-legacy'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -140,8 +141,11 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [
-      react(), 
-      basicSsl(), 
+      react(),
+      basicSsl(),
+      legacy({
+        targets: ['defaults', 'not IE 11', 'iOS >= 12', 'Safari >= 13']
+      }),
       notificationSoundsPlugin(),
       VitePWA({
         registerType: 'prompt',
@@ -200,6 +204,9 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: false
         }
+      }
+    },
+
       }
     },
   build: {
