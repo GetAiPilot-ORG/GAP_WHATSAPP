@@ -1,5 +1,4 @@
-/* Flow Builder Animations */
-@import './components/flow-builder/flow-animations.css';
+/* Flow Builder Animations imported in main.jsx */
 
 @tailwind base;
 @tailwind components;

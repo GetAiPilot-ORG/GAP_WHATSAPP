@@ -12,8 +12,7 @@ import {
 import { useAuth } from '../context/AuthContext'
 import TwilioNumberPurchase from '../components/TwilioNumberPurchase'
 import TourButton from '../onboarding/TourButton'
-
-const API_BASE = `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api`
+import { API_BASE } from '../config/api'
 
 const initialForm = {
     business_name: '',

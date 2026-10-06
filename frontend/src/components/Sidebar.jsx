@@ -30,6 +30,7 @@ import { useAuth } from '../context/AuthContext'
 import { useWhatsAppAccounts } from '../context/WhatsAppAccountContext'
 import { usePwaInstall } from '../context/PwaInstallContext'
 import { usePush } from '../context/PushContext'
+import { API_BASE } from '../config/api'
 
 const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: Grid2X2 },
@@ -63,7 +64,6 @@ const navigation = [
 ]
 
 const SELECTED_WA_ACCOUNT_KEY = 'selected_wa_account_id'
-const API_BASE = `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api`
 const EXPANDED_WIDTH = 'w-[224px]'
 const COLLAPSED_WIDTH = 'w-12'
 

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import axios from 'axios';
 import { supabase } from '../supabaseClient';
+import { API_BASE } from '../config/api';
 
 const PushContext = createContext(null);
 
@@ -72,7 +73,7 @@ export const PushProvider = ({ children }) => {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) throw new Error('No active user session');
 
-            await axios.post(`${import.meta.env.VITE_BACKEND_URL}/api/push/subscribe`, {
+            await axios.post(`${API_BASE}/push/subscribe`, {
                 subscription,
                 orgId
             }, {
@@ -98,7 +99,7 @@ export const PushProvider = ({ children }) => {
                 // Remove from backend
                 const { data: { session } } = await supabase.auth.getSession();
                 if (session) {
-                    await axios.delete(`${import.meta.env.VITE_BACKEND_URL}/api/push/unsubscribe`, {
+                    await axios.delete(`${API_BASE}/push/unsubscribe`, {
                         data: { endpoint: subscription.endpoint },
                         headers: { Authorization: `Bearer ${session.access_token}` }
                     });

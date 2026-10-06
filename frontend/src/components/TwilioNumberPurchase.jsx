@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Search, ShoppingCart, Loader2, Phone } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-
-const API_BASE = `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api`;
+import { API_BASE } from '../config/api';
 
 export default function TwilioNumberPurchase() {
     const { apiCall } = useAuth();

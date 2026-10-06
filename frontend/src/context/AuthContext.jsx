@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
 import { supabase } from '../supabaseClient'
+import { BACKEND_URL } from '../config/api'
 
 const AuthContext = createContext({})
 
@@ -52,7 +53,7 @@ export function AuthProvider({ children }) {
             const { data: { session } } = await supabase.auth.getSession();
             const token = session?.access_token;
             if (token) {
-                const res = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api/team/my-profile`, {
+                const res = await fetch(`${BACKEND_URL}/api/team/my-profile`, {
                     headers: {
                         Authorization: `Bearer ${token}`,
                         'X-Auth-Portal': loginType || 'owner'
@@ -126,7 +127,7 @@ export function AuthProvider({ children }) {
         fetchedForProfileKey.current = profileKey
         setIsProfileLoading(true)
         try {
-            const res = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api/team/my-profile`, {
+            const res = await fetch(`${BACKEND_URL}/api/team/my-profile`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                     'X-Auth-Portal': loginType
@@ -245,7 +246,7 @@ export function AuthProvider({ children }) {
         const token = session?.access_token
         if (!token) throw new Error('No session token')
 
-        const res = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api/team/status`, {
+        const res = await fetch(`${BACKEND_URL}/api/team/status`, {
             method: 'PATCH',
             headers: {
                 'Content-Type': 'application/json',
@@ -268,7 +269,7 @@ export function AuthProvider({ children }) {
                 if (sent) return;
                 sent = true;
                 const token = session.access_token;
-                const url = `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api/team/status`;
+                const url = `${BACKEND_URL}/api/team/status`;
                 fetch(url, {
                     method: 'PATCH',
                     headers: {
@@ -294,7 +295,7 @@ export function AuthProvider({ children }) {
         const token = session?.access_token
         if (!token) throw new Error('No session token')
 
-        const res = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api/team/my-profile`, {
+        const res = await fetch(`${BACKEND_URL}/api/team/my-profile`, {
             method: 'PATCH',
             headers: {
                 'Content-Type': 'application/json',
@@ -338,7 +339,7 @@ export function AuthProvider({ children }) {
         signOut: async () => {
             if (session?.access_token && memberProfile && memberProfile.role !== 'owner') {
                 try {
-                    await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api/team/status`, {
+                    await fetch(`${BACKEND_URL}/api/team/status`, {
                         method: 'PATCH',
                         headers: {
                             'Content-Type': 'application/json',

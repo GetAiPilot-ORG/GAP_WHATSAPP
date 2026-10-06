@@ -13,6 +13,7 @@ import { getBotAgentReply } from '../services/ai.service.js';
 import { normalizeMetaTemplateStatus, upsertLocalTemplateSubmission } from './whatsapp.controller.js';
 import { encryptToken } from '../utils/crypto.js';
 import { uploadMediaToStorage } from '../services/broadcast.service.js';
+import { transcribeAudioBuffer } from '../services/voice.service.js';
 
 const VERIFY_TOKEN = process.env.WA_VERIFY_TOKEN;
 const APP_SECRET = process.env.META_APP_SECRET;
@@ -49,6 +50,374 @@ function webhookError(step: string, error: any, details: Record<string, any> = {
   console.error(
     `[WEBHOOK][${new Date().toISOString()}][${step}][ERROR]`,
     JSON.stringify({ ...details, error: safeError }, null, 2),
+  );
+}
+
+/**
+ * Common debounce queue and sequential lock for AI bot agent replies.
+ * Used for both text messages and transcribed voice notes.
+ */
+export function queueBotAgentReply(params: {
+  requestId?: string;
+  organization_id: string;
+  conv: any;
+  contact: any;
+  text: string;
+  from: string;
+  phone_number_id: string;
+  wa_message_id?: string | null;
+  metadata?: any;
+}) {
+  const {
+    requestId = crypto.randomUUID(),
+    organization_id,
+    conv,
+    contact,
+    text,
+    from,
+    phone_number_id,
+    wa_message_id,
+    metadata,
+  } = params;
+
+  webhookLog("bot_agent.process.queue", {
+    requestId,
+    conversation_id: conv.id,
+    textPreview: text.slice(0, 120),
+  });
+
+  const debounceKey = conv.id;
+  if (botDebounceMap.has(debounceKey)) {
+    clearTimeout(botDebounceMap.get(debounceKey)!);
+  }
+
+  botDebounceMap.set(
+    debounceKey,
+    setTimeout(async () => {
+      botDebounceMap.delete(debounceKey);
+
+      // Ensure sequential processing per conversation
+      const previousPromise = botLockMap.get(conv.id) || Promise.resolve();
+      const currentPromise = previousPromise.then(async () => {
+        try {
+          if (phone_number_id && wa_message_id) {
+            sendTypingIndicator({ phone_number_id, message_id: wa_message_id, to: from }).catch(() => {});
+          }
+          const botResult = await getBotAgentReply({
+            organization_id,
+            conversation_id: conv.id,
+            text, // This will be the text of the LAST message sent within the 5 seconds
+          });
+
+          webhookLog("bot_agent.process.done", {
+            requestId,
+            hasReply: !!botResult?.reply,
+            agentId: botResult?.agent?.id || null,
+            agentName: botResult?.agent?.name || null,
+          });
+
+          if (botResult?.reply) {
+            let botWaMessageId: string | null = null;
+            let storedBotReply: any = null;
+
+            const isFallback = botResult.reply.startsWith("[FALLBACK]");
+            const cleanReply = botResult.reply.replace("[FALLBACK]", "").trim();
+
+            if (isFallback) {
+              console.log(`🤖 Bot "${botResult.agent?.name}" sending fallback interactive buttons`);
+              const buttonBody =
+                cleanReply ||
+                'I couldn\'t find an answer to your question. Please reply with "human" or click the button below to connect with a support agent.';
+              const fallbackButtons = [{ id: "talk_to_agent", text: "Talk to Agent" }];
+
+              const sendResult = await sendInteractiveButtons(
+                from,
+                buttonBody,
+                fallbackButtons,
+                "Choose an option",
+                phone_number_id
+              );
+              botWaMessageId = sendResult?.messages?.[0]?.id || null;
+
+              storedBotReply = await storeMessage({
+                organization_id,
+                contact_id: contact.id,
+                conversation_id: conv.id,
+                wa_message_id: botWaMessageId,
+                direction: "outbound",
+                type: "interactive",
+                content: {
+                  text: buttonBody,
+                  interactive: {
+                    type: "button",
+                    body: buttonBody,
+                    buttons: fallbackButtons,
+                  },
+                  is_bot_reply: true,
+                  bot_agent_id: botResult.agent?.id,
+                  bot_agent_name: botResult.agent?.name,
+                },
+                status: "sent",
+                is_bot_reply: true,
+                bot_agent_id: botResult.agent?.id || null,
+                sender_type: "ai_agent",
+                automation_source: "ai_agent",
+              } as any);
+
+              io.emit("new_message", {
+                from: metadata?.display_phone_number || phone_number_id,
+                phone: from,
+                text: buttonBody,
+                sender: "agent",
+                conversation_id: conv.id,
+                contact_id: contact.id,
+                message_id: storedBotReply?.id || null,
+                wa_message_id: botWaMessageId,
+                created_at: storedBotReply?.created_at || new Date().toISOString(),
+                connectedAccount: metadata?.display_phone_number,
+                type: "interactive",
+                content: {
+                  text: buttonBody,
+                  interactive: {
+                    type: "button",
+                    body: buttonBody,
+                    buttons: fallbackButtons,
+                  },
+                },
+                is_bot_reply: true,
+              });
+            } else {
+              let isJsonButtons = false;
+              let parsedInteractive: any = null;
+              botDebugLog(`Raw reply from agent: ${botResult.reply}`);
+              try {
+                const trimmedReply = botResult.reply.trim();
+                const firstBrace = trimmedReply.indexOf("{");
+                const lastBrace = trimmedReply.lastIndexOf("}");
+                botDebugLog(`Brace indices: ${firstBrace}, ${lastBrace}`);
+                if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+                  const jsonCandidate = trimmedReply.substring(firstBrace, lastBrace + 1);
+                  botDebugLog(`JSON Candidate: ${jsonCandidate}`);
+                  const parsed = JSON.parse(jsonCandidate);
+                  if (
+                    parsed &&
+                    typeof parsed === "object" &&
+                    typeof parsed.text === "string" &&
+                    Array.isArray(parsed.buttons)
+                  ) {
+                    parsedInteractive = parsed;
+                    isJsonButtons = true;
+                    botDebugLog(`Successfully parsed JSON buttons payload`);
+                  }
+                }
+              } catch (err: any) {
+                botDebugLog(`JSON parsing failed: ${err.message || err}`);
+              }
+
+              let isValid = true;
+              let validatedButtons: any[] = [];
+              let buttonType: string | null = null;
+              let interactiveType: "button" | "cta_url" = "button";
+
+              if (isJsonButtons && parsedInteractive) {
+                const buttons = parsedInteractive.buttons;
+                if (buttons.length < 1) {
+                  isValid = false;
+                } else {
+                  const rawButtonsSlice = buttons.slice(0, 3);
+                  for (const btn of rawButtonsSlice) {
+                    if (!btn || typeof btn !== "object" || !btn.text || typeof btn.text !== "string") {
+                      isValid = false;
+                      break;
+                    }
+
+                    const rawType = String(btn.type || "reply").toLowerCase();
+                    const currentBtnType =
+                      rawType === "url" || rawType === "form"
+                        ? "url"
+                        : rawType === "phone"
+                          ? "phone"
+                          : "reply";
+
+                    if (buttonType === null) {
+                      buttonType = currentBtnType;
+                    } else if (buttonType !== currentBtnType) {
+                      isValid = false;
+                      break;
+                    }
+
+                    const sanitizedText = btn.text.trim().substring(0, 20);
+                    if (!sanitizedText) {
+                      isValid = false;
+                      break;
+                    }
+
+                    const rawId = btn.id || btn.text;
+                    const sanitizedId = String(rawId).trim().substring(0, 256);
+
+                    validatedButtons.push({
+                      id: sanitizedId,
+                      text: sanitizedText,
+                      type: currentBtnType,
+                      url: btn.url || undefined,
+                      phone: btn.phone || undefined,
+                    });
+                  }
+                }
+
+                if (isValid && buttonType === "url") {
+                  if (validatedButtons.length > 1) {
+                    validatedButtons = [validatedButtons[0]];
+                  }
+                  interactiveType = "cta_url";
+                }
+              } else {
+                isValid = false;
+                botDebugLog(`Validation skipped (isJsonButtons was false or parsedInteractive was null)`);
+              }
+
+              botDebugLog(
+                `Decision details - isJsonButtons: ${isJsonButtons}, isValid: ${isValid}, validatedButtons length: ${validatedButtons.length}`
+              );
+
+              let previewText = botResult.reply;
+
+              if (isJsonButtons && isValid && validatedButtons.length > 0) {
+                botDebugLog(`Sending dynamic AI-generated buttons for bot "${botResult.agent?.name}"`);
+                const buttonBody = parsedInteractive.text;
+                const footer = parsedInteractive.footer || "";
+                previewText = buttonBody;
+
+                const sendResult = await sendInteractiveButtons(
+                  from,
+                  buttonBody,
+                  validatedButtons,
+                  footer,
+                  phone_number_id
+                );
+                botWaMessageId = sendResult?.messages?.[0]?.id || null;
+
+                storedBotReply = await storeMessage({
+                  organization_id,
+                  contact_id: contact.id,
+                  conversation_id: conv.id,
+                  wa_message_id: botWaMessageId,
+                  direction: "outbound",
+                  type: "interactive",
+                  content: {
+                    text: buttonBody,
+                    interactive: {
+                      type: interactiveType,
+                      body: buttonBody,
+                      footer: footer,
+                      buttons: validatedButtons,
+                    },
+                    is_bot_reply: true,
+                    bot_agent_id: botResult.agent?.id,
+                    bot_agent_name: botResult.agent?.name,
+                  },
+                  status: "sent",
+                  is_bot_reply: true,
+                  bot_agent_id: botResult.agent?.id || null,
+                  sender_type: "ai_agent",
+                  automation_source: "ai_agent",
+                } as any);
+
+                io.emit("new_message", {
+                  from: metadata?.display_phone_number || phone_number_id,
+                  phone: from,
+                  text: buttonBody,
+                  sender: "agent",
+                  conversation_id: conv.id,
+                  contact_id: contact.id,
+                  message_id: storedBotReply?.id || null,
+                  wa_message_id: botWaMessageId,
+                  created_at: storedBotReply?.created_at || new Date().toISOString(),
+                  connectedAccount: metadata?.display_phone_number,
+                  type: "interactive",
+                  content: {
+                    text: buttonBody,
+                    interactive: {
+                      type: interactiveType,
+                      body: buttonBody,
+                      footer: footer,
+                      buttons: validatedButtons,
+                    },
+                  },
+                  is_bot_reply: true,
+                });
+              } else {
+                botDebugLog(`Replying with plain text for bot "${botResult.agent?.name}"`);
+                let plainTextReply = botResult.reply;
+                if (isJsonButtons && parsedInteractive && parsedInteractive.text) {
+                  plainTextReply = parsedInteractive.text;
+                }
+                previewText = plainTextReply;
+
+                const sendResult = await sendTextMessage(from, plainTextReply, phone_number_id);
+                botWaMessageId = sendResult?.messages?.[0]?.id || null;
+                storedBotReply = await storeMessage({
+                  organization_id,
+                  contact_id: contact.id,
+                  conversation_id: conv.id,
+                  wa_message_id: botWaMessageId,
+                  direction: "outbound",
+                  type: "text",
+                  content: {
+                    text: plainTextReply,
+                    bot_agent_id: botResult.agent?.id,
+                    bot_agent_name: botResult.agent?.name,
+                  },
+                  status: "sent",
+                  is_bot_reply: true,
+                  bot_agent_id: botResult.agent?.id || null,
+                  sender_type: "ai_agent",
+                  automation_source: "ai_agent",
+                } as any);
+                io.emit("new_message", {
+                  from: metadata?.display_phone_number || phone_number_id,
+                  phone: from,
+                  text: plainTextReply,
+                  sender: "agent",
+                  conversation_id: conv.id,
+                  contact_id: contact.id,
+                  message_id: storedBotReply?.id || null,
+                  wa_message_id: botWaMessageId,
+                  created_at: storedBotReply?.created_at || new Date().toISOString(),
+                  connectedAccount: metadata?.display_phone_number,
+                  type: "text",
+                  is_bot_reply: true,
+                });
+              }
+
+              webhookLog("bot_agent.reply.sent", {
+                requestId,
+                botWaMessageId: botWaMessageId,
+                storedMessageId: storedBotReply?.id || null,
+                agentId: botResult.agent?.id || null,
+              });
+
+              // Update conversation preview using cleaned previewText
+              await supabase
+                .from("w_conversations")
+                .update({
+                  last_message_at: new Date().toISOString(),
+                  last_message_preview: previewText.substring(0, 100),
+                })
+                .eq("id", conv.id);
+            }
+            webhookLog("bot_agent.conversation_preview.updated", {
+              requestId,
+              conversation_id: conv.id,
+            });
+          }
+        } catch (err) {
+          console.error("[Bot Lock] Error generating reply for conversation:", conv.id, err);
+        }
+      });
+
+      botLockMap.set(conv.id, currentPromise);
+    }, 5000)
   );
 }
 
@@ -330,8 +699,8 @@ export async function handleWebhook(req: any, res: Response) {
 
     // 1. Identify Organization & Account
     const phone_number_id = metadata?.phone_number_id;
-    let organization_id = null;
-    let wa_account_id = null;
+    let organization_id: string | null = null;
+    let wa_account_id: string | null = null;
 
     if (phone_number_id && supabase) {
       webhookLog("account.lookup.start", {
@@ -495,10 +864,10 @@ export async function handleWebhook(req: any, res: Response) {
       } else if (type === "interactive") {
         interactivePayload = msg.interactive;
         text =
-          msg.interactive?.button_reply?.title ||
-          msg.interactive?.list_reply?.title ||
           msg.interactive?.button_reply?.id ||
           msg.interactive?.list_reply?.id ||
+          msg.interactive?.button_reply?.title ||
+          msg.interactive?.list_reply?.title ||
           `[interactive:${msg.interactive.type}]`;
       } else if (type === "button") {
         text = msg.button?.text || "";
@@ -556,6 +925,16 @@ export async function handleWebhook(req: any, res: Response) {
           requestId,
           wa_account_id,
         });
+      }
+
+      if (!organization_id || !wa_account_id) {
+        webhookError("account.missing", new Error("Missing organization_id or wa_account_id"), {
+          requestId,
+          phone_number_id,
+          organization_id,
+          wa_account_id,
+        });
+        continue;
       }
 
       // A. Upsert Contact
@@ -670,6 +1049,9 @@ export async function handleWebhook(req: any, res: Response) {
       // D. Emit Realtime
       // Emit to org room
       io.to(`org:${organization_id}`).emit("new_message", {
+        organization_id,
+        wa_account_id,
+        phone_number_id,
         from,
         phone: from,
         text,
@@ -683,7 +1065,7 @@ export async function handleWebhook(req: any, res: Response) {
         created_at: storedInbound?.created_at || new Date().toISOString(),
         status: "delivered",
         name: profileName,
-        connectedAccount: metadata?.display_phone_number,
+        connectedAccount: metadata?.display_phone_number || phone_number_id,
         type,
         ...(enrichedContent?.media_url
           ? { media_url: enrichedContent.media_url }
@@ -780,6 +1162,20 @@ export async function handleWebhook(req: any, res: Response) {
                   hasPublicUrl: !!uploaded?.publicUrl,
                 });
 
+                let transcript: string | null = null;
+                if (type === "audio" && downloaded.buffer) {
+                  try {
+                    transcript = await transcribeAudioBuffer({
+                      buffer: downloaded.buffer,
+                      mimeType: downloaded.mimeType,
+                      fileName: downloaded.fileName,
+                      organization_id,
+                    });
+                  } catch (tErr) {
+                    console.error("[Webhook] Voice transcription error:", tErr);
+                  }
+                }
+
                 const caption =
                   type === "image"
                     ? msg.image?.caption || null
@@ -787,10 +1183,13 @@ export async function handleWebhook(req: any, res: Response) {
                       ? msg.video?.caption || null
                       : type === "document"
                         ? msg.document?.caption || null
-                        : null;
+                        : type === "audio" && transcript
+                          ? `[Voice Note]: "${transcript}"`
+                          : null;
 
                 const finalMediaContent = {
                   text: caption,
+                  transcript: transcript || null,
                   media_url: uploaded.publicUrl,
                   mime_type: downloaded.mimeType,
                   file_name: downloaded.fileName,
@@ -819,8 +1218,23 @@ export async function handleWebhook(req: any, res: Response) {
                       mediaId,
                     });
                   }
+
+                  // Update conversation last message preview if transcript available
+                  if (transcript) {
+                    await supabase
+                      .from("w_conversations")
+                      .update({
+                        last_message_text: `[Voice Note]: "${transcript.slice(0, 100)}"`,
+                        last_message_at: new Date().toISOString(),
+                      })
+                      .eq("id", conv.id);
+                  }
+
                   // EMIT UPDATE TO FRONTEND
-                  io.emit("message_updated", {
+                  io.to(`org:${organization_id}`).emit("message_updated", {
+                    organization_id,
+                    wa_account_id,
+                    conversation_id: conv.id,
                     message_id: storedInbound.id,
                     content: finalMediaContent,
                   });
@@ -829,6 +1243,86 @@ export async function handleWebhook(req: any, res: Response) {
                     message_id: storedInbound.id,
                     mediaId,
                   });
+                }
+
+                // If this was an audio message with a transcript, trigger flows or AI bot agent!
+                if (type === "audio" && transcript && conv?.bot_enabled !== false) {
+                  webhookLog("bot_agent.voice_transcript.intercepted", {
+                    requestId,
+                    conversation_id: conv.id,
+                    transcriptPreview: transcript.slice(0, 100),
+                  });
+
+                  // Check if human handoff keyword was spoken
+                  const spokenText = transcript.toLowerCase().trim();
+                  if (spokenText === "talk to human" || spokenText === "human") {
+                    await supabase
+                      .from("w_conversations")
+                      .update({
+                        bot_enabled: false,
+                        handoff_status: "handoff_requested",
+                        handoff_requested_at: new Date().toISOString(),
+                        handoff_reason: `User requested stop with voice note: "${transcript}"`,
+                      })
+                      .eq("id", conv.id);
+
+                    const autoReplyText = "I have paused the AI assistant. A human agent will connect with you shortly.";
+                    const sendResult = await sendTextMessage(from, autoReplyText, phone_number_id);
+                    const botWaMessageId = sendResult?.messages?.[0]?.id || null;
+
+                    const storedBotReply = await storeMessage({
+                      organization_id,
+                      contact_id: contact.id,
+                      conversation_id: conv.id,
+                      wa_message_id: botWaMessageId,
+                      direction: "outbound",
+                      type: "text",
+                      content: { text: autoReplyText },
+                      status: "sent",
+                      is_bot_reply: true,
+                      sender_type: "ai_agent",
+                      automation_source: "ai_agent",
+                    } as any);
+
+                    io.emit("new_message", {
+                      from: metadata?.display_phone_number || phone_number_id,
+                      phone: from,
+                      text: autoReplyText,
+                      sender: "agent",
+                      conversation_id: conv.id,
+                      contact_id: contact.id,
+                      message_id: storedBotReply?.id || null,
+                      wa_message_id: botWaMessageId,
+                      created_at: storedBotReply?.created_at || new Date().toISOString(),
+                      connectedAccount: metadata?.display_phone_number,
+                      type: "text",
+                      is_bot_reply: true,
+                    });
+                  } else {
+                    // Check flow engine
+                    const flowResult = await processFlowEngine(
+                      organization_id,
+                      contact.id,
+                      conv.id,
+                      transcript,
+                      storedInbound?.id || null,
+                      conv.wa_account_id || null,
+                    );
+
+                    if (!flowResult?.consumed) {
+                      queueBotAgentReply({
+                        requestId,
+                        organization_id,
+                        conv,
+                        contact,
+                        text: transcript,
+                        from,
+                        phone_number_id,
+                        wa_message_id,
+                        metadata,
+                      });
+                    }
+                  }
                 }
               } else {
                 webhookLog("media.download.empty", {
@@ -926,7 +1420,10 @@ export async function handleWebhook(req: any, res: Response) {
             automation_source: "ai_agent",
           } as any);
 
-          io.emit("new_message", {
+          io.to(`org:${organization_id}`).emit("new_message", {
+            organization_id,
+            wa_account_id,
+            phone_number_id,
             from: metadata?.display_phone_number || phone_number_id,
             phone: from,
             text: autoReplyText,
@@ -936,7 +1433,7 @@ export async function handleWebhook(req: any, res: Response) {
             message_id: storedBotReply?.id || null,
             wa_message_id: botWaMessageId,
             created_at: storedBotReply?.created_at || new Date().toISOString(),
-            connectedAccount: metadata?.display_phone_number,
+            connectedAccount: metadata?.display_phone_number || phone_number_id,
             type: "text",
             is_bot_reply: true,
           });
@@ -1012,7 +1509,10 @@ export async function handleWebhook(req: any, res: Response) {
                 },
               } as any);
 
-              io.emit("new_message", {
+              io.to(`org:${organization_id}`).emit("new_message", {
+                organization_id,
+                wa_account_id,
+                phone_number_id,
                 from: metadata?.display_phone_number || phone_number_id,
                 phone: from,
                 text: flowResult.output,
@@ -1023,7 +1523,7 @@ export async function handleWebhook(req: any, res: Response) {
                 wa_message_id: botWaMessageId,
                 created_at:
                   storedBotReply?.created_at || new Date().toISOString(),
-                connectedAccount: metadata?.display_phone_number,
+                connectedAccount: metadata?.display_phone_number || phone_number_id,
                 type: "text",
                 is_bot_reply: true,
               });
@@ -1073,7 +1573,10 @@ export async function handleWebhook(req: any, res: Response) {
                 },
               } as any);
 
-              io.emit("new_message", {
+              io.to(`org:${organization_id}`).emit("new_message", {
+                organization_id,
+                wa_account_id,
+                phone_number_id,
                 from: metadata?.display_phone_number || phone_number_id,
                 phone: from,
                 text: body,
@@ -1084,7 +1587,7 @@ export async function handleWebhook(req: any, res: Response) {
                 wa_message_id: botWaMessageId,
                 created_at:
                   storedBotReply?.created_at || new Date().toISOString(),
-                connectedAccount: metadata?.display_phone_number,
+                connectedAccount: metadata?.display_phone_number || phone_number_id,
                 type: "interactive",
                 is_bot_reply: true,
               });
@@ -1133,7 +1636,10 @@ export async function handleWebhook(req: any, res: Response) {
                 },
               } as any);
 
-              io.emit("new_message", {
+              io.to(`org:${organization_id}`).emit("new_message", {
+                organization_id,
+                wa_account_id,
+                phone_number_id,
                 from: metadata?.display_phone_number || phone_number_id,
                 phone: from,
                 text: body,
@@ -1143,7 +1649,7 @@ export async function handleWebhook(req: any, res: Response) {
                 message_id: storedBotReply?.id || null,
                 wa_message_id: botWaMessageId,
                 created_at: storedBotReply?.created_at || new Date().toISOString(),
-                connectedAccount: metadata?.display_phone_number,
+                connectedAccount: metadata?.display_phone_number || phone_number_id,
                 type: "interactive",
                 is_bot_reply: true,
               });
@@ -1206,7 +1712,10 @@ export async function handleWebhook(req: any, res: Response) {
                     },
                   } as any);
 
-                  io.emit("new_message", {
+                  io.to(`org:${organization_id}`).emit("new_message", {
+                    organization_id,
+                    wa_account_id,
+                    phone_number_id,
                     from: metadata?.display_phone_number || phone_number_id,
                     phone: from,
                     text: preview,
@@ -1217,7 +1726,7 @@ export async function handleWebhook(req: any, res: Response) {
                     wa_message_id: sentMedia.wa_message_id,
                     created_at:
                       storedBotMedia?.created_at || new Date().toISOString(),
-                    connectedAccount: metadata?.display_phone_number,
+                    connectedAccount: metadata?.display_phone_number || phone_number_id,
                     type: media.type,
                     media_url: sentMedia.media_url,
                     mime_type: sentMedia.mime_type,
@@ -1282,335 +1791,17 @@ export async function handleWebhook(req: any, res: Response) {
           Boolean(text?.trim());
 
         if (!flowConsumedMessage && isAgentEligible) {
-          webhookLog("bot_agent.process.queue", {
+          queueBotAgentReply({
             requestId,
-            conversation_id: conv.id,
-            textPreview: text.slice(0, 120),
+            organization_id,
+            conv,
+            contact,
+            text,
+            from,
+            phone_number_id,
+            wa_message_id,
+            metadata,
           });
-          
-          const debounceKey = conv.id;
-          if (botDebounceMap.has(debounceKey)) {
-              clearTimeout(botDebounceMap.get(debounceKey)!);
-          }
-          
-          botDebounceMap.set(debounceKey, setTimeout(async () => {
-              botDebounceMap.delete(debounceKey);
-              
-              // Ensure sequential processing per conversation
-              const previousPromise = botLockMap.get(conv.id) || Promise.resolve();
-              const currentPromise = previousPromise.then(async () => {
-                  try {
-                      if (phone_number_id && wa_message_id) {
-                        sendTypingIndicator({ phone_number_id, message_id: wa_message_id, to: from }).catch(() => {});
-                      }
-                      const botResult = await getBotAgentReply({
-                        organization_id,
-                        conversation_id: conv.id,
-                        text, // This will be the text of the LAST message sent within the 5 seconds
-                      });
-                      
-                      webhookLog("bot_agent.process.done", {
-                        requestId,
-                        hasReply: !!botResult?.reply,
-                        agentId: botResult?.agent?.id || null,
-                        agentName: botResult?.agent?.name || null,
-                      });
-
-                      if (botResult?.reply) {
-                        let botWaMessageId: string | null = null;
-                        let storedBotReply: any = null;
-
-                        const isFallback = botResult.reply.startsWith("[FALLBACK]");
-                        const cleanReply = botResult.reply.replace("[FALLBACK]", "").trim();
-
-                        if (isFallback) {
-                          console.log(`🤖 Bot "${botResult.agent?.name}" sending fallback interactive buttons`);
-                          const buttonBody = cleanReply || "I couldn't find an answer to your question. Please reply with \"human\" or click the button below to connect with a support agent.";
-                          const fallbackButtons = [{ id: "talk_to_agent", text: "Talk to Agent" }];
-
-                          const sendResult = await sendInteractiveButtons(
-                            from,
-                            buttonBody,
-                            fallbackButtons,
-                            "Choose an option",
-                            phone_number_id
-                          );
-                          botWaMessageId = sendResult?.messages?.[0]?.id || null;
-
-                          storedBotReply = await storeMessage({
-                            organization_id,
-                            contact_id: contact.id,
-                            conversation_id: conv.id,
-                            wa_message_id: botWaMessageId,
-                            direction: "outbound",
-                            type: "interactive",
-                            content: {
-                              text: buttonBody,
-                              interactive: {
-                                type: "button",
-                                body: buttonBody,
-                                buttons: fallbackButtons,
-                              },
-                              is_bot_reply: true,
-                              bot_agent_id: botResult.agent?.id,
-                              bot_agent_name: botResult.agent?.name,
-                            },
-                            status: "sent",
-                            is_bot_reply: true,
-                            bot_agent_id: botResult.agent?.id || null,
-                            sender_type: "ai_agent",
-                            automation_source: "ai_agent",
-                          } as any);
-
-                          io.emit("new_message", {
-                            from: metadata?.display_phone_number || phone_number_id,
-                            phone: from,
-                            text: buttonBody,
-                            sender: "agent",
-                            conversation_id: conv.id,
-                            contact_id: contact.id,
-                            message_id: storedBotReply?.id || null,
-                            wa_message_id: botWaMessageId,
-                            created_at: storedBotReply?.created_at || new Date().toISOString(),
-                            connectedAccount: metadata?.display_phone_number,
-                            type: "interactive",
-                            content: {
-                              text: buttonBody,
-                              interactive: {
-                                type: "button",
-                                body: buttonBody,
-                                buttons: fallbackButtons,
-                              }
-                            },
-                            is_bot_reply: true,
-                          });
-                        } else {
-                          let isJsonButtons = false;
-                          let parsedInteractive: any = null;
-                          botDebugLog(`Raw reply from agent: ${botResult.reply}`);
-                          try {
-                            const trimmedReply = botResult.reply.trim();
-                            const firstBrace = trimmedReply.indexOf("{");
-                            const lastBrace = trimmedReply.lastIndexOf("}");
-                            botDebugLog(`Brace indices: ${firstBrace}, ${lastBrace}`);
-                            if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-                              const jsonCandidate = trimmedReply.substring(firstBrace, lastBrace + 1);
-                              botDebugLog(`JSON Candidate: ${jsonCandidate}`);
-                              const parsed = JSON.parse(jsonCandidate);
-                              if (parsed && typeof parsed === "object" && typeof parsed.text === "string" && Array.isArray(parsed.buttons)) {
-                                parsedInteractive = parsed;
-                                isJsonButtons = true;
-                                botDebugLog(`Successfully parsed JSON buttons payload`);
-                              }
-                            }
-                          } catch (err: any) {
-                            botDebugLog(`JSON parsing failed: ${err.message || err}`);
-                          }
-
-                          let isValid = true;
-                          let validatedButtons: any[] = [];
-                          let buttonType: string | null = null;
-                          let interactiveType: "button" | "cta_url" = "button";
-
-                          if (isJsonButtons && parsedInteractive) {
-                            const buttons = parsedInteractive.buttons;
-                            if (buttons.length < 1) {
-                              isValid = false;
-                            } else {
-                              const rawButtonsSlice = buttons.slice(0, 3);
-                              for (const btn of rawButtonsSlice) {
-                                if (!btn || typeof btn !== "object" || !btn.text || typeof btn.text !== "string") {
-                                  isValid = false;
-                                  break;
-                                }
-
-                                const rawType = String(btn.type || "reply").toLowerCase();
-                                const currentBtnType = rawType === "url" || rawType === "form" ? "url" : rawType === "phone" ? "phone" : "reply";
-
-                                if (buttonType === null) {
-                                  buttonType = currentBtnType;
-                                } else if (buttonType !== currentBtnType) {
-                                  isValid = false;
-                                  break;
-                                }
-
-                                const sanitizedText = btn.text.trim().substring(0, 20);
-                                if (!sanitizedText) {
-                                  isValid = false;
-                                  break;
-                                }
-
-                                const rawId = btn.id || btn.text;
-                                const sanitizedId = String(rawId).trim().substring(0, 256);
-
-                                validatedButtons.push({
-                                  id: sanitizedId,
-                                  text: sanitizedText,
-                                  type: currentBtnType,
-                                  url: btn.url || undefined,
-                                  phone: btn.phone || undefined
-                                });
-                              }
-                            }
-
-                            if (isValid && buttonType === "url") {
-                              if (validatedButtons.length > 1) {
-                                validatedButtons = [validatedButtons[0]];
-                              }
-                              interactiveType = "cta_url";
-                            }
-                          } else {
-                            isValid = false;
-                            botDebugLog(`Validation skipped (isJsonButtons was false or parsedInteractive was null)`);
-                          }
-
-                          botDebugLog(`Decision details - isJsonButtons: ${isJsonButtons}, isValid: ${isValid}, validatedButtons length: ${validatedButtons.length}`);
-
-                          let previewText = botResult.reply;
-
-                          if (isJsonButtons && isValid && validatedButtons.length > 0) {
-                            botDebugLog(`Sending dynamic AI-generated buttons for bot "${botResult.agent?.name}"`);
-                            const buttonBody = parsedInteractive.text;
-                            const footer = parsedInteractive.footer || "";
-                            previewText = buttonBody;
-
-                            const sendResult = await sendInteractiveButtons(
-                              from,
-                              buttonBody,
-                              validatedButtons,
-                              footer,
-                              phone_number_id
-                            );
-                            botWaMessageId = sendResult?.messages?.[0]?.id || null;
-
-                            storedBotReply = await storeMessage({
-                              organization_id,
-                              contact_id: contact.id,
-                              conversation_id: conv.id,
-                              wa_message_id: botWaMessageId,
-                              direction: "outbound",
-                              type: "interactive",
-                              content: {
-                                text: buttonBody,
-                                interactive: {
-                                  type: interactiveType,
-                                  body: buttonBody,
-                                  footer: footer,
-                                  buttons: validatedButtons,
-                                },
-                                is_bot_reply: true,
-                                bot_agent_id: botResult.agent?.id,
-                                bot_agent_name: botResult.agent?.name,
-                              },
-                              status: "sent",
-                              is_bot_reply: true,
-                              bot_agent_id: botResult.agent?.id || null,
-                              sender_type: "ai_agent",
-                              automation_source: "ai_agent",
-                            } as any);
-
-                            io.emit("new_message", {
-                              from: metadata?.display_phone_number || phone_number_id,
-                              phone: from,
-                              text: buttonBody,
-                              sender: "agent",
-                              conversation_id: conv.id,
-                              contact_id: contact.id,
-                              message_id: storedBotReply?.id || null,
-                              wa_message_id: botWaMessageId,
-                              created_at: storedBotReply?.created_at || new Date().toISOString(),
-                              connectedAccount: metadata?.display_phone_number,
-                              type: "interactive",
-                              content: {
-                                text: buttonBody,
-                                interactive: {
-                                  type: interactiveType,
-                                  body: buttonBody,
-                                  footer: footer,
-                                  buttons: validatedButtons,
-                                }
-                              },
-                              is_bot_reply: true,
-                            });
-                          } else {
-                            botDebugLog(`Replying with plain text for bot "${botResult.agent?.name}"`);
-                            let plainTextReply = botResult.reply;
-                            if (isJsonButtons && parsedInteractive && parsedInteractive.text) {
-                              plainTextReply = parsedInteractive.text;
-                            }
-                            previewText = plainTextReply;
-
-                            const sendResult = await sendTextMessage(
-                              from,
-                              plainTextReply,
-                              phone_number_id,
-                            );
-                            botWaMessageId = sendResult?.messages?.[0]?.id || null;
-                            storedBotReply = await storeMessage({
-                              organization_id,
-                              contact_id: contact.id,
-                              conversation_id: conv.id,
-                              wa_message_id: botWaMessageId,
-                              direction: "outbound",
-                              type: "text",
-                              content: {
-                                text: plainTextReply,
-                                bot_agent_id: botResult.agent?.id,
-                                bot_agent_name: botResult.agent?.name,
-                              },
-                              status: "sent",
-                              is_bot_reply: true,
-                              bot_agent_id: botResult.agent?.id || null,
-                              sender_type: "ai_agent",
-                              automation_source: "ai_agent",
-                            } as any);
-                            io.emit("new_message", {
-                              from: metadata?.display_phone_number || phone_number_id,
-                              phone: from,
-                              text: plainTextReply,
-                              sender: "agent",
-                              conversation_id: conv.id,
-                              contact_id: contact.id,
-                              message_id: storedBotReply?.id || null,
-                              wa_message_id: botWaMessageId,
-                              created_at:
-                                storedBotReply?.created_at || new Date().toISOString(),
-                              connectedAccount: metadata?.display_phone_number,
-                              type: "text",
-                              is_bot_reply: true,
-                            });
-                          }
-
-                          webhookLog("bot_agent.reply.sent", {
-                            requestId,
-                            botWaMessageId: botWaMessageId,
-                            storedMessageId: storedBotReply?.id || null,
-                            agentId: botResult.agent?.id || null,
-                          });
-
-                          // Update conversation preview using cleaned previewText
-                          await supabase
-                            .from("w_conversations")
-                            .update({
-                              last_message_at: new Date().toISOString(),
-                              last_message_preview: previewText.substring(0, 100),
-                            })
-                            .eq("id", conv.id);
-                        }
-                        webhookLog("bot_agent.conversation_preview.updated", {
-                          requestId,
-                          conversation_id: conv.id,
-                        });
-                      }
-                  } catch (err) {
-                      console.error("[Bot Lock] Error generating reply for conversation:", conv.id, err);
-                  }
-              });
-              
-              botLockMap.set(conv.id, currentPromise);
-              
-          }, 5000));
-
         } else if (!flowConsumedMessage) {
           webhookLog("bot_agent.process.skipped", {
             requestId,
@@ -1874,7 +2065,8 @@ export async function handleWebhook(req: any, res: Response) {
 
       // Refund is already handled asynchronously at the start of status loop execution if applicable
 
-      io.emit("message_status_update", {
+      io.to(`org:${organization_id}`).emit("message_status_update", {
+        organization_id,
         wa_message_id,
         status: newStatus,
         error_message: errorMessage,

@@ -1,11 +1,11 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react'
 import { useAuth } from './AuthContext'
 import { supabase } from '../supabaseClient'
+import { API_BASE } from '../config/api'
 
 const WhatsAppAccountContext = createContext(null)
 
 const SELECTED_WA_ACCOUNT_KEY = 'selected_wa_account_id'
-const API_BASE = `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api`
 
 export function WhatsAppAccountProvider({ children }) {
     const { session, apiCall } = useAuth()

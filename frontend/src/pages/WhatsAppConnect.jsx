@@ -1,4 +1,5 @@
-import { createElement, useEffect, useMemo, useState } from 'react'
+import InfoHelp from '../components/InfoHelp'
+import { createElement, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
     AlertCircle,
@@ -16,7 +17,6 @@ import {
     QrCode,
     ShieldCheck,
     Smartphone,
-    Sparkles,
     Wallet,
     X,
 } from 'lucide-react'
@@ -28,9 +28,7 @@ import { formatINRFromPaise } from '../config/whatsappPricing'
 import TourButton from '../onboarding/TourButton'
 import WhatsAppMessagingGuideModal from '../components/WhatsAppMessagingGuideModal'
 import { loadFacebookSDK } from '../services/facebookSdkLoader'
-
-const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
-const API_BASE = `${API_URL}/api`
+import { BACKEND_URL as API_URL, API_BASE } from '../config/api'
 const META_APP_ID = import.meta.env.VITE_META_APP_ID || '1459710399100167'
 const META_CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID || '1108075894853600'
 const META_EMBEDDED_SIGNUP_VERSION = import.meta.env.VITE_META_EMBEDDED_SIGNUP_VERSION || 'v4'
@@ -52,6 +50,7 @@ export default function WhatsAppConnect() {
     const [diagnostics, setDiagnostics] = useState({})
     const [diagnosticsLoadingId, setDiagnosticsLoadingId] = useState(null)
     const [isGuideModalOpen, setIsGuideModalOpen] = useState(false)
+    const capturedMetaSessionRef = useRef(null)
     const [hasIntegrationConsent, setHasIntegrationConsent] = useState(() => {
         if (import.meta.env.VITE_ENABLE_COOKIE_CONSENT !== 'true') return true
         try {
@@ -71,6 +70,26 @@ export default function WhatsAppConnect() {
     const isLocalHost = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
     const isSecureForMetaLogin = window.location.protocol === 'https:' || isLocalHost
     const activeConnections = useMemo(() => accounts, [accounts])
+
+    useEffect(() => {
+        const handleMetaMessage = (event) => {
+            if (!event.origin || (!event.origin.includes('facebook.com') && !event.origin.includes('fb.com'))) return
+            try {
+                const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
+                if (data?.type === 'WA_EMBEDDED_SIGNUP') {
+                    const sessionData = data.data || {}
+                    if (sessionData.phone_number_id || sessionData.waba_id) {
+                        capturedMetaSessionRef.current = {
+                            phone_number_id: sessionData.phone_number_id || null,
+                            waba_id: sessionData.waba_id || null,
+                        }
+                    }
+                }
+            } catch { }
+        }
+        window.addEventListener('message', handleMetaMessage)
+        return () => window.removeEventListener('message', handleMetaMessage)
+    }, [])
 
     useEffect(() => {
         if (!session?.access_token) return
@@ -183,13 +202,19 @@ export default function WhatsAppConnect() {
         setEmbedStatus('saving')
         setEmbedError('')
         try {
+            const payload = {
+                code: response.authResponse.code,
+                phone_number_id: capturedMetaSessionRef.current?.phone_number_id || undefined,
+                waba_id: capturedMetaSessionRef.current?.waba_id || undefined,
+            }
             const res = await fetch(`${API_BASE}/wa/connect/callback`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-                body: JSON.stringify({ code: response.authResponse.code }),
+                body: JSON.stringify(payload),
             })
             const data = await res.json().catch(() => ({}))
             if (!res.ok) throw new Error(data.error || 'Connection failed')
+            capturedMetaSessionRef.current = null
             setEmbedStatus('saved')
             setEmbedError('')
             await fetchAccounts()
@@ -343,8 +368,7 @@ export default function WhatsAppConnect() {
     return (
         <div className="mx-auto max-w-7xl space-y-4 sm:space-y-6 pb-12 sm:pb-20">
             <section className="rounded-lg border border-[#b9dcfb] bg-[#eef7ff] p-4 sm:p-5">
-                <div className="inline-flex items-center gap-1.5 rounded-full border border-[#b9dcfb] bg-white px-2 py-0.5 text-[10px] sm:text-xs font-semibold text-[#0064b7]">
-                    <Sparkles className="h-3.5 w-3.5" />
+                <div className="inline-flex items-center rounded-full border border-[#b9dcfb] bg-white px-2 py-0.5 text-[10px] sm:text-xs font-semibold text-[#0064b7]">
                     Start here
                 </div>
                 <h1 className="mt-2.5 sm:mt-3 max-w-2xl text-base sm:text-2xl font-semibold leading-normal sm:leading-snug text-gray-950">Connect WhatsApp so your dashboard, chats, broadcasts and automations can start working.</h1>
@@ -388,12 +412,12 @@ export default function WhatsAppConnect() {
             <section className="overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50/80 via-teal-50/40 to-white p-4 sm:p-6 shadow-sm">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="max-w-3xl">
-                        <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1 text-xs font-bold text-white shadow-xs">
-                            <Sparkles className="h-3.5 w-3.5 text-emerald-200" />
+                        <div className="inline-flex items-center rounded-full bg-emerald-600 px-3 py-1 text-xs font-bold text-white shadow-xs">
                             Official WhatsApp Messaging Rules
                         </div>
                         <h2 className="mt-3 text-base sm:text-xl font-bold text-gray-950">
                             How messaging works after connecting your number
+                            <InfoHelp text="Meta WhatsApp Cloud API enforces a 24-hour customer service window for freeform chat and template approval for business-initiated conversations." />
                         </h2>
                         <p className="mt-1.5 text-xs sm:text-sm leading-relaxed text-gray-600">
                             Meta WhatsApp Cloud API has specific rules: You can only send freeform text messages within the <strong>24-Hour Customer Care Window</strong> after a customer texts you. To initiate a chat with a new contact, an approved <strong>Template Message</strong> is required.
@@ -417,9 +441,8 @@ export default function WhatsAppConnect() {
                         <button
                             type="button"
                             onClick={() => setIsGuideModalOpen(true)}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-emerald-700 transition-colors"
+                            className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-5 py-3 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-emerald-700 transition-colors"
                         >
-                            <Sparkles className="h-4 w-4 text-emerald-200" />
                             Open Messaging Manual
                         </button>
                         <Link
