@@ -500,7 +500,7 @@ function NavItem({ item, active, collapsed, onNavigate, attention }) {
         <Link
             to={item.href}
             onClick={onNavigate}
-            data-tour={`nav-${item.href.replace('/', '').replaceAll('/', '-') || 'dashboard'}`}
+            data-tour={`nav-${item.href.replace('/', '').replace(/\//g, '-') || 'dashboard'}`}
             title={collapsed ? item.name : undefined}
             className={clsx(
                 'group flex h-9 items-center rounded-md text-[14px] font-medium transition-colors',
@@ -539,7 +539,7 @@ function ExpandableNavItem({ item, active, collapsed, onNavigate }) {
             <button
                 type="button"
                 onClick={() => setIsManuallyOpen(prev => !prev)}
-                data-tour={`nav-${item.href.replace('/', '').replaceAll('/', '-') || 'dashboard'}`}
+                data-tour={`nav-${item.href.replace('/', '').replace(/\//g, '-') || 'dashboard'}`}
                 className={clsx(
                     'group flex h-9 w-full items-center rounded-md text-[14px] font-medium transition-colors text-left focus:outline-none',
                     collapsed ? 'justify-center px-0' : 'gap-2 px-2',

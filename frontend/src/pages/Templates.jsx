@@ -147,8 +147,8 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                     ...item,
                     id: `meta-${item.id || `${item.name}-${item.language}`}`,
                     source: 'meta_library',
-                    displayName: item.name.replaceAll('_', ' '),
-                    industry: (item.industry || ['General']).map(value => value.replaceAll('_', ' ').replace(/\b\w/g, letter => letter.toUpperCase())),
+                    displayName: item.name.replace(/_/g, ' '),
+                    industry: (item.industry || ['General']).map(value => value.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase())),
                     useCase: item.usecase || item.topic || 'ACCOUNT_UPDATES',
                     components,
                 }
@@ -1496,7 +1496,7 @@ function CreateTemplateModal({ isOpen, onClose, onSuccess, apiCall, initialData,
             <Modal isOpen={isOpen} onClose={closeModal} title={initialData.name} maxWidth="max-w-3xl">
                 <div className="grid overflow-hidden rounded-xl border border-slate-200 bg-white md:grid-cols-[minmax(0,1fr)_280px]">
                     <div className="p-5 sm:p-6">
-                        <p className="text-xs text-slate-500">{initialData.category} · {initialData.useCase?.replaceAll('_', ' ')}</p>
+                        <p className="text-xs text-slate-500">{initialData.category} · {initialData.useCase?.replace(/_/g, ' ')}</p>
                         <h3 className="mt-4 text-sm font-semibold text-slate-900">Enter template details</h3>
                         <p className="mt-1 text-xs text-slate-500">
                             {usesAuthenticationModel
