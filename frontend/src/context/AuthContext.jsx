@@ -8,7 +8,24 @@ export const useAuth = () => useContext(AuthContext)
 // Map raw plan IDs → display names
 function resolvePlanName(plan) {
     if (!plan) return 'No active plan'
-    const p = String(plan).toLowerCase()
+
+    let planStr = String(plan);
+    try {
+        const parsed = JSON.parse(planStr);
+        if (Array.isArray(parsed)) {
+            // Find the WhatsApp specific plan from the array
+            const waPlan = parsed.find(p => p && (p.toLowerCase().includes('wa ') || p.toLowerCase().includes('whatsapp') || p.toLowerCase().includes('whatsapp_')));
+            if (waPlan) {
+                planStr = waPlan;
+            } else {
+                planStr = parsed[0] || '';
+            }
+        }
+    } catch (e) {
+        // Not a JSON string, continue normally
+    }
+
+    const p = String(planStr).toLowerCase()
     if (p === 'free' || p === 'whatsapp_free' || p === '') return 'No active plan'
     if (p.includes('max')) return 'GAP Max'
     if (p.includes('all_in_one') || p.includes('bundle')) return 'GAP Max'
@@ -16,7 +33,7 @@ function resolvePlanName(plan) {
     if (p.includes('growth')) return 'GAP Growth'
     if (p.includes('core')) return 'GAP Core'
     if (p.includes('starter')) return 'GAP Starter'
-    return plan
+    return planStr
 }
 
 export function AuthProvider({ children }) {
@@ -48,13 +65,16 @@ export function AuthProvider({ children }) {
                     setMemberProfile(data);
 
                     if (data?.subscription) {
+                        console.log('[AUTH_DEBUG] Profile Subscription data:', data.subscription);
                         const expiresAt = data.subscription.expires_at ? new Date(data.subscription.expires_at).getTime() : 0;
                         const isSubActive = !data.subscription.expires_at || expiresAt > Date.now() || data.subscription.status === 'active';
                         let resolvedPlan = isSubActive
-                            ? (data.subscription.plan_label || data.subscription.plan_id || 'GAP Max')
+                            ? (data.subscription.plan_label || data.subscription.plan_id)
                             : 'No active plan';
+                        console.log('[AUTH_DEBUG] Profile Resolved pre-format:', resolvedPlan);
                         const resolvedStatus = isSubActive ? 'active' : (data.subscription ? 'expired' : 'inactive');
                         resolvedPlan = resolvePlanName(resolvedPlan);
+                        console.log('[AUTH_DEBUG] Profile Resolved post-format:', resolvedPlan);
 
                         setUser(prev => prev ? {
                             ...prev,
@@ -78,7 +98,7 @@ export function AuthProvider({ children }) {
             const expiresAt = sub?.expires_at ? new Date(sub.expires_at).getTime() : 0;
             const isSubActive = sub ? (!sub.expires_at || expiresAt > Date.now() || sub.status === 'active') : false;
             let resolvedPlan = isSubActive
-                ? (sub?.plan_label || sub?.plan_id || 'GAP Max')
+                ? (sub?.plan_label || sub?.plan_id)
                 : 'No active plan';
             const resolvedStatus = isSubActive ? 'active' : (sub ? 'expired' : 'inactive');
             resolvedPlan = resolvePlanName(resolvedPlan);
@@ -120,13 +140,16 @@ export function AuthProvider({ children }) {
 
                 // Inherit the organization's subscription status
                 if (data?.subscription) {
+                    console.log('[AUTH_DEBUG] Subscription data:', data.subscription);
                     const expiresAt = data.subscription.expires_at ? new Date(data.subscription.expires_at).getTime() : 0
                     const isSubActive = !data.subscription.expires_at || expiresAt > Date.now() || data.subscription.status === 'active'
                     let resolvedPlan = isSubActive
-                        ? (data.subscription.plan_label || data.subscription.plan_id || 'GAP Max')
+                        ? (data.subscription.plan_label || data.subscription.plan_id)
                         : 'No active plan'
+                    console.log('[AUTH_DEBUG] Resolved pre-format:', resolvedPlan);
                     const resolvedStatus = isSubActive ? 'active' : (data.subscription ? 'expired' : 'inactive')
                     resolvedPlan = resolvePlanName(resolvedPlan)
+                    console.log('[AUTH_DEBUG] Resolved post-format:', resolvedPlan);
 
                     setUser(prev => prev ? {
                         ...prev,

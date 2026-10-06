@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { FLOW_TEMPLATES } from './flowTemplates';
 import { notify } from '../../services/notificationService';
 
-export default function NodeConfigPanel({ node, onClose, onSave }) {
+export default function NodeConfigPanel({ node, nodes, onClose, onSave }) {
     const [config, setConfig] = useState(node?.data?.config || {});
 
     useEffect(() => {
@@ -48,7 +48,7 @@ export default function NodeConfigPanel({ node, onClose, onSave }) {
 
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-6">
-                    {renderConfigForm(node.type, config, updateConfig)}
+                    {renderConfigForm(node.type, config, updateConfig, nodes, node.id)}
                 </div>
 
                 {/* Footer */}
@@ -72,7 +72,7 @@ export default function NodeConfigPanel({ node, onClose, onSave }) {
     );
 }
 
-function renderConfigForm(nodeType, config, updateConfig) {
+function renderConfigForm(nodeType, config, updateConfig, nodes, currentNodeId) {
     switch (nodeType) {
         case 'startBotFlow':
             return <StartBotFlowConfig config={config} updateConfig={updateConfig} />;
@@ -87,6 +87,8 @@ function renderConfigForm(nodeType, config, updateConfig) {
             return <UserInputConfig config={config} updateConfig={updateConfig} />;
         case 'condition':
             return <ConditionConfig config={config} updateConfig={updateConfig} />;
+        case 'abTest':
+            return <div className="text-sm text-gray-500 p-2">A/B Test node automatically splits traffic 50/50 between Path A and Path B. No additional configuration is required. Just connect both handles!</div>;
         case 'button':
             return <ButtonConfig config={config} updateConfig={updateConfig} />;
         case 'location':
@@ -111,6 +113,8 @@ function renderConfigForm(nodeType, config, updateConfig) {
             return <HandoffConfig config={config} updateConfig={updateConfig} />;
         case 'end':
             return <EndConfig config={config} updateConfig={updateConfig} />;
+        case 'goto':
+            return <GoToConfig config={config} updateConfig={updateConfig} nodes={nodes} currentNodeId={currentNodeId} />;
         default:
             return <DefaultConfig config={config} updateConfig={updateConfig} />;
     }
@@ -410,6 +414,8 @@ function UserInputConfig({ config, updateConfig }) {
                 />
                 <p className="mt-1 text-xs text-gray-500">Use a simple key like <span className="font-mono">name</span>. Later messages can use <span className="font-mono">{'{{name}}'}</span>.</p>
             </div>
+            
+            <FollowUpConfig config={config} updateConfig={updateConfig} />
         </div>
     );
 }
@@ -576,6 +582,8 @@ function ButtonConfig({ config, updateConfig }) {
                     </button>
                 )}
             </div>
+            
+            <FollowUpConfig config={config} updateConfig={updateConfig} />
         </div>
     );
 }
@@ -1383,6 +1391,118 @@ function SmartDelayConfig({ config, updateConfig }) {
                     onChange={(e) => updateDelay('hours', e.target.value)}
                     className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                 />
+            </div>
+        </div>
+    );
+}
+
+function FollowUpConfig({ config, updateConfig }) {
+    const followUp = config.followUp || { enabled: false, hours: 2, message: '' };
+
+    const updateFollowUp = (field, value) => {
+        updateConfig('followUp', { ...followUp, [field]: value });
+    };
+
+    return (
+        <div className="space-y-3 p-4 bg-orange-50 rounded-lg border border-orange-100 mt-4">
+            <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-orange-900 cursor-pointer flex-1" onClick={() => updateFollowUp('enabled', !followUp.enabled)}>
+                    Send Follow-up Message
+                </label>
+                <input
+                    type="checkbox"
+                    checked={followUp.enabled}
+                    onChange={(e) => updateFollowUp('enabled', e.target.checked)}
+                    className="h-4 w-4 text-orange-600 rounded border-orange-300 focus:ring-orange-500 cursor-pointer"
+                />
+            </div>
+            {followUp.enabled && (
+                <div className="space-y-3 mt-3 animate-fade-in">
+                    <div>
+                        <label className="block text-xs font-medium text-orange-800 mb-1">Wait Time (Hours)</label>
+                        <input
+                            type="number"
+                            min="1"
+                            max="72"
+                            value={followUp.hours}
+                            onChange={(e) => updateFollowUp('hours', parseInt(e.target.value) || 1)}
+                            className="w-full px-3 py-2 text-sm border border-orange-200 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white"
+                        />
+                        <p className="text-[10px] text-orange-700 mt-1">If user doesn't reply in this time, a follow-up is sent automatically.</p>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-orange-800 mb-1">Follow-up Message</label>
+                        <textarea
+                            value={followUp.message}
+                            onChange={(e) => updateFollowUp('message', e.target.value)}
+                            placeholder="Hi, are you still there?"
+                            rows={2}
+                            className="w-full px-3 py-2 text-sm border border-orange-200 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white"
+                        />
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function GoToConfig({ config, updateConfig, nodes, currentNodeId }) {
+    // Filter out the current node from the target options to prevent self-loop jumping
+    const targetOptions = nodes?.filter(n => n.id !== currentNodeId) || [];
+
+    const getNodePreviewText = (node) => {
+        const c = node.data?.config || {};
+        let text = '';
+        
+        switch (node.type) {
+            case 'startBotFlow': text = c.keywords ? `Keywords: ${c.keywords}` : 'No keywords'; break;
+            case 'textMessage': text = c.message || c.text || 'Empty text'; break;
+            case 'userInput': text = c.question || c.text || 'Empty question'; break;
+            case 'button': text = c.text || c.headerText || 'Empty message'; break;
+            case 'interactive': text = c.headerText || c.text || 'Empty message'; break;
+            case 'condition': text = c.variable ? `If ${c.variable} ${c.operator}` : 'Empty condition'; break;
+            case 'template': text = c.templateName ? `Template: ${c.templateName}` : 'Empty template'; break;
+            case 'image':
+            case 'video':
+            case 'audio':
+            case 'file': text = c.caption || c.mediaUrl || c.url || 'Media without caption'; break;
+            case 'handoff': text = c.reason || 'Handoff'; break;
+            case 'whatsappFlow': text = c.message || 'Flow message'; break;
+            default: text = ''; break;
+        }
+        
+        if (text.length > 45) text = text.substring(0, 45) + '...';
+        return text ? ` — "${text}"` : '';
+    };
+
+    return (
+        <div className="space-y-4">
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Target Node
+                </label>
+                <p className="text-xs text-gray-500 mb-3">
+                    Select the node you want the user to jump to. When they reach this point, they will immediately be taken to the selected node without any lines drawn on the canvas.
+                </p>
+                <select
+                    value={config.targetNodeId || ''}
+                    onChange={(e) => {
+                        const targetId = e.target.value;
+                        const targetNode = targetOptions.find(n => n.id === targetId);
+                        updateConfig('targetNodeId', targetId);
+                        if (targetNode) {
+                            updateConfig('targetNodeName', targetNode.data?.title || targetNode.data?.label || targetNode.type);
+                        }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                >
+                    <option value="" disabled>Select a node to jump to...</option>
+                    {targetOptions.map(node => (
+                        <option key={node.id} value={node.id}>
+                            {node.data?.title || node.data?.label || node.type}{getNodePreviewText(node)}
+                        </option>
+                    ))}
+                </select>
             </div>
         </div>
     );

@@ -1606,6 +1606,16 @@ export async function processFlowEngine(
       };
     }
 
+    // --- GOTO NODE ---
+    if (nodeType === "goto") {
+      const targetNodeId = config.targetNodeId;
+      if (targetNodeId) {
+        activeNode = nodes.find((n: any) => n.id === targetNodeId);
+        console.log(`🌀 Jumped to node: ${targetNodeId}`);
+        continue;
+      }
+    }
+
     if (nodeType === "end") {
       await supabase
         .from("w_flow_sessions")

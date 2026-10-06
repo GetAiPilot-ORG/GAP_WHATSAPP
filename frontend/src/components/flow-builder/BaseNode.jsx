@@ -1,5 +1,5 @@
 import { Handle, Position } from 'reactflow';
-import { Trash2, Check, AlertCircle, Eye } from 'lucide-react';
+import { Trash2, Check, AlertCircle, Eye, Copy } from 'lucide-react';
 
 export default function BaseNode({
     id,
@@ -34,9 +34,9 @@ export default function BaseNode({
                 }`}
             style={{ minWidth: '240px', maxWidth: '280px' }}
         >
-            {/* Eye preview button */}
-            {data?.onPreview && (
-                <div className="absolute -left-10 top-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+            {/* Action buttons (Preview & Duplicate) */}
+            <div className="absolute -left-10 top-2 opacity-0 group-hover:opacity-100 transition-opacity z-10 flex flex-col gap-2">
+                {data?.onPreview && (
                     <button
                         type="button"
                         onClick={(e) => {
@@ -49,8 +49,23 @@ export default function BaseNode({
                     >
                         <Eye className="h-4 w-4" />
                     </button>
-                </div>
-            )}
+                )}
+                {data?.onDuplicate && (
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            data.onDuplicate(id);
+                        }}
+                        className="bg-white border border-gray-200 shadow-sm rounded-full p-2 text-gray-500 hover:text-green-600 hover:bg-gray-50 flex items-center justify-center nodrag nopan"
+                        title="Duplicate node"
+                    >
+                        <Copy className="h-4 w-4" />
+                    </button>
+                )}
+            </div>
+            
             {handles.input && (
                 <Handle
                     type="target"

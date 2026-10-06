@@ -346,7 +346,12 @@ export default function FlowBuilder() {
     }, { scope: dashboardRef, dependencies: [loading, waAccountsLoading, editingFlow] });
 
     if (editingFlow) {
-        return <FlowEditor flow={editingFlow} waAccounts={waAccounts} onClose={() => { setEditingFlow(null); fetchFlows(); }} />;
+        return createPortal(
+            <div className="fixed inset-0 z-[9999] bg-[#f5f7fa]">
+                <FlowEditor flow={editingFlow} waAccounts={waAccounts} onClose={() => { setEditingFlow(null); fetchFlows(); }} />
+            </div>,
+            document.body
+        );
     }
 
     if (loading || waAccountsLoading) {
@@ -854,96 +859,100 @@ export default function FlowBuilder() {
             )}
 
             {/* Create Flow Modal */}
-            <AnimatePresence>
-                {showCreateModal && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-                        onClick={() => {
-                            setShowCreateModal(false);
-                            setNewFlowName('');
-                            setNewFlowDescription('');
-                            setNewFlowAccountScope('all');
-                            setNewFlowAccountIds([]);
-                        }}
-                    >
+            {createPortal(
+                <AnimatePresence>
+                    {showCreateModal && (
                         <motion.div
-                            initial={{ scale: 0.95, y: 15, opacity: 0 }}
-                            animate={{ scale: 1, y: 0, opacity: 1 }}
-                            exit={{ scale: 0.95, y: 15, opacity: 0 }}
-                            transition={{ type: "spring", stiffness: 450, damping: 30 }}
-                            onClick={(e) => e.stopPropagation()}
-                            className="bg-white rounded-xl max-w-lg w-full overflow-hidden shadow-2xl border border-zinc-150"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] p-4"
+                            onClick={() => {
+                                setShowCreateModal(false);
+                                setNewFlowName('');
+                                setNewFlowDescription('');
+                                setNewFlowAccountScope('all');
+                                setNewFlowAccountIds([]);
+                            }}
                         >
-                            <div className="p-6 border-b border-gray-200">
-                                <h2 className="text-xl font-bold text-gray-900">Create New Flow</h2>
-                                <p className="text-sm text-gray-500 mt-1">Set up a new automation flow for your WhatsApp</p>
-                            </div>
-
-                            <div className="p-6 space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Flow Name</label>
-                                    <input
-                                        type="text"
-                                        value={newFlowName}
-                                        onChange={(e) => setNewFlowName(e.target.value)}
-                                        placeholder="e.g., Welcome Flow"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                                        autoFocus
-                                    />
+                            <motion.div
+                                initial={{ scale: 0.95, y: 15, opacity: 0 }}
+                                animate={{ scale: 1, y: 0, opacity: 1 }}
+                                exit={{ scale: 0.95, y: 15, opacity: 0 }}
+                                transition={{ type: "spring", stiffness: 450, damping: 30 }}
+                                onClick={(e) => e.stopPropagation()}
+                                className="bg-white rounded-xl max-w-lg w-full overflow-hidden shadow-2xl border border-zinc-150"
+                            >
+                                <div className="p-6 border-b border-gray-200">
+                                    <h2 className="text-xl font-bold text-gray-900">Create New Flow</h2>
+                                    <p className="text-sm text-gray-500 mt-1">Set up a new automation flow for your WhatsApp</p>
                                 </div>
 
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Description (Optional)</label>
-                                    <textarea
-                                        value={newFlowDescription}
-                                        onChange={(e) => setNewFlowDescription(e.target.value)}
-                                        placeholder="What does this flow do?"
-                                        rows={3}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                                    />
+                                <div className="p-6 space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Flow Name</label>
+                                        <input
+                                            type="text"
+                                            value={newFlowName}
+                                            onChange={(e) => setNewFlowName(e.target.value)}
+                                            placeholder="e.g., Welcome Flow"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                            autoFocus
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Description (Optional)</label>
+                                        <textarea
+                                            value={newFlowDescription}
+                                            onChange={(e) => setNewFlowDescription(e.target.value)}
+                                            placeholder="What does this flow do?"
+                                            rows={3}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                        />
+                                    </div>
+                                    {waAccounts.length > 1 && (
+                                        <FlowAccountSelector
+                                            accounts={waAccounts}
+                                            scope={newFlowAccountScope}
+                                            selectedIds={newFlowAccountIds}
+                                            onScopeChange={setNewFlowAccountScope}
+                                            onSelectedIdsChange={setNewFlowAccountIds}
+                                        />
+                                    )}
                                 </div>
 
-                                <FlowAccountSelector
-                                    accounts={waAccounts}
-                                    scope={newFlowAccountScope}
-                                    selectedIds={newFlowAccountIds}
-                                    onScopeChange={setNewFlowAccountScope}
-                                    onSelectedIdsChange={setNewFlowAccountIds}
-                                />
-                            </div>
-
-                            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
-                                <motion.button
-                                    whileTap={{ scale: 0.97 }}
-                                    onClick={() => {
-                                        setShowCreateModal(false);
-                                        setNewFlowName('');
-                                        setNewFlowDescription('');
-                                        setNewFlowAccountScope('all');
-                                        setNewFlowAccountIds([]);
-                                    }}
-                                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer"
-                                >
-                                    Cancel
-                                </motion.button>
-                                <motion.button
-                                    whileTap={{ scale: 0.97 }}
-                                    onClick={handleCreateFlow}
-                                    disabled={!newFlowName.trim() || (newFlowAccountScope === 'selected' && newFlowAccountIds.length === 0)}
-                                    className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
-                                >
-                                    <Plus className="h-4 w-4" />
-                                    Create Flow
-                                </motion.button>
-                            </div>
+                                <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+                                    <motion.button
+                                        whileTap={{ scale: 0.97 }}
+                                        onClick={() => {
+                                            setShowCreateModal(false);
+                                            setNewFlowName('');
+                                            setNewFlowDescription('');
+                                            setNewFlowAccountScope('all');
+                                            setNewFlowAccountIds([]);
+                                        }}
+                                        className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer"
+                                    >
+                                        Cancel
+                                    </motion.button>
+                                    <motion.button
+                                        whileTap={{ scale: 0.97 }}
+                                        onClick={handleCreateFlow}
+                                        disabled={!newFlowName.trim() || (newFlowAccountScope === 'selected' && newFlowAccountIds.length === 0)}
+                                        className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
+                                    >
+                                        <Plus className="h-4 w-4" />
+                                        Create Flow
+                                    </motion.button>
+                                </div>
+                            </motion.div>
                         </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+                    )}
+                </AnimatePresence>,
+                document.body
+            )}
         </div>
     );
 }
@@ -1274,50 +1283,39 @@ function TemplateGalleryModal({
                 exit={{ scale: 0.95, y: 15, opacity: 0 }}
                 transition={{ type: "spring", stiffness: 400, damping: 28 }}
                 onClick={(e) => e.stopPropagation()}
-                className="hidden md:flex h-full w-full max-w-7xl flex-col overflow-hidden rounded-none border border-gray-200 bg-white sm:h-[88vh] sm:rounded-lg lg:flex-row"
+                className="hidden md:flex h-full w-full max-w-7xl flex-col overflow-hidden rounded-none border border-gray-200 bg-white sm:h-[88vh] sm:rounded-lg lg:flex-row relative"
             >
+                <motion.button
+                    whileTap={{ scale: 0.9 }}
+                    onClick={onClose}
+                    className="absolute top-4 right-4 z-50 rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-900 cursor-pointer"
+                >
+                    <X className="h-5 w-5" />
+                </motion.button>
                 <div className="flex h-[46vh] w-full flex-col border-b border-gray-200 bg-white lg:h-auto lg:w-[420px] lg:border-b-0 lg:border-r">
                     <div className="border-b border-gray-200 bg-white p-4 sm:p-5">
-                        <div className="flex items-start justify-between gap-4">
-                            <div>
-                                <div className="flex items-center gap-2 text-sm font-semibold text-[#128C7E]">
-                                    <Sparkles className="h-4 w-4" />
-                                    Flow Templates
-                                </div>
-                                <h2 className="mt-1 text-xl font-light text-black sm:text-2xl">Start from a proven flow</h2>
-                                <p className="mt-1 text-sm leading-5 text-gray-500">Choose a workflow, fill details, and generate a ready-to-edit draft.</p>
+                        <div className="flex items-center gap-3">
+                            <div className="flex-1 relative">
+                                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                                <input
+                                    value={query}
+                                    onChange={(event) => onQueryChange(event.target.value)}
+                                    placeholder="Search templates..."
+                                    className="fp-input h-10 pl-9"
+                                />
                             </div>
-                            <motion.button
-                                whileTap={{ scale: 0.9 }}
-                                onClick={onClose}
-                                className="rounded-full p-2 text-gray-500 hover:bg-gray-100 hover:text-black cursor-pointer"
-                            >
-                                <X className="h-5 w-5" />
-                            </motion.button>
-                        </div>
 
-                        <div className="relative mt-4">
-                            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                            <input
-                                value={query}
-                                onChange={(event) => onQueryChange(event.target.value)}
-                                placeholder="Search sales, support, booking..."
-                                className="fp-input h-10 pl-9"
-                            />
-                        </div>
-
-                        <div className="mt-3 flex flex-wrap gap-2">
-                            {categories.map(item => (
-                                <motion.button
-                                    whileTap={{ scale: 0.96 }}
-                                    key={item}
-                                    onClick={() => onCategoryChange(item)}
-                                    className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${category === item ? 'bg-black text-white' : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-                                        } cursor-pointer`}
+                            <div className="shrink-0">
+                                <select 
+                                    value={category} 
+                                    onChange={(e) => onCategoryChange(e.target.value)}
+                                    className="fp-input h-10 px-3 cursor-pointer min-w-[120px]"
                                 >
-                                    {item}
-                                </motion.button>
-                            ))}
+                                    {categories.map(item => (
+                                        <option key={item} value={item}>{item}</option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
                     </div>
 
@@ -1367,11 +1365,9 @@ function TemplateGalleryModal({
                             <div>
                                 <div className="flex items-center gap-2">
                                     <h2 className="text-xl font-semibold text-black">{selectedTemplate.name}</h2>
-                                    <span className="rounded-full bg-[#25D366]/10 px-2 py-1 text-xs font-semibold text-[#128C7E]">{selectedTemplate.category}</span>
                                 </div>
-                                <p className="mt-1 max-w-2xl text-sm text-gray-500">{selectedTemplate.bestFor}</p>
                             </div>
-                            <div className="flex flex-wrap items-center gap-3">
+                            <div className="flex flex-wrap items-center gap-3 pr-10">
                                 <div className="hidden rounded-lg border border-gray-200 bg-[#f8faf9] px-3 py-2 text-xs text-gray-600 lg:block">
                                     <div className="font-semibold text-gray-900">{selectedTemplate.preview.nodes.length} nodes</div>
                                     Ready-to-edit draft
@@ -1404,7 +1400,7 @@ function TemplateGalleryModal({
                             </div>
                         </div>
 
-                        <div className="border-t border-gray-200 bg-[#f8faf9] p-4 sm:p-5 xl:border-l xl:border-t-0">
+                        <div className="overflow-y-auto border-t border-gray-200 bg-[#f8faf9] p-4 sm:p-5 xl:border-l xl:border-t-0">
                             <h3 className="text-sm font-semibold text-gray-900">Fill Details</h3>
                             <p className="mt-1 text-xs leading-5 text-gray-500">These values replace placeholders inside messages and node settings.</p>
 
