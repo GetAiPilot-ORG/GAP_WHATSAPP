@@ -149,7 +149,7 @@ export default function Broadcast({ defaultTab = 'new' }) {
             } else if (source === 'custom') {
                 replacement = customTexts[v.key] || v.token;
             }
-            text = text.replaceAll(v.token, replacement);
+            text = text.split(v.token).join(replacement);
         });
         return text;
     };

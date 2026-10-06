@@ -1056,7 +1056,7 @@ function AccountCard({ account, diagnostics, loading, onCheck, onReconnect, onDi
                                 Business verification: {businessVerified ? 'Verified' : 'Action required'}
                             </p>
                             <p className={`mt-0.5 truncate text-[10px] ${businessVerified ? 'text-emerald-700' : 'text-amber-800'}`}>
-                                {businessVerification.business_name || 'Meta Business Portfolio'} · {String(businessVerification.status || 'unknown').replaceAll('_', ' ')}
+                                {businessVerification.business_name || 'Meta Business Portfolio'} · {String(businessVerification.status || 'unknown').replace(/_/g, ' ')}
                             </p>
                         </div>
                     </div>

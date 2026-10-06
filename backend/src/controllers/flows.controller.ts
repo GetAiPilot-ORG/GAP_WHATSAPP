@@ -282,3 +282,182 @@ export async function deleteFlowSession(req: any, res: Response) {
         res.json({ success: true });
     } catch (err: any) { res.status(500).json({ error: err.message }); }
 }
+export async function testFlow(req: any, res: Response) {
+    const orgId = req.organization_id;
+    const { id } = req.params;
+    const { text, currentNodeId, flowState = {} } = req.body;
+    
+    try {
+        const { data: flow, error } = await supabase
+            .from('w_flows')
+            .select('*')
+            .eq('id', id)
+            .eq('organization_id', orgId)
+            .maybeSingle();
+            
+        if (error) throw error;
+        if (!flow) return res.status(404).json({ error: 'Flow not found' });
+        
+        const nodes = flow.nodes || [];
+        const edges = flow.edges || [];
+        
+        let activeNode;
+        if (!currentNodeId) {
+            // Start of flow: find trigger node
+            activeNode = nodes.find(n => n.type === 'startBotFlow');
+            if (!activeNode) return res.json({ output: "Error: No starting node (Keyword Trigger) found." });
+            
+            // Validate keyword match if it's a real start, but since it's a test, we can just proceed.
+            // Move to next node immediately
+            const outEdges = edges.filter(e => e.source === activeNode.id);
+            if (outEdges.length > 0) {
+                activeNode = nodes.find(n => n.id === outEdges[0].target);
+            } else {
+                return res.json({ output: "Flow ends immediately after start." });
+            }
+        } else {
+            // Process user input for the current waiting node
+            activeNode = nodes.find(n => n.id === currentNodeId);
+            if (!activeNode) return res.json({ output: "Error: Current node not found." });
+            
+            const nodeType = activeNode.type;
+            const config = activeNode.data?.config || {};
+            let conditionMet = false;
+            let matchEdge = null;
+            const outEdges = edges.filter(e => e.source === activeNode.id);
+            
+            if (nodeType === 'userInput') {
+                const saveToField = config.saveToField;
+                if (saveToField) {
+                    flowState[saveToField] = text;
+                }
+                matchEdge = outEdges[0];
+            } else if (nodeType === 'button' || nodeType === 'interactive') {
+                const actualValue = String(text || "").toLowerCase().trim();
+                let matchedValue = null;
+                
+                // Find matching branch
+                const branches = outEdges.map(e => e.sourceHandle);
+                for (const branch of branches) {
+                    if (actualValue === String(branch).toLowerCase().trim()) {
+                        matchedValue = branch;
+                        break;
+                    }
+                }
+                
+                if (matchedValue) {
+                    matchEdge = outEdges.find(e => e.sourceHandle === matchedValue);
+                } else if (outEdges.length > 0) {
+                    // Fallback to default
+                    matchEdge = outEdges.find(e => !e.sourceHandle || e.sourceHandle === 'default') || outEdges[0];
+                }
+            } else if (nodeType === 'condition') {
+                 // Condition evaluating logic
+                 matchEdge = outEdges[0]; // Simplified for test
+            } else {
+                matchEdge = outEdges[0];
+            }
+            
+            if (matchEdge) {
+                activeNode = nodes.find(n => n.id === matchEdge.target);
+            } else {
+                activeNode = null;
+            }
+        }
+        
+        // Now execute until we hit a waiting node (userInput, button, interactive) or end
+        let outputText = [];
+        let mediaOutput = [];
+        let interactiveOptions = [];
+        let buttons = [];
+        let steps = 0;
+        
+        while (activeNode && steps < 15) {
+            steps++;
+            const nodeType = activeNode.type;
+            const config = activeNode.data?.config || {};
+            
+            if (nodeType === 'textMessage') {
+                if (config.message || config.text) outputText.push(config.message || config.text);
+            } else if (['image', 'video', 'audio', 'file'].includes(nodeType)) {
+                mediaOutput.push({
+                    type: nodeType,
+                    url: config.url || config.mediaUrl,
+                    caption: config.caption || ''
+                });
+            } else if (nodeType === 'goto') {
+                if (config.targetNodeId) {
+                    activeNode = nodes.find(n => n.id === config.targetNodeId);
+                    continue;
+                }
+            } else if (nodeType === 'end') {
+                if (config.message) outputText.push(config.message);
+                activeNode = null;
+                break;
+            } else if (nodeType === 'handoff') {
+                outputText.push(`[System: Handoff to human - Reason: ${config.reason || 'None'}]`);
+                activeNode = null;
+                break;
+            } else if (nodeType === 'userInput') {
+                if (config.question || config.text) outputText.push(config.question || config.text);
+                break; // Stop and wait for input
+            } else if (nodeType === 'button') {
+                const header = config.headerText || config.text || "Choose an option:";
+                // Generate button texts from edges
+                const btnEdges = edges.filter(e => e.source === activeNode.id);
+                buttons = btnEdges.map(e => e.sourceHandle).filter(Boolean);
+                outputText.push(`${header}`);
+                break; // Stop and wait for input
+            } else if (nodeType === 'interactive') {
+                const header = config.headerText || config.text || "Choose an option:";
+                const optsList = config.items || config.options || [];
+                interactiveOptions = optsList.map(o => ({ id: o.id || o.title, title: o.title || o.id, description: o.description }));
+                outputText.push(`${header}`);
+                break; // Stop and wait for input
+            } else if (nodeType === 'ai') {
+                outputText.push(`[AI Agent Reply simulated]`);
+            } else if (nodeType === 'condition') {
+                const outEdges = edges.filter(e => e.source === activeNode.id);
+                // For test, just take the first path always if condition logic is complex
+                const matchEdge = outEdges[0];
+                if (matchEdge) {
+                    activeNode = nodes.find(n => n.id === matchEdge.target);
+                    continue;
+                } else {
+                    break;
+                }
+            } else if (nodeType === 'abTest') {
+                const outEdges = edges.filter(e => e.source === activeNode.id);
+                const chosenPath = Math.random() < 0.5 ? 'pathA' : 'pathB';
+                const matchEdge = outEdges.find(e => e.sourceHandle === chosenPath) || outEdges[0];
+                outputText.push(`[A/B Test Simulation: Routed to ${chosenPath === 'pathA' ? 'Path A' : 'Path B'}]`);
+                if (matchEdge) {
+                    activeNode = nodes.find(n => n.id === matchEdge.target);
+                    continue;
+                } else {
+                    break;
+                }
+            }
+            
+            // Advance to next node
+            const nextEdge = edges.find(e => e.source === activeNode.id);
+            if (nextEdge) {
+                activeNode = nodes.find(n => n.id === nextEdge.target);
+            } else {
+                activeNode = null;
+            }
+        }
+        
+        res.json({
+            output: outputText.length > 0 ? outputText.join('\n\n') : null,
+            media: mediaOutput,
+            interactiveOptions,
+            buttons,
+            currentNodeId: activeNode ? activeNode.id : null,
+            flowState: flowState
+        });
+        
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+}
