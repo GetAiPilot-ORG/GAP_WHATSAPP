@@ -20,6 +20,7 @@ import {
 import { useAuth } from '../context/AuthContext'
 import { useDialog } from '../context/DialogContext'
 import { notify } from '../services/notificationService'
+import { BACKEND_URL as baseUrl } from '../config/api'
 
 export default function ScheduledMeetings() {
     const navigate = useNavigate()
@@ -52,7 +53,6 @@ export default function ScheduledMeetings() {
         )
 
         try {
-            const baseUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
             const res = await fetch(`${baseUrl}/api/appointments/${encodeURIComponent(item.id)}/status`, {
                 method: 'PATCH',
                 headers: {
@@ -93,7 +93,6 @@ export default function ScheduledMeetings() {
         setAppointments((prev) => prev.filter((app) => app.id !== item.id))
 
         try {
-            const baseUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
             const gEvtId = item.google_event_id || (item.source === 'Google Calendar' ? item.id : '')
             const queryParams = new URLSearchParams({
                 organization_id: organizationId,
@@ -137,7 +136,6 @@ export default function ScheduledMeetings() {
             setLoading(true)
             setError(null)
 
-            const baseUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
             const query = new URLSearchParams({
                 organization_id: organizationId,
                 page: String(page),

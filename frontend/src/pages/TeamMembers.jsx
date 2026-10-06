@@ -25,8 +25,7 @@ import {
     ArrowRight,
     SearchCode
 } from 'lucide-react'
-
-const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
+import { BACKEND_URL as BACKEND_BASE } from '../config/api'
 
 export default function TeamMembers() {
     const { session, userRole, apiCall, user, updateMyOnlineStatus } = useAuth()

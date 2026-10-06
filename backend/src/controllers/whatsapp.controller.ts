@@ -334,6 +334,20 @@ export async function addMetaAccount(req: any, res: Response) {
       console.error("Supabase upsert error:", error);
       throw new Error(error.message);
     }
+
+    if (waba_id && access_token) {
+      fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${String(waba_id).trim()}/message_templates?fields=id,name,language,status,category,components,quality_score,rejected_reason&limit=250`, {
+        headers: { Authorization: `Bearer ${String(access_token).trim()}` }
+      })
+      .then(res => res.json())
+      .then(async (json) => {
+        if (json?.data && Array.isArray(json.data)) {
+          await bulkUpsertLocalTemplateSubmissions(orgId, data.id, String(waba_id).trim(), json.data);
+        }
+      })
+      .catch(tErr => console.warn('[addMetaAccount] Background template sync error:', tErr.message));
+    }
+
     res.json({ success: true, account: toSafeWhatsappAccount(data) });
   } catch (err: any) {
     console.error("Error saving Meta account:", err);

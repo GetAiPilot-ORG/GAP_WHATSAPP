@@ -17,6 +17,7 @@ import TourButton from '../onboarding/TourButton'
 import WhatsAppMessagingGuideModal from '../components/WhatsAppMessagingGuideModal'
 import { supabase } from '../supabaseClient'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { BACKEND_URL as BACKEND_BASE } from '../config/api'
 
 function DiceBearAvatar({ seed, className }) {
     const colorClass = getAvatarColor(seed);
@@ -42,8 +43,6 @@ function DiceBearAvatar({ seed, className }) {
         </div>
     );
 }
-
-const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
 // Connect to backend
 const socket = io(BACKEND_BASE, {
@@ -627,6 +626,16 @@ export default function LiveChat() {
         }
     }, [])
 
+    const selectedAccountRef = useRef(selectedAccount)
+    useEffect(() => {
+        selectedAccountRef.current = selectedAccount
+    }, [selectedAccount])
+
+    const memberProfileRef = useRef(memberProfile)
+    useEffect(() => {
+        memberProfileRef.current = memberProfile
+    }, [memberProfile])
+
     const normalizeAccountKey = (value) => String(value || '').replace(/[^0-9]/g, '')
 
     const normalizeId = (value) => {
@@ -860,6 +869,7 @@ export default function LiveChat() {
             mimeType,
             fileName,
             durationSeconds: Number.isFinite(Number(durationSeconds)) ? Number(durationSeconds) : null,
+            transcript: m.transcript ?? m.content?.transcript ?? null,
             sender: m.direction === 'outbound' ? 'agent' : 'user',
             time: format(createdAt, 'h:mm a'),
             type: m.type === 'note' ? 'note' : (m.type || 'text'),
@@ -1539,14 +1549,34 @@ export default function LiveChat() {
         }
 
         const handleNewMessage = (msg) => {
+            if (!msg) return
             if (msg?.type === 'reaction' || msg?.type === 'protocol' || msg?.type === 'system') return
+
+            const currentOrgId = memberProfileRef.current?.organization_id || memberProfile?.organization_id
+            if (msg?.organization_id && currentOrgId && String(msg.organization_id) !== String(currentOrgId)) {
+                return
+            }
+
+            const currentSelected = selectedAccountRef.current
+            if (currentSelected && currentSelected !== 'All') {
+                const normSelected = normalizeAccountKey(currentSelected)
+                const msgWaAccountId = msg.wa_account_id ? String(msg.wa_account_id) : ''
+                const msgPhoneId = normalizeAccountKey(msg.phone_number_id || msg.connectedAccount || msg.account)
+
+                const hasAccountInfo = Boolean(msgWaAccountId || msgPhoneId)
+                const matchesAccount = (msgWaAccountId && msgWaAccountId === currentSelected) ||
+                    (normSelected && msgPhoneId && (normSelected === msgPhoneId || msgPhoneId.includes(normSelected) || normSelected.includes(msgPhoneId)))
+
+                if (hasAccountInfo && !matchesAccount) {
+                    return
+                }
+            }
 
             const convId = msg?.conversation_id
             const createdAt = msg?.created_at ? new Date(msg.created_at) : new Date()
 
             const activeChat = selectedChatRef.current
-
-            const conversationExists = convId ? chatsRef.current.some(c => idsEqual(c?.id, convId)) : true
+            const conversationExists = convId ? chatsRef.current.some(c => idsEqual(c?.id, convId)) : false
 
             const pageFocused = typeof document !== 'undefined'
                 ? (!document.hidden && (typeof document.hasFocus === 'function' ? document.hasFocus() : true))
@@ -1562,103 +1592,57 @@ export default function LiveChat() {
             }
 
             if (convId) {
-                setChats(prev => {
-                    const copy = [...prev]
-                    const idx = copy.findIndex(c => idsEqual(c?.id, convId))
-                    if (idx < 0) {
-                        const maybeName = typeof msg?.name === 'string' ? msg.name.trim() : ''
-                        const usableName = (maybeName && !maybeName.includes('@') && !/^\d+$/.test(maybeName)) ? maybeName : ''
-                        const display = usableName || (formatPhoneForDisplay(msg?.phone || msg?.from) || 'Unknown')
-                        const createdTime = createdAt
+                if (conversationExists) {
+                    setChats(prev => {
+                        const copy = [...prev]
+                        const idx = copy.findIndex(c => idsEqual(c?.id, convId))
+                        if (idx < 0) return prev
+
+                        const current = copy[idx]
                         const typeLabel = msg?.type ? String(msg.type) : ''
                         const preview = msg?.text || (typeLabel ? `[${typeLabel.charAt(0).toUpperCase()}${typeLabel.slice(1)}]` : 'New message')
+                        const isViewing = idsEqual(activeChat?.id, convId) && pageFocused
 
-                        const placeholder = {
-                            id: convId,
-                            contactId: msg?.contact_id || null,
-                            name: display,
-                            phone: msg?.phone || msg?.from || null,
-                            waId: msg?.from || null,
-                            contact: null,
+                        // If I'm actively viewing this chat, treat inbound as read immediately.
+                        const unreadInc = (inbound && !isViewing) ? 1 : 0
+                        const nextUnread = isViewing ? 0 : (unreadInc ? (current.unread || 0) + 1 : (current.unread || 0))
+
+                        const patched = {
+                            ...current,
                             lastMessage: preview,
-                            lastMessageAt: createdTime,
-                            time: format(createdTime, 'h:mm a'),
-                            unread: 1,
-                            userHasRead: false,
-                            status: 'open',
-                            tags: [],
-                            assigned_to: msg?.assigned_to || null,
-                            type: 'text'
+                            lastMessageAt: createdAt,
+                            time: format(createdAt, 'h:mm a'),
+                            unread: nextUnread,
+                            userHasRead: nextUnread === 0,
                         }
 
-                        return [placeholder, ...copy]
-                    }
-
-                    const current = copy[idx]
-                    const typeLabel = msg?.type ? String(msg.type) : ''
-                    const preview = msg?.text || (typeLabel ? `[${typeLabel.charAt(0).toUpperCase()}${typeLabel.slice(1)}]` : 'New message')
-                    const isViewing = idsEqual(activeChat?.id, convId) && pageFocused
-
-                    // If I'm actively viewing this chat, treat inbound as read immediately.
-                    const unreadInc = (inbound && !isViewing) ? 1 : 0
-                    const nextUnread = isViewing ? 0 : (unreadInc ? (current.unread || 0) + 1 : (current.unread || 0))
-
-                    const patched = {
-                        ...current,
-                        lastMessage: preview,
-                        lastMessageAt: createdAt,
-                        time: format(createdAt, 'h:mm a'),
-                        unread: nextUnread,
-                        userHasRead: nextUnread === 0,
-                    }
-
-                    copy.splice(idx, 1)
-                    return [patched, ...copy]
-                })
-
-                // If the sidebar doesn't know this conversation yet, refresh from server
-                // so we get correct name/contact/tags/unread.
-                if (!conversationExists) {
+                        copy.splice(idx, 1)
+                        return [patched, ...copy]
+                    })
+                } else {
+                    // Refresh from server to ensure proper tenant/account filtering and full contact info
                     scheduleChatRefresh()
                 }
             }
 
             // If this message belongs to currently open chat
-            if (activeChat) {
-                // Check match. Msg might have conversation_id or phone
-                const msgPhoneKey = normalizeAccountKey(msg.phone || msg.from)
-                const chatPhoneKey = normalizeAccountKey(activeChat.phone)
+            if (activeChat && convId && idsEqual(activeChat.id, convId)) {
+                setMessages(prev => mergeMessages(prev, normalizeSocketMessage(msg)))
 
-                const isMatch = (msg.conversation_id && idsEqual(msg.conversation_id, activeChat.id)) ||
-                    (msgPhoneKey && chatPhoneKey && msgPhoneKey === chatPhoneKey) ||
-                    (msg.contact_id && idsEqual(activeChat.contactId, msg.contact_id));
+                const nearBottom = isNearBottom()
 
-                if (isMatch) {
-                    setMessages(prev => mergeMessages(prev, normalizeSocketMessage(msg)));
-
-                    const nearBottom = isNearBottom()
-
-                    // Only mark read when the user is actually looking at the latest messages.
-                    if (user?.id && nearBottom && pageFocused && session?.access_token) {
-                        setTimeout(() => {
-                            fetch(`${API_BASE}/conversations/${activeChat.id}/read`, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${session.access_token}`
-                                },
-                                body: JSON.stringify({ user_id: user.id })
-                            }).catch(() => undefined)
-                        }, 250)
-                    }
-
-
-                } else if (msg?.conversation_id && idsEqual(msg.conversation_id, activeChat.id)) {
-                    // Fallback: if the server emitted a message for the active conversation but our match logic missed,
-                    // re-fetch to keep UI in sync.
+                // Only mark read when the user is actually looking at the latest messages.
+                if (user?.id && nearBottom && pageFocused && session?.access_token) {
                     setTimeout(() => {
-                        fetchMessages(activeChat)
-                    }, 150)
+                        fetch(`${API_BASE}/conversations/${activeChat.id}/read`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${session.access_token}`
+                            },
+                            body: JSON.stringify({ user_id: user.id })
+                        }).catch(() => undefined)
+                    }, 250)
                 }
             }
         };
@@ -1741,18 +1725,39 @@ export default function LiveChat() {
         });
 
         socket.on('message_updated', (update) => {
+            if (update?.organization_id && memberProfileRef.current?.organization_id && String(update.organization_id) !== String(memberProfileRef.current.organization_id)) {
+                return;
+            }
             const targetId = update?.message_id || null
             const targetWaId = update?.wa_message_id || null
             const nextReactions = Array.isArray(update?.reactions) ? update.reactions : null
-            if (!nextReactions) return
+            const nextContent = update?.content || null
+            if (!nextReactions && !nextContent) return
 
             setMessages(prev => prev.map(m => {
                 const match = (targetId && m.id === targetId) || (targetWaId && m.wa_message_id && m.wa_message_id === targetWaId)
-                return match ? { ...m, reactions: nextReactions } : m
+                if (!match) return m
+
+                const updated = { ...m }
+                if (nextReactions) {
+                    updated.reactions = nextReactions
+                }
+                if (nextContent) {
+                    updated.content = nextContent
+                    if (nextContent.media_url) updated.mediaUrl = nextContent.media_url
+                    if (nextContent.mime_type) updated.mimeType = nextContent.mime_type
+                    if (nextContent.file_name) updated.fileName = nextContent.file_name
+                    if (nextContent.transcript) updated.transcript = nextContent.transcript
+                    if (nextContent.text) updated.text = nextContent.text
+                }
+                return updated
             }))
         })
 
         socket.on('message_status_update', (update) => {
+            if (update?.organization_id && memberProfileRef.current?.organization_id && String(update.organization_id) !== String(memberProfileRef.current.organization_id)) {
+                return;
+            }
             console.log("Status update received:", update);
             setMessages(prev => prev.map(m =>
                 (m.wa_message_id && m.wa_message_id === update.wa_message_id)
@@ -2380,6 +2385,7 @@ export default function LiveChat() {
             }
 
             if (t === 'audio') {
+                const transcriptText = msg.transcript || msg.content?.transcript || (typeof msg.text === 'string' && msg.text.startsWith('[Voice Note]:') ? msg.text.replace(/^\[Voice Note\]:\s*"?/i, '').replace(/"?$/, '') : null);
                 return (
                     <div className="space-y-2">
                         <AudioMessageBubble
@@ -2389,7 +2395,20 @@ export default function LiveChat() {
                             isMine={msg.sender === 'agent'}
                             status={msg.status}
                         />
-                        {msg.text ? <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p> : null}
+                        {transcriptText ? (
+                            <div className={`mt-1.5 p-2 rounded-lg border text-xs leading-relaxed ${
+                                msg.sender === 'agent' 
+                                    ? 'bg-green-700/10 border-green-300 text-green-950' 
+                                    : 'bg-gray-50 border-gray-200 text-gray-800'
+                            }`}>
+                                <div className="flex items-center gap-1 font-semibold text-[11px] text-gray-500 mb-0.5">
+                                    <span>🎙️ Voice Transcript</span>
+                                </div>
+                                <p className="italic">{transcriptText}</p>
+                            </div>
+                        ) : msg.text && msg.text !== '[Audio]' ? (
+                            <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                        ) : null}
                     </div>
                 )
             }

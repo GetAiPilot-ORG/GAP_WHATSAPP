@@ -1,3 +1,4 @@
+import InfoHelp from '../components/InfoHelp'
 import { useEffect, useMemo, useRef, useState, Fragment } from 'react'
 import { gsap } from 'gsap'
 import { useGSAP } from '@gsap/react'
@@ -31,10 +32,7 @@ import {
 import { useAuth } from '../context/AuthContext'
 import { useDialog } from '../context/DialogContext'
 import { FALLBACK_PLANS } from '../config/whatsappPricing'
-
-
-const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
-const API_BASE = `${BACKEND_BASE}/api`
+import { BACKEND_URL as BACKEND_BASE, API_BASE } from '../config/api'
 
 const MODELS = [
     { value: 'gpt-4o-mini', label: 'GPT-4o Mini', helper: 'Fast support replies' },
@@ -909,7 +907,7 @@ function ApiKeyModal({ apiKey, setApiKey, configured, isSaving, onClose, onSave 
         </div>
     )
 }
-function StatCard({ icon, label, value, helper }) {
+function StatCard({ icon, label, value, helper, info }) {
     const IconComponent = icon
     return (
         <div className="stat-card-item rounded-lg bg-white p-5 border border-gray-200 shadow-2xs flex flex-col justify-between">

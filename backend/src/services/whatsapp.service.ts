@@ -62,7 +62,11 @@ export async function connectToWhatsApp(sessionId: string, orgId: string, io?: a
         if (qr) {
             latestQrBySession.set(sessionId, { qr, createdAt: Date.now() });
             if (io) {
-                io.emit("qr", { sessionId, qr });
+                if (orgId) {
+                    io.to(`org:${orgId}`).emit("qr", { sessionId, qr, organization_id: orgId });
+                } else {
+                    io.emit("qr", { sessionId, qr });
+                }
             }
         }
 
@@ -87,7 +91,11 @@ export async function connectToWhatsApp(sessionId: string, orgId: string, io?: a
                 latestQrBySession.delete(sessionId);
                 reconnectAttempts.delete(sessionId);
                 if (io) {
-                    io.emit("disconnected", { sessionId });
+                    if (orgId) {
+                        io.to(`org:${orgId}`).emit("disconnected", { sessionId, organization_id: orgId });
+                    } else {
+                        io.emit("disconnected", { sessionId });
+                    }
                 }
             }
         } else if (connection === 'open') {
@@ -97,7 +105,11 @@ export async function connectToWhatsApp(sessionId: string, orgId: string, io?: a
             latestQrBySession.delete(sessionId);
             
             if (io) {
-                io.emit("ready", { sessionId });
+                if (orgId) {
+                    io.to(`org:${orgId}`).emit("ready", { sessionId, organization_id: orgId });
+                } else {
+                    io.emit("ready", { sessionId });
+                }
             }
         }
     });

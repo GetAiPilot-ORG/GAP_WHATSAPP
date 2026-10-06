@@ -19,6 +19,7 @@ import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import { useDialog } from '../../context/DialogContext';
 import TourButton from '../../onboarding/TourButton';
+import { BACKEND_URL as API_URL } from '../../config/api';
 
 // Import all node components
 import StartBotFlowNode from './StartBotFlowNode';
@@ -381,7 +382,6 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
 
     const handleSave = async () => {
         try {
-            const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
             await axios.put(`${API_URL}/api/flows/${flow.id}`, {
                 nodes,
                 edges,
@@ -400,7 +400,6 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
 
     const handlePublish = async () => {
         try {
-            const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
             await axios.put(`${API_URL}/api/flows/${flow.id}`, {
                 nodes,
                 edges,
