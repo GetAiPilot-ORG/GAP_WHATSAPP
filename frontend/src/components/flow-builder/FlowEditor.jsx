@@ -11,9 +11,10 @@ import ReactFlow, {
     BaseEdge,
     EdgeLabelRenderer,
     getSmoothStepPath,
+    MiniMap,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { Save, ArrowLeft, Play, Zap, Handshake, Square, Plus, MoreHorizontal, X, ChevronDown } from 'lucide-react';
+import { Save, ArrowLeft, Play, Zap, Handshake, Square, Plus, MoreHorizontal, X, ChevronDown, Undo2, Redo2, Workflow } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import { useDialog } from '../../context/DialogContext';
@@ -31,6 +32,7 @@ import LocationNode from './LocationNode';
 import HTTPAPINode from './HTTPAPINode';
 import AINode from './AINode';
 import InteractiveNode from './InteractiveNode';
+import ABTestNode from './ABTestNode';
 import WhatsAppFlowNode from './WhatsAppFlowNode';
 import GoogleSheetsNode from './GoogleSheetsNode';
 import TemplateMessageNode from './TemplateMessageNode';
@@ -42,6 +44,10 @@ import EnhancedFlowSidebar from './EnhancedFlowSidebar';
 import NodeConfigPanel from './NodeConfigPanel';
 import BaseNode from './BaseNode';
 import WhatsAppPreviewPanel from './WhatsAppPreviewPanel';
+import useUndoRedo from './useUndoRedo';
+import useAutoLayout from './useAutoLayout';
+import GoToNode from './GoToNode';
+import FlowTester from './FlowTester';
 
 function DeletableEdge({
     id,
@@ -109,11 +115,13 @@ const nodeTypes = {
     httpApi: HTTPAPINode,
     ai: AINode,
     interactive: InteractiveNode,
+    abTest: ABTestNode,
     whatsappFlow: WhatsAppFlowNode,
     googleSheets: GoogleSheetsNode,
     template: TemplateMessageNode,
     appointment: AppointmentNode,
     product: ProductNode,
+    goto: GoToNode,
     handoff: ({ id, data, selected }) => (
         <BaseNode id={id} data={data} selected={selected} icon={Handshake} title="Handoff to Human" color="orange">
             <div className="text-xs text-gray-600">{data?.config?.reason || 'Request sales agent help'}</div>
@@ -134,8 +142,21 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
     const { session } = useAuth();
     const { alertDialog } = useDialog();
     const reactFlowWrapper = useRef(null);
-    const [nodes, setNodes, onNodesChange] = useNodesState(flow?.nodes || []);
-    const [edges, setEdges, onEdgesChange] = useEdgesState(flow?.edges || []);
+    const getInitialState = (key, fallback) => {
+        try {
+            const draft = localStorage.getItem(`flowDraft_${flow?.id}`);
+            if (draft) {
+                const parsed = JSON.parse(draft);
+                if (parsed[key] && Array.isArray(parsed[key])) return parsed[key];
+            }
+        } catch (e) {
+            console.error('Error loading draft', e);
+        }
+        return fallback;
+    };
+
+    const [nodes, setNodes, onNodesChange] = useNodesState(getInitialState('nodes', flow?.nodes || []));
+    const [edges, setEdges, onEdgesChange] = useEdgesState(getInitialState('edges', flow?.edges || []));
     const [reactFlowInstance, setReactFlowInstance] = useState(null);
     const [selectedNodeId, setSelectedNodeId] = useState(null);
     const [selectedEdgeId, setSelectedEdgeId] = useState(null);
@@ -143,6 +164,7 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
     const [previewNodeId, setPreviewNodeId] = useState(null);
     const [accountScope, setAccountScope] = useState(flow?.wa_account_scope || 'all');
     const [accountIds, setAccountIds] = useState(Array.isArray(flow?.wa_account_ids) ? flow.wa_account_ids : []);
+    const [isTesterOpen, setIsTesterOpen] = useState(false);
 
     // Mobile-specific state
     const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
@@ -150,12 +172,24 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
     const [mobileConfigOpen, setMobileConfigOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
 
+    const { undo, redo, canUndo, canRedo } = useUndoRedo(nodes, setNodes, edges, setEdges);
+    const autoLayout = useAutoLayout();
+
     useEffect(() => {
         const check = () => setIsMobile(window.innerWidth < 768);
         check();
         window.addEventListener('resize', check);
         return () => window.removeEventListener('resize', check);
     }, []);
+
+    // Autosave draft locally to prevent data loss on refresh
+    useEffect(() => {
+        if (!flow?.id) return;
+        const timer = setTimeout(() => {
+            localStorage.setItem(`flowDraft_${flow.id}`, JSON.stringify({ nodes, edges }));
+        }, 800);
+        return () => clearTimeout(timer);
+    }, [nodes, edges, flow?.id]);
 
     const selectedNode = nodes.find((node) => node.id === selectedNodeId) || null;
     const previewNode = nodes.find((node) => node.id === previewNodeId) || null;
@@ -202,6 +236,7 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
                     onDelete: handleDeleteNode,
                     onUpdate: handleUpdateNode,
                     onPreview: setPreviewNodeId,
+                    onDuplicate: handleDuplicateNode,
                 },
             };
 
@@ -239,6 +274,7 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
                 onDelete: handleDeleteNode,
                 onUpdate: handleUpdateNode,
                 onPreview: setPreviewNodeId,
+                onDuplicate: handleDuplicateNode,
             },
         };
 
@@ -257,6 +293,32 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
         }
     };
 
+    const handleDuplicateNode = useCallback((nodeId) => {
+        setNodes((nds) => {
+            const nodeToDuplicate = nds.find((n) => n.id === nodeId);
+            if (!nodeToDuplicate) return nds;
+
+            const suffix = Math.random().toString(36).substring(2, 8);
+            const newNodeId = `node_${Date.now()}_${suffix}`;
+
+            const newNode = {
+                ...nodeToDuplicate,
+                id: newNodeId,
+                position: {
+                    x: nodeToDuplicate.position.x + 40,
+                    y: nodeToDuplicate.position.y + 40
+                },
+                selected: true,
+                data: {
+                    ...nodeToDuplicate.data,
+                    status: { sent: 0, delivered: 0, subscribers: 0, errors: 0 }
+                }
+            };
+            return [...nds, newNode];
+        });
+        // Deselect the old one if needed, we've set the new one to selected: true.
+    }, []);
+
     const handleDeleteEdge = useCallback((edgeId) => {
         setEdges((eds) => eds.filter((edge) => edge.id !== edgeId));
         setSelectedEdgeId(null);
@@ -274,6 +336,7 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
     };
 
     const onNodeClick = useCallback((event, node) => {
+        setIsTesterOpen(false);
         setSelectedNodeId(node.id);
         setSelectedEdgeId(null);
         if (isMobile) {
@@ -285,6 +348,7 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
     }, [isMobile]);
 
     const onPaneClick = useCallback(() => {
+        setIsTesterOpen(false);
         setSelectedNodeId(null);
         setSelectedEdgeId(null);
         setConfigPanelOpen(false);
@@ -326,6 +390,7 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
             }, {
                 headers: { Authorization: `Bearer ${session?.access_token}` }
             });
+            localStorage.removeItem(`flowDraft_${flow.id}`);
             await alertDialog('Draft saved. Click Publish to make this flow live on WhatsApp.', { title: 'Draft saved', tone: 'success' });
         } catch (error) {
             console.error('Error saving flow:', error);
@@ -346,6 +411,7 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
             await axios.post(`${API_URL}/api/flows/${flow.id}/publish`, {}, {
                 headers: { Authorization: `Bearer ${session?.access_token}` }
             });
+            localStorage.removeItem(`flowDraft_${flow.id}`);
             onClose();
         } catch (error) {
             const details = error?.response?.data?.validation?.errors || [error?.response?.data?.error || 'Failed to publish flow'];
@@ -354,8 +420,27 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
     };
 
     const handleTest = async () => {
-        console.log('Testing flow:', { nodes, edges });
-        await alertDialog('Flow test started. Check console for details.', { title: 'Test started', tone: 'info' });
+        // Open instantly to prevent UI lag
+        setConfigPanelOpen(false);
+        setMobileConfigOpen(false);
+        setSelectedNodeId(null);
+        setIsTesterOpen(true);
+        
+        // Save the flow in the background before testing
+        try {
+            const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+            await axios.put(`${API_URL}/api/flows/${flow.id}`, { 
+                nodes, 
+                edges,
+                wa_account_scope: accountScope,
+                wa_account_ids: accountScope === 'selected' ? accountIds : [],
+            }, {
+                headers: { Authorization: `Bearer ${session?.access_token}` }
+            });
+        } catch (error) {
+            console.error("Test Flow Save Error:", error);
+            // Optionally, we could close it on error, but showing an alert is fine
+        }
     };
 
     return (
@@ -382,6 +467,28 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
 
                 {/* Right: Publish + More */}
                 <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center gap-0.5 border-r border-gray-200 pr-1.5 mr-0.5">
+                        <button
+                            onClick={undo}
+                            disabled={!canUndo}
+                            className="h-8 w-8 text-gray-600 disabled:text-gray-300 hover:text-gray-900 hover:bg-gray-100 rounded-full inline-flex items-center justify-center transition-colors"
+                        >
+                            <Undo2 className="h-4 w-4" />
+                        </button>
+                        <button
+                            onClick={redo}
+                            disabled={!canRedo}
+                            className="h-8 w-8 text-gray-600 disabled:text-gray-300 hover:text-gray-900 hover:bg-gray-100 rounded-full inline-flex items-center justify-center transition-colors"
+                        >
+                            <Redo2 className="h-4 w-4" />
+                        </button>
+                        <button
+                            onClick={autoLayout}
+                            className="h-8 w-8 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full inline-flex items-center justify-center transition-colors"
+                        >
+                            <Workflow className="h-4 w-4" />
+                        </button>
+                    </div>
                     <button
                         onClick={handlePublish}
                         className="inline-flex h-8 items-center justify-center gap-1.5 rounded-full bg-black px-3.5 text-xs font-semibold text-white transition-colors hover:bg-[#181818]"
@@ -400,42 +507,71 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
             </div>
 
             {/* ── DESKTOP HEADER (md+) ── */}
-            <div className="hidden md:flex bg-white border-b border-gray-200 px-5 py-1 items-center justify-between">
-                <div className="flex items-center gap-3">
+            <div className="hidden md:flex bg-white border-b border-gray-200 px-5 py-1 items-center justify-between min-w-0">
+                <div className="flex flex-1 min-w-0 items-center gap-3 mr-4">
                     <button
                         onClick={onClose}
-                        className="h-8 w-8 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors inline-flex items-center justify-center"
+                        className="shrink-0 h-8 w-8 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors inline-flex items-center justify-center"
                         title="Back"
                     >
                         <ArrowLeft className="h-4 w-4" />
                     </button>
-                    <div>
-                        <h1 className="text-base font-semibold leading-tight text-black">{flow.name}</h1>
-                        {flow.description && <p className="text-[11px] text-gray-500 mt-0.5">{flow.description}</p>}
+                    <div className="min-w-0">
+                        <h1 className="text-base font-semibold leading-tight text-black truncate">{flow.name}</h1>
+                        {flow.description && <p className="text-[11px] text-gray-500 mt-0.5 truncate">{flow.description}</p>}
                     </div>
                 </div>
-                <div className="flex items-center gap-3">
-                    <TourButton compact />
-                    <AccountTargetControl
-                        accounts={waAccounts}
-                        scope={accountScope}
-                        selectedIds={accountIds}
-                        onScopeChange={setAccountScope}
-                        onSelectedIdsChange={setAccountIds}
-                    />
+                    <div className="flex shrink-0 items-center gap-3">
+                        <TourButton compact />
+                        {waAccounts.length > 1 && (
+                            <AccountTargetControl
+                                accounts={waAccounts}
+                                scope={accountScope}
+                                selectedIds={accountIds}
+                                onScopeChange={setAccountScope}
+                                onSelectedIdsChange={setAccountIds}
+                            />
+                        )}
                     <div className="text-xs text-gray-600 px-3 py-1 bg-[#f5f7fa] rounded-full">
                         <span className="font-semibold">{nodes.length}</span> nodes · <span className="font-semibold">{edges.length}</span> connections
                     </div>
+                    
+                    <div className="flex items-center gap-1 border-r border-gray-200 pr-3 mr-1">
+                        <button
+                            onClick={undo}
+                            disabled={!canUndo}
+                            className="h-8 w-8 text-gray-600 disabled:text-gray-300 hover:text-gray-900 hover:bg-gray-100 rounded-full inline-flex items-center justify-center transition-colors"
+                            title="Undo"
+                        >
+                            <Undo2 className="h-4 w-4" />
+                        </button>
+                        <button
+                            onClick={redo}
+                            disabled={!canRedo}
+                            className="h-8 w-8 text-gray-600 disabled:text-gray-300 hover:text-gray-900 hover:bg-gray-100 rounded-full inline-flex items-center justify-center transition-colors"
+                            title="Redo"
+                        >
+                            <Redo2 className="h-4 w-4" />
+                        </button>
+                        <button
+                            onClick={autoLayout}
+                            className="h-8 w-8 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full inline-flex items-center justify-center transition-colors"
+                            title="Format Flow Layout"
+                        >
+                            <Workflow className="h-4 w-4" />
+                        </button>
+                    </div>
+
                     <button
                         onClick={handleTest}
-                        className="fp-button-secondary !h-8 !px-4 !text-xs"
+                        className="fp-button-secondary !h-8 !px-4 !text-xs whitespace-nowrap"
                     >
                         <Play className="h-4 w-4" />
                         Test Flow
                     </button>
                     <button
                         onClick={handleSave}
-                        className="inline-flex h-8 items-center justify-center gap-2 rounded-full bg-[#25D366] px-4 text-xs font-semibold text-white transition-colors hover:bg-[#1fb85a] disabled:opacity-50"
+                        className="inline-flex h-8 items-center justify-center gap-2 rounded-full bg-[#25D366] px-4 text-xs font-semibold text-white transition-colors hover:bg-[#1fb85a] disabled:opacity-50 whitespace-nowrap"
                     >
                         <Save className="h-4 w-4" />
                         Save Flow
@@ -455,7 +591,7 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
 
                 {/* Desktop Sidebar (md+) */}
                 <div data-tour="flow-editor-sidebar" className="hidden md:block h-full shrink-0">
-                    <EnhancedFlowSidebar onDragStart={onDragStart} />
+                    <EnhancedFlowSidebar onDragStart={onDragStart} onMobileTap={handleMobileTapNode} />
                 </div>
 
                 {/* Canvas — full width on mobile, shared on desktop */}
@@ -469,6 +605,7 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
                                 onDelete: handleDeleteNode,
                                 onUpdate: handleUpdateNode,
                                 onPreview: setPreviewNodeId,
+                                onDuplicate: handleDuplicateNode,
                             },
                         }))}
                         edges={edges.map(edge => ({
@@ -508,6 +645,21 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
                     >
                         <Controls className="flow-controls bg-white border border-gray-200 rounded-lg" />
                         <Background variant="dots" gap={18} size={1.2} color="#cbd5e1" />
+                        
+                        <MiniMap 
+                            className="bg-white border border-gray-200 rounded-lg shadow-sm"
+                            nodeColor={(n) => {
+                                if (n.type === 'startBotFlow') return '#25D366';
+                                if (n.type === 'end') return '#0d9488';
+                                if (n.type === 'userInput' || n.type === 'button' || n.type === 'interactive' || n.type === 'whatsappFlow') return '#3b82f6';
+                                if (n.type === 'condition' || n.type === 'logic') return '#f97316';
+                                return '#e2e8f0';
+                            }}
+                            maskColor="rgba(240, 242, 245, 0.7)"
+                            position="bottom-right"
+                            pannable={true}
+                            zoomable={true}
+                        />
 
                         {/* Empty State */}
                         {nodes.length === 0 && (
@@ -537,6 +689,7 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
                     {!isMobile && configPanelOpen && selectedNode && (
                         <NodeConfigPanel
                             node={selectedNode}
+                            nodes={nodes}
                             onClose={() => setConfigPanelOpen(false)}
                             onSave={handleSaveConfig}
                         />
@@ -615,16 +768,18 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
 
                         {/* Account Scope */}
                         <div className="px-4 pb-3">
-                            <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Run on numbers</p>
-                                <MobileAccountTargetControl
-                                    accounts={waAccounts}
-                                    scope={accountScope}
-                                    selectedIds={accountIds}
-                                    onScopeChange={setAccountScope}
-                                    onSelectedIdsChange={setAccountIds}
-                                />
-                            </div>
+                            {waAccounts.length > 1 && (
+                                <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Run on numbers</p>
+                                    <MobileAccountTargetControl
+                                        accounts={waAccounts}
+                                        scope={accountScope}
+                                        selectedIds={accountIds}
+                                        onScopeChange={setAccountScope}
+                                        onSelectedIdsChange={setAccountIds}
+                                    />
+                                </div>
+                            )}
                         </div>
 
                         {/* Safe-area spacer */}
@@ -691,11 +846,21 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
                     <div className="flex-1 overflow-hidden relative">
                         <NodeConfigPanel
                             node={selectedNode}
+                            nodes={nodes}
                             onClose={() => { setMobileConfigOpen(false); setSelectedNodeId(null); }}
                             onSave={(nodeId, config) => { handleSaveConfig(nodeId, config); setMobileConfigOpen(false); setSelectedNodeId(null); }}
                         />
                     </div>
                 </div>
+            )}
+            
+            {/* Flow Tester Mobile Popup */}
+            {isTesterOpen && (
+                <FlowTester 
+                    flow={flow} 
+                    isOpen={isTesterOpen} 
+                    onClose={() => setIsTesterOpen(false)} 
+                />
             )}
         </div>
     );
@@ -729,7 +894,7 @@ function AccountTargetControl({ accounts, scope, selectedIds, onScopeChange, onS
             <div className="relative" ref={dropdownRef}>
                 <button
                     onClick={() => setIsOpen(!isOpen)}
-                    className="flex h-7 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-100 focus:outline-none"
+                    className="flex h-7 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-100 focus:outline-none whitespace-nowrap"
                     title="Choose where this flow can run"
                 >
                     {scope === 'all' ? 'Runs on all numbers' : 'Runs on selected numbers'}

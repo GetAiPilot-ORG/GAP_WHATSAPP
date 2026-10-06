@@ -1080,10 +1080,33 @@ export async function handleWebhook(req: any, res: Response) {
       webhookLog("socket.emit.new_message.ok", {
         requestId,
         room: `org:${organization_id}`,
-        conversation_id: conv.id,
-        message_id: storedInbound?.id || null,
-        wa_message_id,
       });
+
+      // ----------------------------------------------------------------------
+      // ECOSYSTEM INTEGRATION: Notify CRM that lead responded
+      // ----------------------------------------------------------------------
+      try {
+        const crmWebhookUrl = process.env.ECOSYSTEM_WEBHOOK_URL;
+        if (crmWebhookUrl) {
+          await fetch(crmWebhookUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-ecosystem-secret': process.env.ECOSYSTEM_SYNC_SECRET || ''
+            },
+            body: JSON.stringify({
+              org_id: organization_id,
+              lead_phone: from,
+              status: 'customer',
+              source: 'GAP_WHATSAPP'
+            })
+          });
+          webhookLog("ecosystem.notify.ok", { requestId, phone: from });
+        }
+      } catch (ecoErr) {
+        console.error("[Webhook] Failed to notify CRM Ecosystem:", ecoErr);
+      }
+      // ----------------------------------------------------------------------
 
       // If media, download from Meta and store in Supabase Storage
       if (["image", "video", "audio", "document"].includes(type)) {

@@ -437,8 +437,8 @@ export async function getMyProfile(req: any, res: Response) {
             subscription = sub;
         }
 
-        // Also fallback to organization plan if subscription in app_user_subscriptions is missing
-        if (!subscription && orgId) {
+        // Also fallback to organization plan if subscription in app_user_subscriptions is missing or empty
+        if ((!subscription || (!subscription.plan_id && !subscription.plan_label)) && orgId) {
             const { data: org } = await supabase
                 .from('organizations')
                 .select('plan_id, plan_status, is_active, subscription_tier')

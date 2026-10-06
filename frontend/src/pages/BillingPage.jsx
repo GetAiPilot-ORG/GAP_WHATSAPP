@@ -763,7 +763,7 @@ export default function BillingPage() {
                                         <div className="flex flex-wrap items-center gap-2">
                                             <p className="text-sm font-semibold text-gray-900">{getMessageChargeTitle(charge)}</p>
                                             <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${charge.billing_status === 'charged' ? 'bg-green-50 text-green-700 ring-green-600/20' : charge.billing_status === 'failed' ? 'bg-red-50 text-red-700 ring-red-600/10' : 'bg-gray-50 text-gray-600 ring-gray-200'}`}>
-                                                {String(charge.billing_status || 'recorded').replaceAll('_', ' ')}
+                                                {String(charge.billing_status || 'recorded').replace(/_/g, ' ')}
                                             </span>
                                         </div>
                                         <p className="mt-1 truncate text-xs text-gray-500">
@@ -1295,7 +1295,7 @@ export default function BillingPage() {
                             return (
                                 <div key={tx.id} className="flex items-center justify-between gap-4 p-4">
                                     <div>
-                                        <p className="text-sm font-semibold capitalize text-gray-900">{String(tx.type || '').replaceAll('_', ' ')}</p>
+                                        <p className="text-sm font-semibold capitalize text-gray-900">{String(tx.type || '').replace(/_/g, ' ')}</p>
                                         <div className="mt-1 flex items-center gap-2">
                                             {isPending ? (
                                                 <span className="inline-flex rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/10">
@@ -1472,7 +1472,7 @@ export default function BillingPage() {
 
 function getMessageChargeTitle(charge) {
     const source = String(charge.source || '').toLowerCase()
-    const category = String(charge.category || 'message').replaceAll('_', ' ')
+    const category = String(charge.category || 'message').replace(/_/g, ' ')
     if (source === 'broadcast') return `Broadcast ${category} charge`
     if (source === 'flow') return `Flow automation ${category} charge`
     if (source === 'ai_agent') return `AI agent ${category} charge`
@@ -1494,7 +1494,7 @@ function getPlanDisplayName(planId, plans = []) {
 
     return plans.find(plan => String(plan.id).toLowerCase() === normalized)?.name
         || FALLBACK_PLANS.find(plan => String(plan.id).toLowerCase() === normalized)?.name
-        || (planId ? String(planId).replaceAll('_', ' ') : 'Plan')
+        || (planId ? String(planId).replace(/_/g, ' ') : 'Plan')
 }
 
 function SubscriptionInvoiceRow({ invoice, plans }) {
@@ -1524,7 +1524,7 @@ function SubscriptionInvoiceRow({ invoice, plans }) {
                                     ? 'bg-red-50 text-red-700 ring-red-600/10'
                                     : 'bg-gray-50 text-gray-600 ring-gray-200'
                     }`}>
-                        {status.replaceAll('_', ' ')}
+                        {status.replace(/_/g, ' ')}
                     </span>
                     <span className="text-xs text-gray-500">
                         {invoice.created_at ? new Date(invoice.created_at).toLocaleDateString('en-IN') : 'Recorded'}

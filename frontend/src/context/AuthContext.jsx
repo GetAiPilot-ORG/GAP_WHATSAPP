@@ -17,7 +17,7 @@ function resolvePlanName(plan) {
     if (p.includes('growth')) return 'GAP Growth'
     if (p.includes('core')) return 'GAP Core'
     if (p.includes('starter')) return 'GAP Starter'
-    return plan
+    return planStr
 }
 
 export function AuthProvider({ children }) {
@@ -49,6 +49,7 @@ export function AuthProvider({ children }) {
                     setMemberProfile(data);
 
                     if (data?.subscription) {
+                        console.log('[AUTH_DEBUG] Profile Subscription data:', data.subscription);
                         const expiresAt = data.subscription.expires_at ? new Date(data.subscription.expires_at).getTime() : 0;
                         const isSubActive = (data.subscription.status === 'active' || data.subscription.status === 'trial') && (!data.subscription.expires_at || expiresAt > Date.now());
                         let resolvedPlan = isSubActive
@@ -56,6 +57,7 @@ export function AuthProvider({ children }) {
                             : 'Free Plan';
                         const resolvedStatus = isSubActive ? 'active' : (data.subscription ? 'expired' : 'inactive');
                         resolvedPlan = resolvePlanName(resolvedPlan);
+                        console.log('[AUTH_DEBUG] Profile Resolved post-format:', resolvedPlan);
 
                         setUser(prev => prev ? {
                             ...prev,
@@ -121,6 +123,7 @@ export function AuthProvider({ children }) {
 
                 // Inherit the organization's subscription status
                 if (data?.subscription) {
+                    console.log('[AUTH_DEBUG] Subscription data:', data.subscription);
                     const expiresAt = data.subscription.expires_at ? new Date(data.subscription.expires_at).getTime() : 0
                     const isSubActive = (data.subscription.status === 'active' || data.subscription.status === 'trial') && (!data.subscription.expires_at || expiresAt > Date.now())
                     let resolvedPlan = isSubActive
@@ -128,6 +131,7 @@ export function AuthProvider({ children }) {
                         : 'Free Plan'
                     const resolvedStatus = isSubActive ? 'active' : (data.subscription ? 'expired' : 'inactive')
                     resolvedPlan = resolvePlanName(resolvedPlan)
+                    console.log('[AUTH_DEBUG] Resolved post-format:', resolvedPlan);
 
                     setUser(prev => prev ? {
                         ...prev,

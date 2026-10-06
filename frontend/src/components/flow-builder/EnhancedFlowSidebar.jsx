@@ -1,7 +1,8 @@
 import {
     Bot, Calendar, ChevronDown, FileSpreadsheet, FileText, GitBranch, Globe,
     Handshake, Image, Link2, MapPin, MessageSquare, Music, PackageSearch,
-    Rocket, Search, Square, UserCircle, Video, Workflow, File, X
+    Rocket, Search, Square, UserCircle, Video, Workflow, File, X, Waypoints,
+    SplitSquareHorizontal
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
@@ -125,6 +126,14 @@ const nodeCategories = [
         title: 'Logic',
         nodes: [
             {
+                type: 'abTest',
+                icon: SplitSquareHorizontal,
+                label: 'A/B Test',
+                description: 'Split traffic 50/50 to test flows.',
+                useCase: 'Analyze which flow gets more responses.',
+                setup: ['Connect Path A', 'Connect Path B'],
+            },
+            {
                 type: 'condition',
                 icon: GitBranch,
                 label: 'Condition',
@@ -139,6 +148,14 @@ const nodeCategories = [
                 description: 'Send the chat to a team member.',
                 useCase: 'Use when the customer asks for sales, escalation, or complex support.',
                 setup: ['Set handoff reason', 'Choose team or agent', 'Add internal note'],
+            },
+            {
+                type: 'goto',
+                icon: Waypoints,
+                label: 'Jump to Node',
+                description: 'Teleport to another part of the flow.',
+                useCase: 'Use to jump back to a main menu or repeat a step without drawing a messy line.',
+                setup: ['Place node', 'Select target node from list'],
             },
             {
                 type: 'end',
@@ -237,31 +254,23 @@ export default function EnhancedFlowSidebar({ onDragStart, mobileMode = false, o
     return (
         <div className={`bg-white flex flex-col h-full ${mobileMode ? 'w-full' : 'w-[316px] border-r border-gray-200'}`}>
             {/* Header */}
-            <div className="border-b border-gray-200 px-4 py-3">
-                <div className="flex items-center justify-between gap-3">
-                    <div className={mobileMode ? 'flex items-center gap-2' : ''}>
-                        {!mobileMode && (
-                            <>
-                                <h3 className="text-sm font-semibold text-black">Nodes</h3>
-                                <p className="text-[11px] text-gray-500">Drag blocks to build WhatsApp automation.</p>
-                            </>
-                        )}
-                        {mobileMode && (
-                            <h3 className="text-sm font-semibold text-black">Add Node</h3>
-                        )}
-                    </div>
-                    <span className="rounded-full bg-gray-100 px-2 py-1 text-[10px] font-semibold text-gray-600 shrink-0">
+            <div className="border-b border-gray-100 px-4 py-3 bg-white/80 backdrop-blur-md z-10 relative shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)]">
+                <div className="flex items-center justify-between gap-2 mb-3">
+                    <h3 className="text-sm font-bold text-gray-900 tracking-tight flex items-center gap-2">
+                        {mobileMode ? 'Add Node' : 'Nodes'}
+                    </h3>
+                    <span className="rounded-full bg-gray-50 px-2 py-0.5 text-[10px] font-semibold text-gray-500 shrink-0 border border-gray-200 shadow-sm">
                         {allNodes.length} blocks
                     </span>
                 </div>
-                <div className="relative mt-3">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <div className="relative group">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400 group-focus-within:text-[#25D366] transition-colors" />
                     <input
                         type="text"
-                        placeholder="Search nodes..."
+                        placeholder="Search blocks..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="fp-input h-9 pl-9 text-xs"
+                        className="w-full h-8 pl-9 pr-3 text-xs rounded-lg bg-gray-50 border border-gray-200 focus:bg-white focus:border-[#25D366] focus:ring-2 focus:ring-[#25D366]/10 outline-none transition-all placeholder:text-gray-400"
                     />
                 </div>
             </div>
@@ -338,7 +347,12 @@ export default function EnhancedFlowSidebar({ onDragStart, mobileMode = false, o
                                                     setHoveredComingSoonNode(null);
                                                 }}
                                                 onFocus={() => setActiveNode(node)}
-                                                onClick={() => setActiveNode(node)}
+                                                onClick={() => {
+                                                    setActiveNode(node);
+                                                    if (!node.comingSoon && onMobileTap) {
+                                                        onMobileTap(node.type);
+                                                    }
+                                                }}
                                                 onDragStart={(e) => {
                                                     if (node.comingSoon) {
                                                         e.preventDefault();
@@ -422,30 +436,34 @@ function NodeHelp({ node }) {
     const Icon = node.icon;
 
     return (
-        <div className="border-t border-gray-200 bg-[#f5f7fa] p-3">
-            <div className="rounded-lg border border-gray-200 bg-white p-3">
-                <div className="flex items-start gap-2.5">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-gray-200 bg-[#f5f7fa] text-[#128C7E]">
-                        <Icon className="h-4 w-4 stroke-[1.8]" />
-                    </span>
-                    <div className="min-w-0">
-                        <div className="text-xs font-semibold text-gray-900">{node.label}</div>
-                        <p className="mt-1 text-[11px] leading-4 text-gray-600">{node.useCase}</p>
+        <div className="relative border-t border-gray-100 bg-white p-3 shrink-0">
+            {/* Ambient background glow */}
+            <div className="absolute inset-0 bg-gradient-to-t from-[#25D366]/[0.02] to-transparent pointer-events-none" />
+            
+            <div className="relative rounded-xl border border-gray-100 bg-white shadow-[0_2px_12px_rgba(0,0,0,0.04)] overflow-hidden">
+                {/* Subtle top highlight */}
+                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#25D366]/30 to-transparent" />
+                
+                <div className="p-3">
+
+                    
+                    <div className="rounded-lg bg-gray-50/80 border border-gray-100 p-2.5">
+                        <div className="text-[9px] font-bold uppercase tracking-wider text-gray-500 mb-2 flex items-center gap-1.5">
+                            <span className="flex h-1.5 w-1.5 relative">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#25D366] opacity-40"></span>
+                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#25D366]"></span>
+                            </span>
+                            {node.label}
+                        </div>
+                        <ul className="space-y-1.5">
+                            {node.setup.map((item, index) => (
+                                <li key={index} className="flex items-start gap-2 text-[10px] leading-relaxed text-gray-600 font-medium">
+                                    <span className="mt-[6px] flex h-[3px] w-[3px] shrink-0 items-center justify-center rounded-full bg-gray-400" />
+                                    <span>{item}</span>
+                                </li>
+                            ))}
+                        </ul>
                     </div>
-                </div>
-                <div className="mt-3 border-t border-gray-100 pt-2">
-                    <div className="text-[10px] font-semibold uppercase text-gray-400">Setup</div>
-                    <ul className="mt-1 space-y-1">
-                        {node.setup.map(item => (
-                            <li key={item} className="flex gap-2 text-[11px] leading-4 text-gray-600">
-                                <span className="mt-[6px] h-1 w-1 shrink-0 rounded-full bg-[#25D366]" />
-                                <span>{item}</span>
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-                <div className="mt-3 rounded border border-gray-200 bg-[#f8faf9] px-2.5 py-2 text-[11px] leading-4 text-gray-600">
-                    Connections: click an edge to reveal delete, or select it and press Delete.
                 </div>
             </div>
         </div>
