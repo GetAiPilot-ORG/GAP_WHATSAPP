@@ -10,7 +10,8 @@ import {
     getFlowRunById,
     deleteFlow,
     getFlowSessionByContact,
-    deleteFlowSession
+    deleteFlowSession,
+    testFlow
 } from '../controllers/flows.controller.js';
 import { authMiddleware } from '../middlewares/auth.middleware.js';
 
@@ -25,6 +26,7 @@ router.delete('/:id', authMiddleware, deleteFlow);
 
 router.post('/:id/validate', authMiddleware, validateFlow);
 router.post('/:id/publish', authMiddleware, publishFlow);
+router.post('/:id/test', authMiddleware, testFlow);
 
 router.get('/:id/runs', authMiddleware, getFlowRuns);
 
