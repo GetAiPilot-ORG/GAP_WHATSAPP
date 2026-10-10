@@ -3564,40 +3564,51 @@ export default function LiveChat() {
                     ) : (
                         <>
                             {/* Chat Header */}
-                            <div data-tour="chat-header" className="relative z-40 flex h-14 sm:h-16 shrink-0 items-center justify-between gap-1 sm:gap-2 border-b border-gray-200 bg-[#f0f2f5] px-1.5 sm:px-4">
-                                <div className="flex min-w-0 items-center gap-1.5 sm:gap-3">
-                                    <button onClick={() => setSelectedChat(null)} className="lg:hidden p-0.5 -ml-1 text-gray-600 hover:bg-gray-200 rounded-lg">
+                            <div data-tour="chat-header" className="relative z-40 flex h-14 sm:h-16 shrink-0 items-center justify-between gap-1 sm:gap-2 border-b border-gray-200 bg-[#f0f2f5] px-2 sm:px-4">
+                                <div className="flex min-w-0 items-center gap-1.5 sm:gap-3 flex-1">
+                                    <button onClick={() => setSelectedChat(null)} className="lg:hidden p-1 -ml-1 text-gray-600 hover:bg-gray-200 rounded-lg shrink-0">
                                         <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
                                     </button>
                                     {selectedChat?.profilePhotoUrl ? (
                                         <img
                                             src={selectedChat.profilePhotoUrl}
                                             alt={selectedChat?.name || 'Contact'}
-                                            className="h-8 w-8 sm:h-9 sm:w-9 rounded-full object-cover shrink-0"
+                                            className="hidden sm:block h-8 w-8 sm:h-9 sm:w-9 rounded-full object-cover shrink-0"
                                             onError={() => clearBrokenProfilePhoto(selectedChat.contactId, selectedChat.profilePhotoUrl)}
                                         />
                                     ) : (
-                                        <DiceBearAvatar seed={selectedChat?.name} className="h-8 w-8 sm:h-9 sm:w-9 rounded-full object-cover shrink-0 ring-1 ring-gray-200" />
+                                        <div className="hidden sm:block shrink-0">
+                                            <DiceBearAvatar seed={selectedChat?.name} className="h-8 w-8 sm:h-9 sm:w-9 rounded-full object-cover ring-1 ring-gray-200" />
+                                        </div>
                                     )}
-                                    <div className="min-w-0">
-                                        <div className="flex items-center gap-1 sm:gap-2">
-                                            <h3 className="truncate text-xs sm:text-sm font-bold leading-tight text-gray-900">{selectedChat?.name}</h3>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-1 sm:gap-1.5">
+                                            <h3
+                                                onClick={() => {
+                                                    setFocusAliasOnOpen(false)
+                                                    setIsContactDrawerOpen(true)
+                                                }}
+                                                className="truncate text-xs sm:text-sm font-bold leading-tight text-gray-900 cursor-pointer hover:underline"
+                                                title="View contact info"
+                                            >
+                                                {selectedChat?.name}
+                                            </h3>
                                             <button
                                                 type="button"
                                                 onClick={() => {
                                                     setFocusAliasOnOpen(true)
                                                     setIsContactDrawerOpen(true)
                                                 }}
-                                                className="p-1 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+                                                className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-200/60 rounded-lg transition-colors shrink-0"
                                                 title="Set custom name"
                                             >
-                                                <Pencil className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                                <Pencil className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                             </button>
                                         </div>
-                                        <div className="flex min-w-0 items-center gap-1 sm:gap-2 text-[10px] sm:text-xs text-gray-500">
-                                            <span className="truncate">{formatPhoneForDisplay(selectedChat?.phone || selectedChat?.waId || '')}</span>
+                                        <div className="flex min-w-0 items-center gap-1 sm:gap-2 text-[10px] sm:text-xs text-gray-500 mt-0.5">
+                                            <span className="truncate font-medium">{formatPhoneForDisplay(selectedChat?.phone || selectedChat?.waId || '')}</span>
                                             {timeRemainingStr && (
-                                                <div className="relative inline-flex" data-time-tooltip>
+                                                <div className="relative inline-flex shrink-0" data-time-tooltip>
                                                     <button
                                                         type="button"
                                                         aria-expanded={showTimeTooltip}
@@ -3666,17 +3677,18 @@ export default function LiveChat() {
                                     </div>
                                 </div>
                                 <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+                                    {/* WhatsApp Rules Guide Button - hidden on mobile, visible on sm+ */}
                                     <button
                                         type="button"
                                         onClick={() => setIsGuideModalOpen(true)}
-                                        className="inline-flex h-8 sm:h-9 items-center justify-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50/80 px-2.5 sm:px-3 text-xs font-semibold text-emerald-800 shadow-2xs hover:bg-emerald-100 transition-colors"
+                                        className="hidden sm:inline-flex h-8 sm:h-9 items-center justify-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50/80 px-2.5 sm:px-3 text-xs font-semibold text-emerald-800 shadow-2xs hover:bg-emerald-100 transition-colors"
                                         title="WhatsApp Cloud API Messaging Rules Guide"
                                     >
                                         <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
                                         <span className="hidden md:inline">WhatsApp Rules</span>
                                     </button>
                                     <TourButton compact className="hidden sm:block" />
-                                    {/* Assign Agent Dropdown */}
+                                    {/* Assign Agent Dropdown - hidden on mobile, visible on sm+ */}
                                     <div className="relative hidden sm:block" data-assign-menu>
                                         <button
                                             type="button"
@@ -3761,8 +3773,8 @@ export default function LiveChat() {
                                     </div>
 
 
-                                    {/* Bot Toggle Button */}
-                                    <div className="relative shrink-0" data-bot-menu>
+                                    {/* Bot Toggle Button - hidden on mobile, visible on sm+ */}
+                                    <div className="relative shrink-0 hidden sm:block" data-bot-menu>
                                         <button
                                             onClick={() => setShowBotMenu(!showBotMenu)}
                                             className={`inline-flex h-8 sm:h-10 items-center justify-center gap-1 sm:gap-2 rounded-xl border px-2 sm:px-3 text-[10px] sm:text-xs font-semibold tracking-tight transition-all duration-150 outline-none ${effectiveBotEnabled
@@ -3849,16 +3861,16 @@ export default function LiveChat() {
                                                                     ? 'bg-green-50 text-green-700 font-semibold'
                                                                     : 'hover:bg-gray-50 text-gray-700'
                                                                     }`}
-                                                            >
-                                                                <Bot className="h-5 w-5 sm:h-4 sm:w-4 shrink-0 text-gray-500" />
-                                                                <div className="flex-1 min-w-0">
-                                                                    <div className="font-semibold sm:font-medium truncate text-gray-800">Auto (Workspace Rules)</div>
-                                                                    <div className="text-xs text-gray-500 truncate">Keyword/default/unknown rules</div>
-                                                                </div>
-                                                                {effectiveBotEnabled && !selectedBotId && (
-                                                                    <Check className="h-4.5 w-4.5 sm:h-4 sm:w-4 text-green-600 shrink-0" />
-                                                                )}
-                                                            </button>
+                                                                >
+                                                                    <Bot className="h-5 w-5 sm:h-4 sm:w-4 shrink-0 text-gray-500" />
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <div className="font-semibold sm:font-medium truncate text-gray-800">Auto (Workspace Rules)</div>
+                                                                        <div className="text-xs text-gray-500 truncate">Keyword/default/unknown rules</div>
+                                                                    </div>
+                                                                    {effectiveBotEnabled && !selectedBotId && (
+                                                                        <Check className="h-4.5 w-4.5 sm:h-4 sm:w-4 text-green-600 shrink-0" />
+                                                                    )}
+                                                                </button>
                                                         </div>
                                                     )}
 
@@ -3878,46 +3890,168 @@ export default function LiveChat() {
                                         )}
                                     </div>
 
+                                    {/* Contact info button - hidden on mobile, visible on sm+ */}
                                     <button
                                         onClick={() => {
                                             setFocusAliasOnOpen(false)
                                             setIsContactDrawerOpen(true)
                                         }}
-                                        className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-gray-100 shrink-0"
+                                        className="hidden sm:flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-gray-100 shrink-0"
                                         title="Contact info"
                                     >
                                         <Info className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
                                     </button>
-                                    {isAdmin && (
-                                        <div className="relative shrink-0" data-auto-assign-menu>
-                                            <button
-                                                onClick={() => setIsAutoAssignMenuOpen(!isAutoAssignMenuOpen)}
-                                                className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-gray-100"
-                                            >
-                                                <MoreVertical className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
-                                            </button>
-                                            {isAutoAssignMenuOpen && (
-                                                <>
-                                                    {/* Backdrop for mobile */}
-                                                    <div
-                                                        onClick={() => setIsAutoAssignMenuOpen(false)}
-                                                        className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm sm:hidden transition-opacity duration-300"
-                                                    />
-                                                    <div className="fixed bottom-0 left-0 right-0 z-[101] w-full rounded-t-3xl border-t border-gray-200 bg-white p-5 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] transition-transform duration-300 ease-out sm:absolute sm:bottom-auto sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-56 sm:overflow-hidden sm:rounded-xl sm:border sm:p-0 sm:shadow-xl sm:z-50 animate-in slide-in-from-bottom sm:animate-none">
-                                                        {/* Handle bar on mobile */}
-                                                        <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-gray-200 sm:hidden" />
+
+                                    {/* Three dots menu - always visible on mobile, visible on desktop if admin */}
+                                    <div className="relative shrink-0" data-auto-assign-menu>
+                                        <button
+                                            onClick={() => setIsAutoAssignMenuOpen(!isAutoAssignMenuOpen)}
+                                            className={`flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-gray-100 ${!isAdmin ? 'sm:hidden' : ''}`}
+                                            title="More options"
+                                        >
+                                            <MoreVertical className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
+                                        </button>
+                                        {isAutoAssignMenuOpen && (
+                                            <>
+                                                {/* Backdrop for mobile */}
+                                                <div
+                                                    onClick={() => setIsAutoAssignMenuOpen(false)}
+                                                    className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm sm:hidden transition-opacity duration-300"
+                                                />
+                                                <div className="fixed bottom-0 left-0 right-0 z-[101] w-full rounded-t-3xl border-t border-gray-200 bg-white p-4 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] max-h-[85vh] overflow-y-auto transition-transform duration-300 ease-out sm:absolute sm:bottom-auto sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-64 sm:overflow-hidden sm:rounded-xl sm:border sm:p-0 sm:shadow-xl sm:z-50 animate-in slide-in-from-bottom sm:animate-none">
+                                                    {/* Handle bar on mobile */}
+                                                    <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-gray-200 sm:hidden" />
+
+                                                    {/* Mobile: Contact Profile Preview (Avatar, Name, Number, Info) */}
+                                                    <div className="sm:hidden mb-3 p-3 bg-gray-50 rounded-2xl border border-gray-100 flex items-center gap-3">
+                                                        {selectedChat?.profilePhotoUrl ? (
+                                                            <img
+                                                                src={selectedChat.profilePhotoUrl}
+                                                                alt={selectedChat?.name || 'Contact'}
+                                                                className="h-10 w-10 rounded-full object-cover shrink-0 ring-2 ring-white"
+                                                                onError={() => clearBrokenProfilePhoto(selectedChat.contactId, selectedChat.profilePhotoUrl)}
+                                                            />
+                                                        ) : (
+                                                            <DiceBearAvatar seed={selectedChat?.name} className="h-10 w-10 rounded-full object-cover shrink-0 ring-2 ring-white text-base" />
+                                                        )}
+                                                        <div className="min-w-0 flex-1">
+                                                            <h4 className="font-bold text-sm text-gray-900 truncate">{selectedChat?.name}</h4>
+                                                            <p className="text-xs text-gray-500 truncate mt-0.5">{formatPhoneForDisplay(selectedChat?.phone || selectedChat?.waId || '')}</p>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setIsAutoAssignMenuOpen(false)
+                                                                setFocusAliasOnOpen(false)
+                                                                setIsContactDrawerOpen(true)
+                                                            }}
+                                                            className="px-2.5 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors shrink-0 flex items-center gap-1"
+                                                        >
+                                                            <Info className="h-3.5 w-3.5" />
+                                                            <span>Info</span>
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Mobile: AI Agent Status & Toggle */}
+                                                    <div className="sm:hidden mb-2.5 p-3 bg-neutral-900 text-white rounded-2xl flex items-center justify-between">
+                                                        <div className="flex items-center gap-2.5 min-w-0">
+                                                            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 shrink-0">
+                                                                <Bot className="h-4 w-4 text-emerald-400" />
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <span className="text-xs font-bold text-white">AI Agent</span>
+                                                                    <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded uppercase ${effectiveBotEnabled ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/10 text-gray-400'}`}>
+                                                                        {effectiveBotEnabled ? (botEnabled ? 'On' : 'Auto') : 'Off'}
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-[10px] text-gray-300 truncate mt-0.5">
+                                                                    {effectiveBotEnabled ? 'AI replies active for this chat' : 'AI replies paused'}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5 shrink-0">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    toggleBotForConversation(!botEnabled, selectedBotId || workspaceAutoReplyBot?.id || null)
+                                                                }}
+                                                                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${effectiveBotEnabled ? 'bg-emerald-500' : 'bg-gray-600'}`}
+                                                            >
+                                                                <span
+                                                                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${effectiveBotEnabled ? 'translate-x-6' : 'translate-x-1'}`}
+                                                                />
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setIsAutoAssignMenuOpen(false)
+                                                                    setShowBotMenu(true)
+                                                                }}
+                                                                className="p-1 text-gray-300 hover:text-white rounded-lg hover:bg-white/10"
+                                                                title="Choose AI Agent"
+                                                            >
+                                                                <ChevronDown className="h-4 w-4" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Mobile: WhatsApp Rules Guide */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setIsGuideModalOpen(true)
+                                                            setIsAutoAssignMenuOpen(false)
+                                                        }}
+                                                        className="sm:hidden w-full text-left px-3 py-2.5 mb-2.5 rounded-xl border border-emerald-100 bg-emerald-50/60 hover:bg-emerald-100/70 text-sm text-emerald-900 flex items-center gap-3 transition-colors"
+                                                    >
+                                                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 shrink-0">
+                                                            <Sparkles className="h-4 w-4" />
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="font-semibold text-xs text-emerald-900">WhatsApp Rules Guide</div>
+                                                            <div className="text-[10px] text-emerald-700/80 truncate">24h reply window & templates guide</div>
+                                                        </div>
+                                                    </button>
+
+                                                    {/* Mobile: Assign Agent */}
+                                                    {assignableTeamMembers.length > 0 && (
+                                                        <div className="sm:hidden mb-2.5 p-3 bg-gray-50 rounded-2xl border border-gray-100">
+                                                            <div className="flex items-center justify-between mb-1.5">
+                                                                <span className="text-xs font-semibold text-gray-700">Assign Chat</span>
+                                                                <span className="text-xs text-gray-500 font-medium truncate max-w-[130px]">{getAgentName(selectedChat?.assigned_to)}</span>
+                                                            </div>
+                                                            <select
+                                                                value={selectedChat?.assigned_to || ''}
+                                                                onChange={(e) => {
+                                                                    assignAgent(selectedChat.id, e.target.value)
+                                                                }}
+                                                                className="w-full text-xs font-medium rounded-xl border border-gray-200 bg-white px-2.5 py-2 text-gray-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                                            >
+                                                                <option value="">Unassigned</option>
+                                                                {assignableTeamMembers.map(m => (
+                                                                    <option key={m.user_id} value={m.user_id}>
+                                                                        {m.name} ({m.role})
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Admin Actions (Mobile + Desktop) */}
+                                                    {isAdmin && (
                                                         <div className="py-1">
-                                                            <p className="text-[11px] font-bold text-gray-400 px-4 mb-2.5 uppercase tracking-wider sm:hidden">Admin Actions</p>
+                                                            <p className="text-[11px] font-bold text-gray-400 px-4 py-1.5 uppercase tracking-wider">Admin Actions</p>
                                                             <button
                                                                 onClick={() => {
                                                                     setDraftAutoAssignSettings({ enabled: autoAssignSettings.enabled, batch_size: autoAssignSettings.batch_size });
                                                                     setIsAutoAssignModalOpen(true);
                                                                     setIsAutoAssignMenuOpen(false);
                                                                 }}
-                                                                className="w-full text-left px-4 py-3 sm:py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 sm:gap-2 rounded-xl sm:rounded-none transition-colors"
+                                                                className="w-full text-left px-4 py-2.5 sm:py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 sm:gap-2 rounded-xl sm:rounded-none transition-colors"
                                                             >
-                                                                <Bot className="h-5 w-5 sm:h-4 sm:w-4 text-green-500" />
-                                                                <span className="font-semibold sm:font-normal">Auto Assign Rules</span>
+                                                                <Bot className="h-4.5 w-4.5 sm:h-4 sm:w-4 text-emerald-500" />
+                                                                <span className="font-semibold sm:font-normal text-xs sm:text-sm">Auto Assign Rules</span>
                                                             </button>
                                                             <button
                                                                 onClick={() => {
@@ -3925,17 +4059,17 @@ export default function LiveChat() {
                                                                     setIsAgentStatusModalOpen(true);
                                                                     setIsAutoAssignMenuOpen(false);
                                                                 }}
-                                                                className="w-full text-left px-4 py-3 sm:py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 sm:gap-2 rounded-xl sm:rounded-none transition-colors"
+                                                                className="w-full text-left px-4 py-2.5 sm:py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 sm:gap-2 rounded-xl sm:rounded-none transition-colors"
                                                             >
-                                                                <User className="h-5 w-5 sm:h-4 sm:w-4 text-blue-500" />
-                                                                <span className="font-semibold sm:font-normal">Agent Status (Pause)</span>
+                                                                <User className="h-4.5 w-4.5 sm:h-4 sm:w-4 text-blue-500" />
+                                                                <span className="font-semibold sm:font-normal text-xs sm:text-sm">Agent Status (Pause)</span>
                                                             </button>
                                                         </div>
-                                                    </div>
-                                                </>
-                                            )}
-                                        </div>
-                                    )}
+                                                    )}
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 
