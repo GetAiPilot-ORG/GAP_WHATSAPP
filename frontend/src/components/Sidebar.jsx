@@ -327,8 +327,8 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
                                 <span className={labelTransition(isExpanded, 'flex min-w-0 flex-1 items-center gap-2')}>
                                     <span className="flex flex-col min-w-0 flex-1">
                                         <span className="truncate text-sm font-medium text-gray-700 leading-tight">{displayName}</span>
-                                        <span className={clsx('truncate text-[10px] leading-tight', user?.plan && user.plan !== 'No active plan' ? 'text-emerald-600 font-medium' : 'text-gray-400')}>
-                                            {user?.plan || 'No active plan'}
+                                        <span className={clsx('truncate text-[10px] leading-tight', user?.subscription_status === 'active' && user?.plan && user.plan !== 'Free Plan' && user.plan !== 'No active plan' ? 'text-emerald-600 font-medium' : 'text-gray-400')}>
+                                            {user?.subscription_status === 'active' && user?.plan && user.plan !== 'No active plan' ? user.plan : 'Free Plan'}
                                         </span>
                                     </span>
                                     <ChevronsUpDown className="ml-auto h-3.5 w-3.5 shrink-0 text-gray-400" />
@@ -344,8 +344,8 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
                                         <div className="min-w-0">
                                             <div className="truncate text-sm font-semibold text-gray-950">{displayName}</div>
                                             <div className="truncate text-xs text-gray-500">{userEmail}</div>
-                                            <div className={clsx('truncate text-[10px] font-medium mt-0.5', user?.plan && user.plan !== 'No active plan' ? 'text-emerald-600' : 'text-gray-400')}>
-                                                {user?.plan || 'No active plan'}
+                                            <div className={clsx('truncate text-[10px] font-medium mt-0.5', user?.subscription_status === 'active' && user?.plan && user.plan !== 'Free Plan' && user.plan !== 'No active plan' ? 'text-emerald-600' : 'text-gray-400')}>
+                                                {user?.subscription_status === 'active' && user?.plan && user.plan !== 'No active plan' ? user.plan : 'Free Plan'}
                                             </div>
                                         </div>
                                     </div>
