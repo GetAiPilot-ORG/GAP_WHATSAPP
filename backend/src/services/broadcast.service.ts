@@ -17,6 +17,87 @@ function normalizeFilename(filename: string) {
     return filename.replace(/[^a-zA-Z0-9.\-_]/g, '_');
 }
 
+export function resolveContactFieldValue(fieldMapping: any, contact: any, recipient = ''): string {
+    if (!fieldMapping) return '';
+    const str = String(fieldMapping).trim();
+    if (str === 'name') return contact?.custom_name || contact?.name || '';
+    if (str === 'phone') return recipient || contact?.phone || contact?.wa_id || '';
+    if (str === 'email') return contact?.email || contact?.custom_fields?.email || '';
+
+    // Parse custom_fields if stored as JSON string
+    let customFields = contact?.custom_fields;
+    if (typeof customFields === 'string') {
+        try {
+            customFields = JSON.parse(customFields);
+        } catch {
+            customFields = {};
+        }
+    }
+    if (!customFields || typeof customFields !== 'object') {
+        customFields = {};
+    }
+
+    if (str.startsWith('field:')) {
+        const rawKey = str.slice(6).trim();
+
+        // 1. Exact match in custom_fields
+        if (customFields[rawKey] !== undefined && customFields[rawKey] !== null && String(customFields[rawKey]).trim() !== '') {
+            return String(customFields[rawKey]).trim();
+        }
+
+        // 2. Exact match on contact root properties (e.g. from CSV or DB)
+        if (contact && contact[rawKey] !== undefined && contact[rawKey] !== null && String(contact[rawKey]).trim() !== '') {
+            return String(contact[rawKey]).trim();
+        }
+
+        // 3. Normalized match in custom_fields (e.g. Magic_Link vs magiclink vs magic_link)
+        const targetNorm = rawKey.toLowerCase().replace(/[\s_-]/g, '');
+        for (const [k, v] of Object.entries(customFields)) {
+            if (k.toLowerCase().replace(/[\s_-]/g, '') === targetNorm) {
+                if (v !== null && v !== undefined && String(v).trim() !== '') {
+                    return String(v).trim();
+                }
+            }
+        }
+
+        // 4. Normalized match on contact root properties
+        if (contact && typeof contact === 'object') {
+            for (const [k, v] of Object.entries(contact)) {
+                if (k.toLowerCase().replace(/[\s_-]/g, '') === targetNorm) {
+                    if (v !== null && v !== undefined && String(v).trim() !== '') {
+                        return String(v).trim();
+                    }
+                }
+            }
+        }
+        return '';
+    }
+
+    return str;
+}
+
+export function resolveButtonUrlValue(buttonMappingValue: any, contact: any, recipient = '', templateButtons: any[] = [], buttonIndex: string = '0'): string {
+    const rawResolved = resolveContactFieldValue(buttonMappingValue, contact, recipient);
+    if (!rawResolved) return '';
+
+    const templateBtn = templateButtons.find((b: any) => String(b.index ?? '') === String(buttonIndex));
+    const templateUrl = String(templateBtn?.url || '');
+    if (templateUrl) {
+        const placeholderIdx = templateUrl.indexOf('{{');
+        const prefix = placeholderIdx >= 0 ? templateUrl.slice(0, placeholderIdx) : '';
+        let clean = rawResolved;
+        if (prefix && clean.startsWith(prefix)) {
+            clean = clean.slice(prefix.length);
+        }
+        if (prefix.endsWith('/') && clean.startsWith('/')) {
+            clean = clean.slice(1);
+        }
+        return clean;
+    }
+
+    return rawResolved;
+}
+
 export function normalizeTemplateHeaderMedia(mapping: any, fallbackType?: string) {
     const source = mapping && typeof mapping === 'object' ? mapping : {};
     const type = String(
@@ -210,7 +291,7 @@ export async function processCampaign(campaign: any) {
         } else {
             let query = supabase
                 .from('w_contacts')
-                .select('id, name, custom_name, phone, wa_id, tags')
+                .select('id, name, custom_name, email, phone, wa_id, tags, custom_fields')
                 .eq('organization_id', orgId)
                 .eq('contact_type', 'individual');
 
@@ -320,6 +401,7 @@ export async function processCampaign(campaign: any) {
                 });
             }
 
+            const templateButtons = Array.isArray(mapping._template_buttons) ? mapping._template_buttons : [];
             const buttonUrlKeys = Object.keys(mapping)
                 .map((key) => {
                     const match = key.match(/^_?button_url_(\d+)$/);
@@ -331,7 +413,8 @@ export async function processCampaign(campaign: any) {
             const addedButtonIndexes = new Set<string>();
             for (const item of buttonUrlKeys as any[]) {
                 if (addedButtonIndexes.has(item.index)) continue;
-                const text = String(mapping[`_button_url_${item.index}`] || mapping[`button_url_${item.index}`] || '').trim();
+                const rawMapping = mapping[`_button_url_${item.index}`] || mapping[`button_url_${item.index}`] || mapping[item.key];
+                const text = resolveButtonUrlValue(rawMapping, contact, recipient, templateButtons, item.index);
                 if (!text) continue;
 
                 components.push({
@@ -352,10 +435,7 @@ export async function processCampaign(campaign: any) {
 
             for (const key of sortedKeys) {
                 const field = mapping[key];
-                let text = '';
-                if (field === 'name') text = contact.custom_name || contact.name || '';
-                else if (field === 'phone') text = contact.phone || '';
-                else text = field || '';
+                const text = resolveContactFieldValue(field, contact, recipient);
 
                 renderedText = renderedText.replace(new RegExp(`\\{\\{\\s*${String(key).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\}\\}`, 'g'), text);
                 const parameter: any = { type: 'text', text: text || ' ' };
