@@ -388,12 +388,42 @@ function UserInputConfig({ config, updateConfig }) {
                     onChange={(e) => updateConfig('inputType', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
-                    <option value="text">Text</option>
-                    <option value="number">Number</option>
-                    <option value="email">Email</option>
-                    <option value="phone">Phone</option>
+                    <option value="text">Text (Any input)</option>
+                    <option value="phone">Phone / Mobile (10-digit number validation)</option>
+                    <option value="email">Email (Email address validation)</option>
+                    <option value="number">Number (Numeric validation)</option>
                 </select>
+                <p className="mt-1 text-xs text-gray-500">
+                    {config.inputType === 'phone' && 'Stops flow & prompts user if mobile number is invalid.'}
+                    {config.inputType === 'email' && 'Stops flow & prompts user if email address is invalid.'}
+                    {config.inputType === 'number' && 'Stops flow & prompts user if input is not a number.'}
+                    {(!config.inputType || config.inputType === 'text') && 'Accepts any response from the customer.'}
+                </p>
             </div>
+
+            {config.inputType && config.inputType !== 'text' && (
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Validation Error Message (Optional)
+                    </label>
+                    <input
+                        type="text"
+                        value={config.errorMessage || ''}
+                        onChange={(e) => updateConfig('errorMessage', e.target.value)}
+                        placeholder={
+                            config.inputType === 'phone'
+                                ? '⚠️ Please enter a valid 10-digit mobile number.'
+                                : config.inputType === 'email'
+                                    ? '⚠️ Please enter a valid email address (e.g. name@example.com).'
+                                    : '⚠️ Please enter a valid number.'
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                    <p className="mt-1 text-xs text-gray-400">
+                        Message sent to customer when input is invalid. Leave blank to use system default.
+                    </p>
+                </div>
+            )}
 
             <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
