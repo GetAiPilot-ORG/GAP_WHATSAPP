@@ -117,9 +117,9 @@ export function validateFlowUserInput(
     if (digits.length === 12 && digits.startsWith('91')) {
       return { isValid: true, formatted: digits.slice(2) };
     }
-    // International phone numbers: 10 to 15 digits
-    if (digits.length >= 10 && digits.length <= 15) {
-      return { isValid: true, formatted: trimmed.startsWith('+') ? `+${digits}` : digits };
+    // International phone numbers with explicit '+' prefix: 10 to 15 digits (e.g. +14155552671)
+    if (trimmed.startsWith('+') && digits.length >= 10 && digits.length <= 15) {
+      return { isValid: true, formatted: `+${digits}` };
     }
     return { isValid: false, formatted: '' };
   }
