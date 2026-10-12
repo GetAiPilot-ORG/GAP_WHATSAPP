@@ -624,8 +624,9 @@ export default function Layout() {
     const subStatus = user?.subscription_status || memberProfile?.subscription?.status || 'inactive';
     const isSubActive = subStatus === 'active';
     const rawPlan = String(user?.plan || memberProfile?.subscription?.plan_label || memberProfile?.subscription?.plan_id || '').toLowerCase();
+    const isFreePlan = rawPlan.includes('free') || subStatus === 'free' || subStatus === 'inactive' || !rawPlan || rawPlan === 'no active plan';
     const isWhatsAppPlan = rawPlan.includes('whatsapp') || rawPlan.includes('ultimate') || rawPlan.includes('ecosystem') || rawPlan.includes('all_in_one') || rawPlan.includes('bundle') || rawPlan.includes('starter') || rawPlan.includes('growth') || rawPlan.includes('pro') || rawPlan.includes('gap') || rawPlan.includes('max') || rawPlan.includes('core') || rawPlan.includes('trial') || rawPlan.includes('enterprise');
-    const hasActiveSubscription = isAgent || (isSubActive && isWhatsAppPlan) || (isSubActive && !rawPlan);
+    const hasActiveSubscription = isAgent || isFreePlan || (isSubActive && isWhatsAppPlan) || (isSubActive && !rawPlan);
 
     const handleDirectLogout = async () => {
         setIsLoggingOut(true);
