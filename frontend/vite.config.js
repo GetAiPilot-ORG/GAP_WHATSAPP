@@ -184,6 +184,7 @@ export default defineConfig(({ mode }) => {
       })
     ],
     server: {
+      host: true,
       port: 3000,
       strictPort: true,
       allowedHosts: ['.ngrok-free.dev', '.ngrok-free.app', '.loca.lt'],
