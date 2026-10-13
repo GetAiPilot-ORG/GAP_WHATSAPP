@@ -169,9 +169,7 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
                             )}
                             title={selectedAccountLabel}
                         >
-                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white ring-1 ring-gray-200">
-                                <img src="/logo.png" alt="GAP WhatsApp Pilot" className="h-[17px] w-[17px] object-contain" />
-                            </span>
+                            <img src="/logo.png" alt="GAP WhatsApp Pilot" className="h-7 w-7 shrink-0 object-contain" />
                             <span className={labelTransition(isExpanded, 'flex min-w-0 flex-1 items-center gap-2')}>
                                 <span className="truncate font-medium text-gray-700">{selectedAccountLabel}</span>
                                 <ChevronsUpDown className="ml-auto h-3.5 w-3.5 shrink-0 text-gray-400" />
@@ -383,9 +381,7 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
                                 className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm font-semibold text-gray-800 hover:bg-gray-50"
                                 title={selectedAccountLabel}
                             >
-                                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white ring-1 ring-gray-200">
-                                    <img src="/logo.png" alt="GAP WhatsApp Pilot" className="h-5 w-5 object-contain" />
-                                </span>
+                                <img src="/logo.png" alt="GAP WhatsApp Pilot" className="h-8 w-8 shrink-0 object-contain" />
                                 <span className="min-w-0 flex-1">
                                     <span className="block truncate">{selectedAccountLabel}</span>
                                     <span className="block truncate text-[11px] font-medium text-emerald-600">{user?.plan || 'No active plan'}</span>
