@@ -31,13 +31,18 @@ const getNotificationPermission = () => {
 };
 
 export const PushProvider = ({ children }) => {
-    const [permissionStatus, setPermissionStatus] = useState(getNotificationPermission);
+    const [permissionStatus, setPermissionStatus] = useState(() => {
+        if (typeof window !== 'undefined' && 'Notification' in window) {
+            return Notification.permission;
+        }
+        return 'default';
+    });
     const [isSubscribed, setIsSubscribed] = useState(false);
 
     // Ensure we only run this once we have an active session
     useEffect(() => {
         const checkSubscription = async () => {
-            if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+            if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
                 return;
             }
 
@@ -50,7 +55,7 @@ export const PushProvider = ({ children }) => {
     }, []);
 
     const subscribeToPush = async (orgId) => {
-        if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+        if (typeof window === 'undefined' || !('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
             console.error('Push notifications are not supported by this browser.');
             return false;
         }

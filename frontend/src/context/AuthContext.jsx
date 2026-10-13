@@ -17,7 +17,7 @@ function resolvePlanName(plan) {
     if (p.includes('growth')) return 'GAP Growth'
     if (p.includes('core')) return 'GAP Core'
     if (p.includes('starter')) return 'GAP Starter'
-    return planStr
+    return String(plan || 'Free Plan')
 }
 
 export function AuthProvider({ children }) {
@@ -72,6 +72,8 @@ export function AuthProvider({ children }) {
             }
 
             // Fallback for direct owners if endpoint is loading or unreachable
+            setUserRole(prev => prev || (loginType === 'agent' ? 'agent' : 'owner'));
+
             const { data: sub } = await supabase
                 .from('app_user_subscriptions')
                 .select('plan_id, plan_label, expires_at, status')
@@ -89,6 +91,7 @@ export function AuthProvider({ children }) {
             setUser(prev => prev ? { ...prev, plan: resolvedPlan, subscription_status: resolvedStatus, subscription_checked: true } : null);
         } catch (err) {
             console.error('[AUTH] fetchUserProfile error:', err);
+            setUserRole(prev => prev || (loginType === 'agent' ? 'agent' : 'owner'));
             setUser(prev => prev ? { ...prev, subscription_checked: true } : null);
         }
     }, [loginType]);
