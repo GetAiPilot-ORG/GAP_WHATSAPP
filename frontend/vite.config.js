@@ -143,9 +143,9 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       basicSsl(),
-      legacy({
-        targets: ['defaults', 'not IE 11', 'iOS >= 12', 'Safari >= 13']
-      }),
+      // legacy({
+      //   targets: ['defaults', 'not IE 11', 'iOS >= 12', 'Safari >= 13']
+      // }),
       notificationSoundsPlugin(),
       VitePWA({
         registerType: 'prompt',
@@ -209,19 +209,31 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       chunkSizeWarningLimit: 2500,
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (id.includes('node_modules')) {
-            const normalizedId = id.replaceAll('\\', '/')
-            if (normalizedId.includes('/node_modules/exceljs/') || normalizedId.includes('/node_modules/xlsx/')) {
-              return 'vendor-sheets'
+      rolldownOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              const normalizedId = id.replaceAll('\\', '/')
+              if (normalizedId.includes('/node_modules/exceljs/') || normalizedId.includes('/node_modules/xlsx/')) {
+                return 'vendor-sheets'
+              }
+            }
+          }
+        }
+      },
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              const normalizedId = id.replaceAll('\\', '/')
+              if (normalizedId.includes('/node_modules/exceljs/') || normalizedId.includes('/node_modules/xlsx/')) {
+                return 'vendor-sheets'
+              }
             }
           }
         }
       }
     }
-  }
 }
 })
 

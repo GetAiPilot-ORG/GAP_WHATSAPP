@@ -1,5 +1,5 @@
 import InfoHelp from '../components/InfoHelp'
-import { createElement, useEffect, useMemo, useRef, useState } from 'react'
+import React, { Component, createElement, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
     AlertCircle,
@@ -34,7 +34,20 @@ const META_CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID || '1108075894853600'
 const META_EMBEDDED_SIGNUP_VERSION = import.meta.env.VITE_META_EMBEDDED_SIGNUP_VERSION || 'v4'
 const META_EMBEDDED_SESSION_INFO_VERSION = import.meta.env.VITE_META_EMBEDDED_SESSION_INFO_VERSION || '3'
 
-export default function WhatsAppConnect() {
+function SafeIcon({ icon, className = "h-4 w-4", fallback: Fallback = HelpCircle }) {
+    const candidate = icon || Fallback
+    if (!candidate) return null
+    const resolved = (typeof candidate === 'object' && candidate !== null && candidate.default) ? candidate.default : candidate
+    if (typeof resolved === 'function' || (typeof resolved === 'object' && resolved !== null && (resolved.$$typeof || resolved.render))) {
+        return createElement(resolved, { className })
+    }
+    if (HelpCircle && (typeof HelpCircle === 'function' || (typeof HelpCircle === 'object' && HelpCircle !== null && (HelpCircle.$$typeof || HelpCircle.render)))) {
+        return createElement(HelpCircle, { className })
+    }
+    return null
+}
+
+function WhatsAppConnectContent() {
     const { session, apiCall } = useAuth()
     const { alertDialog, confirmDialog } = useDialog()
     const { accounts, isLoading: loadingAccounts, error: accountsLoadError, refetchAccounts: fetchAccounts } = useWhatsAppAccounts()
@@ -843,7 +856,7 @@ function GuideCard({ icon, title, items, stepNumber, isExpanded, onToggle }) {
             >
                 <div className="flex items-center gap-2 md:gap-2.5 sm:gap-3 min-w-0">
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#eef7ff] text-[#0064b7] md:h-8 md:w-8 md:sm:h-10 md:sm:w-10">
-                        {createElement(icon, { className: 'h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-4 md:w-4 md:sm:h-5 md:sm:w-5' })}
+                        <SafeIcon icon={icon} className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-4 md:w-4 md:sm:h-5 md:sm:w-5" fallback={Building2} />
                     </span>
                     {/* Step badge */}
                     <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#0064b7] text-[10px] font-bold text-white md:hidden">
@@ -900,7 +913,7 @@ function MiniMetric({ icon, label, value, tone }) {
             <div className="flex items-center justify-between gap-1.5">
                 <p className="text-[10px] sm:text-xs font-semibold tracking-tight text-gray-500 truncate">{label}</p>
                 <span className={`flex h-6 w-6 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-lg ${toneClass}`}>
-                    {createElement(icon, { className: 'h-3.5 w-3.5 sm:h-4 sm:w-4' })}
+                    <SafeIcon icon={icon} className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </span>
             </div>
             <p className="mt-1.5 sm:mt-3 text-sm sm:text-xl font-bold tracking-tight text-gray-900 truncate">{value}</p>
@@ -1050,7 +1063,7 @@ function AccountCard({ account, diagnostics, loading, onCheck, onReconnect, onDi
                     <div className="flex min-w-0 items-start gap-2.5">
                         {businessVerified
                             ? <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-                            : <Building2 className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />}
+                            : <SafeIcon icon={Building2} className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" fallback={ShieldCheck} />}
                         <div className="min-w-0">
                             <p className={`text-xs font-semibold ${businessVerified ? 'text-emerald-900' : 'text-amber-950'}`}>
                                 Business verification: {businessVerified ? 'Verified' : 'Action required'}
@@ -1168,4 +1181,51 @@ function maskId(value) {
     const text = String(value)
     if (text.length <= 8) return text
     return `${text.slice(0, 4)}...${text.slice(-4)}`
+}
+
+class WhatsAppErrorBoundary extends Component {
+    constructor(props) {
+        super(props)
+        this.state = { hasError: false, error: null }
+    }
+
+    static getDerivedStateFromError(error) {
+        return { hasError: true, error }
+    }
+
+    componentDidCatch(error, errorInfo) {
+        console.error('WhatsAppConnect caught error:', error, errorInfo)
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="mx-auto max-w-4xl p-6">
+                    <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
+                        <AlertCircle className="mx-auto h-12 w-12 text-red-500" />
+                        <h2 className="mt-3 text-lg font-bold text-red-900">WhatsApp Account Manager load nahi ho paya</h2>
+                        <p className="mt-1 text-sm text-red-700">
+                            Browser script issue ya cache ki wajah se load nahi hua. Kripya page ko refresh karein.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => window.location.reload()}
+                            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 transition"
+                        >
+                            Page Refresh Karein
+                        </button>
+                    </div>
+                </div>
+            )
+        }
+        return this.props.children
+    }
+}
+
+export default function WhatsAppConnect() {
+    return (
+        <WhatsAppErrorBoundary>
+            <WhatsAppConnectContent />
+        </WhatsAppErrorBoundary>
+    )
 }
