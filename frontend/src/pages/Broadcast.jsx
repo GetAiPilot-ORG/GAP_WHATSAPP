@@ -87,6 +87,13 @@ function normalizeDynamicUrlButtonValue(button, value) {
 
 function validateDynamicUrlButtonValue(button, value) {
     const rawValue = String(value || '').trim()
+    if (rawValue.startsWith('field:')) {
+        return {
+            ok: true,
+            value: rawValue,
+            message: ''
+        }
+    }
     const templateUrl = String(button?.url || '')
     const placeholderIndex = templateUrl.indexOf('{{')
     const staticPrefix = placeholderIndex >= 0 ? templateUrl.slice(0, placeholderIndex) : ''
@@ -97,7 +104,7 @@ function validateDynamicUrlButtonValue(button, value) {
         return {
             ok: false,
             value: normalizedValue,
-            message: `Button "${button.text}" is approved for ${staticPrefix}... Enter only the placeholder part for that approved URL, or create a new Meta template for this different domain.`
+            message: `Button "${button.text}" is approved for ${staticPrefix}... Enter only the placeholder part for that approved URL, or select a contact field.`
         }
     }
 
@@ -112,7 +119,7 @@ function validateDynamicUrlButtonValue(button, value) {
     return {
         ok: !!normalizedValue,
         value: normalizedValue,
-        message: `Button "${button.text}" needs the dynamic part of the URL, not the full approved URL. Example: ads, contact, or ?utm_source=whatsapp`
+        message: `Button "${button.text}" needs a dynamic value or contact field.`
     }
 }
 
@@ -324,9 +331,20 @@ export default function Broadcast({ defaultTab = 'new' }) {
         return matchesSearch && matchesTab;
     });
 
-    const availableCustomFields = [...new Set(
-        filteredContacts.flatMap(contact => Object.keys(contact?.custom_fields || {}))
-    )].sort((a, b) => a.localeCompare(b))
+    const availableCustomFields = useMemo(() => {
+        const pool = [...(contacts || []), ...(filteredContacts || []), ...(csvData || [])];
+        const keys = new Set(['magiclink', 'Magic_Link']);
+        pool.forEach(c => {
+            if (c?.custom_fields && typeof c.custom_fields === 'object') {
+                Object.keys(c.custom_fields).forEach(k => {
+                    if (k && !['profile_photo_url', 'profile_photo_checked_at'].includes(k)) {
+                        keys.add(k);
+                    }
+                });
+            }
+        });
+        return [...keys].sort((a, b) => a.localeCompare(b));
+    }, [contacts, filteredContacts, csvData]);
 
     const selectedTemplateCategory = selectedTemplate?.category || campaign.variable_mapping?._template_category || 'MARKETING'
 
@@ -750,8 +768,9 @@ export default function Broadcast({ defaultTab = 'new' }) {
     }
 
     const handleButtonUrlParamChange = (buttonIndex, value) => {
+        const str = String(value || '').trim()
         const button = dynamicUrlButtons.find(item => item.index === buttonIndex)
-        const cleanValue = normalizeDynamicUrlButtonValue(button, value)
+        const cleanValue = str.startsWith('field:') ? str : normalizeDynamicUrlButtonValue(button, str)
         setCampaign(prev => ({
             ...prev,
             variable_mapping: {
@@ -2371,28 +2390,65 @@ const renderLivePreview = () => {
                                                         </div>
                                                     )}
 
-                                                    {dynamicUrlButtons.map((button) => (
-                                                        <div key={`button-url-${button.index}`} className="rounded-xl border border-zinc-150 bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.01)]">
-                                                            <label className="mb-2 block text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">
-                                                                URL button · {button.text}
-                                                            </label>
-                                                            <input
-                                                                type="text"
-                                                                required
-                                                                placeholder={`Value for "${button.text}" URL`}
-                                                                className={`h-10 w-full rounded-lg text-xs border ${
-                                                                    (campaign.variable_mapping[`_button_url_${button.index}`] || campaign.variable_mapping[`button_url_${button.index}`]) 
-                                                                        ? 'border-zinc-200 focus:border-black focus:ring-0' 
-                                                                        : 'border-amber-250 bg-amber-50/20 focus:border-amber-400 focus:ring-0'
-                                                                } transition-all`}
-                                                                value={campaign.variable_mapping[`_button_url_${button.index}`] || campaign.variable_mapping[`button_url_${button.index}`] || ''}
-                                                                onChange={(e) => handleButtonUrlParamChange(button.index, e.target.value)}
-                                                            />
-                                                            <p className="mt-1.5 text-[10px] text-zinc-400 font-sans leading-relaxed">
-                                                                Approved URL: <code className="font-mono bg-zinc-50 px-1 py-0.5 rounded text-zinc-600">{button.url}</code>. Enter only the placeholder value (e.g., <code className="font-mono text-zinc-650 bg-zinc-50 px-1 py-0.5 rounded">ads</code> or <code className="font-mono text-zinc-650 bg-zinc-50 px-1 py-0.5 rounded">?utm_source=whatsapp</code>).
-                                                            </p>
-                                                        </div>
-                                                    ))}
+                                                    {dynamicUrlButtons.map((button) => {
+                                                        const rawVal = campaign.variable_mapping[`_button_url_${button.index}`] || campaign.variable_mapping[`button_url_${button.index}`] || '';
+                                                        const isField = rawVal.startsWith('field:');
+                                                        const selectedField = isField ? rawVal : '';
+                                                        const fixedText = !isField ? rawVal : '';
+
+                                                        return (
+                                                            <div key={`button-url-${button.index}`} className="rounded-xl border border-zinc-150 bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.01)]">
+                                                                <div className="flex items-center justify-between mb-2">
+                                                                    <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">
+                                                                        URL button · {button.text}
+                                                                    </label>
+                                                                    <span className="text-[10px] font-mono font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded uppercase">Dynamic URL</span>
+                                                                </div>
+
+                                                                <div className="space-y-3">
+                                                                    <div>
+                                                                        <label className="mb-1 block text-[10px] font-medium text-zinc-500 uppercase tracking-wider font-mono">
+                                                                            Map to Contact Field (Magic Link)
+                                                                        </label>
+                                                                        <select
+                                                                            className="h-9 w-full rounded-lg border-zinc-200 bg-white text-xs text-zinc-700 focus:border-black focus:ring-0 transition-all"
+                                                                            value={selectedField}
+                                                                            onChange={(e) => handleButtonUrlParamChange(button.index, e.target.value)}
+                                                                        >
+                                                                            <option value="">-- Select Contact Field (e.g. Magic Link) --</option>
+                                                                            {availableCustomFields.map(field => (
+                                                                                <option key={field} value={`field:${field}`}>{field}</option>
+                                                                            ))}
+                                                                        </select>
+                                                                    </div>
+
+                                                                    <div className="relative flex py-1 items-center">
+                                                                        <div className="flex-grow border-t border-zinc-100"></div>
+                                                                        <span className="flex-shrink mx-2 text-[10px] text-zinc-400 font-mono uppercase">Or enter fixed dynamic value</span>
+                                                                        <div className="flex-grow border-t border-zinc-100"></div>
+                                                                    </div>
+
+                                                                    <div>
+                                                                        <input
+                                                                            type="text"
+                                                                            placeholder={`Fixed value for "${button.text}" URL`}
+                                                                            className={`h-9 w-full rounded-lg text-xs border ${
+                                                                                fixedText
+                                                                                    ? 'border-zinc-200 focus:border-black focus:ring-0 bg-white' 
+                                                                                    : 'border-zinc-200 bg-zinc-50/50 focus:border-zinc-300 focus:ring-0'
+                                                                            } transition-all`}
+                                                                            value={fixedText}
+                                                                            onChange={(e) => handleButtonUrlParamChange(button.index, e.target.value)}
+                                                                        />
+                                                                    </div>
+                                                                </div>
+
+                                                                <p className="mt-2 text-[10px] text-zinc-400 font-sans leading-relaxed">
+                                                                    Template URL: <code className="font-mono bg-zinc-50 px-1 py-0.5 rounded text-zinc-600">{button.url}</code>
+                                                                </p>
+                                                            </div>
+                                                        );
+                                                    })}
 
                                                     {variables.length > 0 && (
                                                         <div className="border-t border-zinc-100 pt-4">

@@ -1,0 +1,3 @@
+# Unified Inbound Ingestion with Wire Adapters
+
+Inbound WhatsApp messages arrive via two distinct transport protocols: Meta Cloud Graph API webhooks and Baileys WebSocket events. We decided to consolidate all contact resolution, conversation management, media storage, flow execution, bot agent replies, and notification dispatch into a single deep Inbound Ingestion module (`inboundIngestion.service.ts`). Meta and Baileys handlers are strictly thin wire adapters that normalize incoming payloads and pass them across the `ingestInboundMessage` seam. Inbound processing is performed asynchronously in-process to avoid a mandatory Redis dependency for standard 1:1 chat while isolating transport wire acknowledgments from downstream failures.

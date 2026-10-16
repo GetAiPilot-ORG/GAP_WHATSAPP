@@ -247,6 +247,17 @@ async function activatePlan(params: {
     if (orgErr) console.warn("organizations plan update error:", orgErr.message);
   }
 
+  if (userId) {
+    const { error: profErr } = await supabase
+      .from("profiles")
+      .update({
+        subscription: planName,
+        updated_at: now.toISOString(),
+      })
+      .eq("id", userId);
+    if (profErr) console.warn("profiles subscription update error:", profErr.message);
+  }
+
   if (email) {
     const { error: hubErr } = await supabase
       .from("hub_subscriptions")

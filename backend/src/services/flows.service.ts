@@ -89,7 +89,74 @@ function processButtonConfig(
   };
 }
 
+export function validateFlowUserInput(
+  rawInput: string,
+  inputType: string
+): { isValid: boolean; formatted: string } {
+  const trimmed = String(rawInput || '').trim();
+  if (!trimmed) {
+    return { isValid: false, formatted: '' };
+  }
 
+  const type = String(inputType || 'text').toLowerCase();
+
+  if (type === 'phone' || type === 'mobile') {
+    // If input contains letters or alphabets, it's not a valid phone number
+    if (/[a-zA-Z]/.test(trimmed)) {
+      return { isValid: false, formatted: '' };
+    }
+    const digits = trimmed.replace(/\D/g, '');
+    // Standard phone check: 10 to 15 digits
+    // Indian standard: 10 digits (or 11 with 0, 12 with 91)
+    if (digits.length === 10) {
+      return { isValid: true, formatted: digits };
+    }
+    if (digits.length === 11 && digits.startsWith('0')) {
+      return { isValid: true, formatted: digits.slice(1) };
+    }
+    if (digits.length === 12 && digits.startsWith('91')) {
+      return { isValid: true, formatted: digits.slice(2) };
+    }
+    // International phone numbers with explicit '+' prefix: 10 to 15 digits (e.g. +14155552671)
+    if (trimmed.startsWith('+') && digits.length >= 10 && digits.length <= 15) {
+      return { isValid: true, formatted: `+${digits}` };
+    }
+    return { isValid: false, formatted: '' };
+  }
+
+  if (type === 'email') {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
+    if (emailRegex.test(trimmed)) {
+      return { isValid: true, formatted: trimmed.toLowerCase() };
+    }
+    return { isValid: false, formatted: '' };
+  }
+
+  if (type === 'number') {
+    const cleanNum = trimmed.replace(/,/g, '');
+    if (/^-?\d+(\.\d+)?$/.test(cleanNum)) {
+      return { isValid: true, formatted: cleanNum };
+    }
+    return { isValid: false, formatted: '' };
+  }
+
+  // Default 'text': non-empty string is valid
+  return { isValid: trimmed.length > 0, formatted: trimmed };
+}
+
+export function getDefaultInputErrorMessage(inputType: string): string {
+  const type = String(inputType || 'text').toLowerCase();
+  if (type === 'phone' || type === 'mobile') {
+    return '⚠️ Please enter a valid 10-digit mobile number.';
+  }
+  if (type === 'email') {
+    return '⚠️ Please enter a valid email address (e.g. name@example.com).';
+  }
+  if (type === 'number') {
+    return '⚠️ Please enter a valid number.';
+  }
+  return '⚠️ Please enter a valid response.';
+}
 
 export type FlowEngineResult = {
   consumed: boolean;
@@ -1139,23 +1206,70 @@ export async function processFlowEngine(
           };
         }
       }
-    } else if (currentNode?.type === "button" || currentNode?.type === "userInput") {
-      if (currentNode.type === "userInput") {
-        const saveToField = normalizeFlowVariableKey(
-          currentNode.data?.config?.saveToField,
-        );
-        if (saveToField) {
-          const nextState = {
-            ...(session?.state_data || {}),
-            [saveToField]: text,
-          };
-          await supabase
-            .from("w_flow_sessions")
-            .update({ state_data: nextState })
-            .eq("id", session_id);
-          flowState = nextState;
-        }
+    } else if (currentNode?.type === "userInput") {
+      const inputType = String(currentNode.data?.config?.inputType || "text").toLowerCase();
+      const validation = validateFlowUserInput(text, inputType);
+
+      if (!validation.isValid) {
+        console.log(`[Flow] User input validation failed for type "${inputType}" on node ${currentNode.id}. Input: "${text}"`);
+        const fallbackMsg = getDefaultInputErrorMessage(inputType);
+        const configuredErrorMsg = currentNode.data?.config?.errorMessage
+          ? renderFlowTemplate(currentNode.data.config.errorMessage, flowState)
+          : "";
+        const finalErrorMsg = configuredErrorMsg || fallbackMsg;
+
+        return {
+          consumed: true,
+          output: finalErrorMsg,
+          ...flowMeta,
+          flow_node_id: currentNode.id,
+        };
       }
+
+      // Input is valid: Save formatted value to flowState and database
+      const saveToField = normalizeFlowVariableKey(
+        currentNode.data?.config?.saveToField,
+      );
+      if (saveToField) {
+        const nextState = {
+          ...(flowState || session?.state_data || {}),
+          [saveToField]: validation.formatted,
+        };
+        await supabase
+          .from("w_flow_sessions")
+          .update({ state_data: nextState })
+          .eq("id", session_id);
+        flowState = nextState;
+      }
+
+      // User response is valid -> advance to outgoing edge
+      const outEdges = edges.filter((e: any) => e.source === currentNodeId);
+      const nextEdge = outEdges[0] || null;
+
+      if (nextEdge) {
+        currentNodeId = nextEdge.target;
+        await supabase
+          .from("w_flow_sessions")
+          .update({ current_node_id: currentNodeId })
+          .eq("id", session_id);
+        console.log(`➡️ [Flow userInput] Input valid. Advancing to node: ${currentNodeId}`);
+      } else {
+        await supabase
+          .from("w_flow_sessions")
+          .update({
+            status: "completed",
+            completed_at: new Date().toISOString(),
+          })
+          .eq("id", session_id);
+        if (run_id) {
+          await supabase
+            .from("w_flow_runs")
+            .update({ status: "completed", ended_at: new Date().toISOString() })
+            .eq("id", run_id);
+        }
+        return { consumed: true, output: null, ...flowMeta };
+      }
+    } else if (currentNode?.type === "button") {
       // User ka response match karo outgoing edges se
       const outEdges = edges.filter((e: any) => e.source === currentNodeId);
       let nextEdge: any = null;

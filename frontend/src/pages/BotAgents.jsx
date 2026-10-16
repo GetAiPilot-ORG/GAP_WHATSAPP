@@ -684,20 +684,21 @@ function AgentCard({ agent, onEdit, onToggle, onDelete }) {
                 <div className="flex gap-2">
                     <button
                         onClick={() => onEdit(agent)}
-                        className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-[#f8f9fa] border border-gray-200 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
+                        className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-[#f8f9fa] border border-gray-200 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-100 hover:border-gray-300 transition-colors"
                     >
                         <GearSix size={14} className="text-gray-500" />
                         Configure
                     </button>
                     <button
                         onClick={() => onToggle(agent)}
-                        className={`flex h-9 items-center justify-center px-4 rounded-lg border font-semibold transition-colors ${agent.isActive
-                            ? 'border-red-100 bg-red-50 text-red-600 hover:bg-red-100'
-                            : 'border-emerald-100 bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+                        className={`inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-lg border text-xs font-semibold transition-all active:scale-[0.98] ${agent.isActive
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300'
+                            : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100 hover:text-gray-800'
                             }`}
-                        title={agent.isActive ? 'Pause Agent' : 'Activate Agent'}
+                        title={agent.isActive ? 'Agent is Active • Click to Pause' : 'Agent is Inactive • Click to Activate'}
                     >
-                        {agent.isActive ? <X size={16} weight="bold" /> : <Check size={16} weight="bold" />}
+                        <span className={`h-2 w-2 rounded-full ${agent.isActive ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]' : 'bg-gray-400'}`} />
+                        <span>{agent.isActive ? 'Active' : 'Inactive'}</span>
                     </button>
                 </div>
             </div>
