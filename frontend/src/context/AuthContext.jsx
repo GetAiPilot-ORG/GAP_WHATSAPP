@@ -370,13 +370,19 @@ export function AuthProvider({ children }) {
                     if (!tokenOverride && isExpiring) {
                         const { data, error } = await supabase.auth.refreshSession()
                         if (error) {
-                            supabase.auth.signOut().catch(() => {});
+                            supabase.auth.signOut().catch(() => { });
                             throw error;
                         }
                         currentSession = data.session
                         if (data.session) {
                             setSession(data.session)
-                            setUser(data.session.user)
+                            setUser(prev => prev ? {
+                                ...data.session.user,
+                                subscription_checked: prev.subscription_checked,
+                                role: prev.role,
+                                plan: prev.plan,
+                                subscription_status: prev.subscription_status
+                            } : data.session.user)
                         }
                     }
 
@@ -401,7 +407,7 @@ export function AuthProvider({ children }) {
                     if (response.status === 401 && retryCount === 0) {
                         const { data, error } = await supabase.auth.refreshSession();
                         if (error) {
-                            supabase.auth.signOut().catch(() => {});
+                            supabase.auth.signOut().catch(() => { });
                             throw error;
                         }
                         if (data.session) {

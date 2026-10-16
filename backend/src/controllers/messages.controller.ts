@@ -10,6 +10,7 @@ import { triggerHandoffWebhook } from '../services/n8n.service.js';
 import dotenv from "dotenv";
 import { uploadMediaToStorage } from '../services/broadcast.service.js';
 import { decryptToken } from '../utils/crypto.js';
+import { generateConversationSummaryDirect } from '../services/summary.service.js';
 dotenv.config({ path: "./.env" });
 
 const N8N_HANDOFF_WEBHOOK_URL = process.env.N8N_HANDOFF_WEBHOOK_URL;
@@ -98,9 +99,6 @@ export async function requestSummary(req: any, res: Response) {
             .maybeSingle();
         if (convErr) throw convErr;
         if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
-        if (!N8N_HANDOFF_WEBHOOK_URL) {
-            return res.status(400).json({ error: 'N8N_HANDOFF_WEBHOOK_URL is not configured' });
-        }
 
         await supabase
             .from('w_conversations')
@@ -113,32 +111,34 @@ export async function requestSummary(req: any, res: Response) {
             .eq('id', conversationId)
             .eq('organization_id', orgId);
 
-        await triggerHandoffWebhook({
-            event: 'manual_summary_requested',
-            organization_id: orgId,
-            conversation_id: conversationId,
-            contact_id: conversation.contact_id,
-            handoff_reason: 'Manual summary requested',
-            requested_by_user_id: req.user?.id || null,
-            summary_required: true,
+        if (io && typeof io.to === 'function') {
+            io.to(`org:${orgId}`).emit('conversation_summary_updated', {
+                conversation_id: conversationId,
+                summary_status: 'pending',
+            });
+        }
+
+        // Direct AI summary generation (No n8n!)
+        const result = await generateConversationSummaryDirect(
+            conversationId,
+            orgId,
+            req.user?.id || null
+        );
+
+        res.json({
+            success: true,
+            conversation: result.conversation,
+            summary: result.summary,
         });
-
-        const { data: latestConversation } = await supabase
-            .from('w_conversations')
-            .select('id, handoff_status, handoff_reason, handoff_requested_at, summary_status, latest_summary_id')
-            .eq('id', conversationId)
-            .eq('organization_id', orgId)
-            .maybeSingle();
-
-        io.to(`org:${orgId}`).emit('conversation_summary_updated', {
-            conversation_id: conversationId,
-            summary_status: latestConversation?.summary_status || 'pending',
-        });
-
-        res.json({ success: true, conversation: latestConversation || null });
     } catch (err: any) {
-        console.error('[n8n] Error requesting summary:', err);
-        res.status(500).json({ error: err.message || 'Failed to request summary' });
+        console.error('[Summary] Error requesting summary:', err);
+        await supabase
+            .from('w_conversations')
+            .update({ summary_status: 'failed' })
+            .eq('id', conversationId)
+            .eq('organization_id', orgId);
+
+        res.status(500).json({ error: err.message || 'Failed to generate AI summary' });
     }
 }
 

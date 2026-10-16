@@ -3,6 +3,15 @@ import { io } from "socket.io-client";
 import { AlertCircle, CheckCircle, Loader2, LogOut } from 'lucide-react';
 import QRCode from "react-qr-code";
 import { useAuth } from '../context/AuthContext';
+
+const SafeQRCode = (() => {
+    if (!QRCode) return null;
+    const resolved = (typeof QRCode === 'object' && QRCode !== null && QRCode.default) ? QRCode.default : QRCode;
+    if (typeof resolved === 'function' || (typeof resolved === 'object' && resolved !== null && (resolved.$$typeof || resolved.render))) {
+        return resolved;
+    }
+    return null;
+})();
 import Modal from './Modal';
 import { BACKEND_URL as BACKEND_BASE } from '../config/api';
 
@@ -246,9 +255,9 @@ const WhatsAppLogin = ({ onAccountConnected }) => {
                     </div>
                 )}
 
-                {status === 'scanning' && qrCode && (
+                {status === 'scanning' && qrCode && SafeQRCode && (
                     <div className="p-2 bg-white rounded-lg shadow-sm animate-in zoom-in duration-300">
-                        <QRCode
+                        <SafeQRCode
                             value={qrCode}
                             size={220}
                             style={{ height: "auto", maxWidth: "100%", width: "100%" }}

@@ -54,6 +54,7 @@ export const corsAllowedHeaders = [
     "Authorization",
     "X-Auth-Portal",
     "X-N8N-Secret",
+    "x-ecosystem-secret",
     "ngrok-skip-browser-warning"
 ];
 
