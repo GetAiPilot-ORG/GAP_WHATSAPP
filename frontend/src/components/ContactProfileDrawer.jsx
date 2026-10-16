@@ -69,6 +69,8 @@ function getMessageText(message) {
     const candidates = [
         message.text,
         message.body,
+        message.text_body,
+        message.transcript,
         message.content,
         message.caption,
         message.message,
@@ -78,7 +80,7 @@ function getMessageText(message) {
     for (const candidate of candidates) {
         if (typeof candidate === 'string' && candidate.trim()) return candidate.trim()
         if (candidate && typeof candidate === 'object') {
-            const nested = candidate.text || candidate.body || candidate.caption
+            const nested = candidate.text || candidate.body || candidate.caption || candidate.template?.body
             if (typeof nested === 'string' && nested.trim()) return nested.trim()
         }
     }
@@ -86,13 +88,21 @@ function getMessageText(message) {
 }
 
 function isIncomingMessage(message) {
-    return Boolean(
-        message?.direction === 'incoming' ||
-        message?.from_me === false ||
-        message?.fromMe === false ||
-        message?.sender === 'customer' ||
-        message?.sender_type === 'customer'
-    )
+    if (!message) return false
+    // Check explicit direction
+    if (message.direction === 'inbound' || message.direction === 'incoming') return true
+    if (message.direction === 'outbound' || message.direction === 'outgoing') return false
+
+    // Check from_me flag
+    if (message.from_me === true || message.fromMe === true) return false
+    if (message.from_me === false || message.fromMe === false) return true
+
+    // Check sender: in LiveChat, customer messages have sender === 'user'
+    const sender = String(message.sender || message.sender_type || message.senderType || '').toLowerCase()
+    if (sender === 'user' || sender === 'customer' || sender === 'client' || sender === 'inbound') return true
+    if (sender === 'agent' || sender === 'bot' || sender === 'me' || sender === 'system' || sender === 'outbound') return false
+
+    return false
 }
 
 function buildSalesInsights(messages, contact) {
@@ -254,6 +264,7 @@ export default function ContactProfileDrawer({
     botEnabled = false,
     onToggleBot = null,
     messages = [],
+    socket = null,
 }) {
     const { apiCall } = useAuth()
     const [activeTab, setActiveTab] = useState('chat')
@@ -435,6 +446,25 @@ export default function ContactProfileDrawer({
     }, [conversationId, fetchSummary, isOpen, summaryMeta?.summary_status])
 
     useEffect(() => {
+        if (!socket || !conversationId) return
+        const handleSummaryUpdate = (payload) => {
+            if (payload?.conversation_id === conversationId) {
+                if (payload?.summary) {
+                    setHandoffSummary(payload.summary)
+                }
+                if (payload?.summary_status) {
+                    setSummaryMeta((prev) => ({ ...(prev || {}), summary_status: payload.summary_status }))
+                }
+                fetchSummary().catch(() => {})
+            }
+        }
+        socket.on('conversation_summary_updated', handleSummaryUpdate)
+        return () => {
+            socket.off('conversation_summary_updated', handleSummaryUpdate)
+        }
+    }, [socket, conversationId, fetchSummary])
+
+    useEffect(() => {
         if (!isOpen || !contact?.id || !isContactSaved) return
 
         const fieldsPatch = {}
@@ -475,13 +505,17 @@ export default function ContactProfileDrawer({
     }, [isOpen, contact?.id, isContactSaved, extractedInfo, aiCapturedInfo, displayInsights, customFields, patchCustomFields])
 
     useEffect(() => {
-        if (!isOpen || !focusAliasOnOpen) return
-        setActiveTab('overview')
-        const t = setTimeout(() => {
-            aliasInputRef.current?.focus?.()
-            aliasInputRef.current?.select?.()
-        }, 50)
-        return () => clearTimeout(t)
+        if (!isOpen) return
+        if (focusAliasOnOpen) {
+            setActiveTab('overview')
+            const t = setTimeout(() => {
+                aliasInputRef.current?.focus?.()
+                aliasInputRef.current?.select?.()
+            }, 50)
+            return () => clearTimeout(t)
+        } else {
+            setActiveTab('chat')
+        }
     }, [isOpen, focusAliasOnOpen])
 
     const cancelFlow = async () => {
@@ -560,10 +594,11 @@ export default function ContactProfileDrawer({
                 throw new Error(body || `Failed to request summary (HTTP ${res.status})`)
             }
             const data = await res.json().catch(() => null)
-            setSummaryMeta(data?.conversation || { ...(summaryMeta || {}), summary_status: 'pending' })
-            setTimeout(() => {
-                fetchSummary().catch((err) => console.error('Error fetching requested summary', err))
-            }, 1200)
+            if (data?.summary) {
+                setHandoffSummary(data.summary)
+            }
+            setSummaryMeta(data?.conversation || { ...(summaryMeta || {}), summary_status: 'ready' })
+            await fetchSummary().catch((err) => console.error('Error fetching requested summary', err))
         } catch (e) {
             setSummaryError(e?.message || 'Failed to request summary')
         } finally {
@@ -656,8 +691,8 @@ export default function ContactProfileDrawer({
                     <div className="border-b border-gray-200 bg-white">
                         <nav className="-mb-px flex px-4" aria-label="Tabs">
                             {[
+                                ['chat', 'AI Brief & Interest'],
                                 ['overview', 'Overview'],
-                                ['chat', 'Sales brief'],
                                 ['notes', 'Notes'],
                             ].map(([tab, label]) => (
                                 <button
@@ -810,7 +845,7 @@ export default function ContactProfileDrawer({
                                                 </div>
                                                 <p className="mt-1 text-xs text-gray-500">
                                                     {handoffSummary
-                                                        ? `Generated by ${handoffSummary.generated_by || 'n8n'}`
+                                                        ? `Generated by ${handoffSummary.generated_by || 'AI'}`
                                                         : summaryMeta?.summary_status === 'pending'
                                                             ? 'Summary is being generated.'
                                                             : 'Generate a sales-ready summary from this conversation.'}
@@ -820,10 +855,10 @@ export default function ContactProfileDrawer({
                                                 type="button"
                                                 onClick={requestSummary}
                                                 disabled={!conversationId || isRequestingSummary || summaryMeta?.summary_status === 'pending'}
-                                                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700 hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-green-600 bg-green-600 hover:bg-green-700 text-white px-3.5 py-2 text-xs font-semibold shadow-xs disabled:cursor-not-allowed disabled:opacity-60 transition-colors"
                                             >
                                                 <RefreshCw className={`h-3.5 w-3.5 ${isRequestingSummary || summaryMeta?.summary_status === 'pending' ? 'animate-spin' : ''}`} />
-                                                {summaryMeta?.summary_status === 'pending' ? 'Generating' : handoffSummary ? 'Regenerate' : 'Generate'}
+                                                {summaryMeta?.summary_status === 'pending' ? 'Generating...' : handoffSummary ? 'Regenerate Brief' : 'Generate Brief'}
                                             </button>
                                         </div>
                                         {summaryError ? <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{summaryError}</div> : null}
@@ -921,7 +956,7 @@ export default function ContactProfileDrawer({
                                                 <Sparkles className="h-4 w-4 text-green-600" />
                                                 Analysis notes
                                             </div>
-                                            <p className="mt-1 text-xs text-gray-500">Structured notes generated by n8n/AI analysis.</p>
+                                            <p className="mt-1 text-xs text-gray-500">Structured notes generated by AI analysis.</p>
                                         </div>
                                         <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">{aiNotes.length} AI</span>
                                     </div>
