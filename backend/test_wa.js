@@ -1,9 +1,10 @@
 const payload = {
-  org_id: '88b8306b-ed36-41fc-ae22-b2fea6b50f44',
-  lead_id: 1,
-  phone: '+919999999999',
-  template_id: 'auto_followup_1',
-  variables: { name: 'Test' }
+  org_id: 'c6705bb7-815b-4bd9-8a22-85b2f7ad7916',
+  user_email: 'getaipilott@gmail.com',
+  lead_id: '2c84ef08-5154-489a-8d63-cc83f1caa2f1',
+  phone: '+917082892696',
+  template_id: 'gap_lead_welcome_offer',
+  variables: { name: 'Ank' }
 };
 
 fetch('http://localhost:3001/api/ecosystem/trigger-whatsapp', {

@@ -17,7 +17,7 @@ function resolvePlanName(plan) {
     if (p.includes('growth')) return 'GAP Growth'
     if (p.includes('core')) return 'GAP Core'
     if (p.includes('starter')) return 'GAP Starter'
-    return planStr
+    return String(plan || 'Free Plan')
 }
 
 export function AuthProvider({ children }) {
@@ -72,6 +72,8 @@ export function AuthProvider({ children }) {
             }
 
             // Fallback for direct owners if endpoint is loading or unreachable
+            setUserRole(prev => prev || (loginType === 'agent' ? 'agent' : 'owner'));
+
             const { data: sub } = await supabase
                 .from('app_user_subscriptions')
                 .select('plan_id, plan_label, expires_at, status')
@@ -89,6 +91,7 @@ export function AuthProvider({ children }) {
             setUser(prev => prev ? { ...prev, plan: resolvedPlan, subscription_status: resolvedStatus, subscription_checked: true } : null);
         } catch (err) {
             console.error('[AUTH] fetchUserProfile error:', err);
+            setUserRole(prev => prev || (loginType === 'agent' ? 'agent' : 'owner'));
             setUser(prev => prev ? { ...prev, subscription_checked: true } : null);
         }
     }, [loginType]);
@@ -351,13 +354,19 @@ export function AuthProvider({ children }) {
                     if (!tokenOverride && isExpiring) {
                         const { data, error } = await supabase.auth.refreshSession()
                         if (error) {
-                            supabase.auth.signOut().catch(() => {});
+                            supabase.auth.signOut().catch(() => { });
                             throw error;
                         }
                         currentSession = data.session
                         if (data.session) {
                             setSession(data.session)
-                            setUser(data.session.user)
+                            setUser(prev => prev ? {
+                                ...data.session.user,
+                                subscription_checked: prev.subscription_checked,
+                                role: prev.role,
+                                plan: prev.plan,
+                                subscription_status: prev.subscription_status
+                            } : data.session.user)
                         }
                     }
 
@@ -382,7 +391,7 @@ export function AuthProvider({ children }) {
                     if (response.status === 401 && retryCount === 0) {
                         const { data, error } = await supabase.auth.refreshSession();
                         if (error) {
-                            supabase.auth.signOut().catch(() => {});
+                            supabase.auth.signOut().catch(() => { });
                             throw error;
                         }
                         if (data.session) {

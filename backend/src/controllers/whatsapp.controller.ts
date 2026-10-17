@@ -798,7 +798,7 @@ export async function getTemplates(req: any, res: Response) {
 
     if (!response.ok) {
       console.error('Meta API Error:', json);
-      return res.status(response.status).json({ error: json.error?.message || 'Failed to fetch templates from Meta' });
+      return res.status(response.status === 401 ? 400 : response.status).json({ error: json.error?.message || 'Failed to fetch templates from Meta' });
     }
     const metaTemplates = json.data || [];
     // Filter out recently deleted templates before syncing and merging
@@ -1227,7 +1227,7 @@ export async function createTemplate(req: any, res: Response) {
         meta_response: json,
         submitted_by: req.user?.id || null,
       });
-      return res.status(response.status).json({
+      return res.status(response.status === 401 ? 400 : response.status).json({
         error: clientError,
         code: authVerificationBlocked
           ? 'AUTH_BUSINESS_VERIFICATION_REQUIRED'
@@ -1350,7 +1350,7 @@ export async function deleteTemplate(req: any, res: Response) {
         userFriendlyMsg =
           "Permission denied by Meta. Your connected account needs WhatsApp Business Management admin access to delete templates. You can delete it directly from Meta Business Manager.";
       }
-      return res.status(response.status).json({ error: userFriendlyMsg });
+      return res.status(response.status === 401 ? 400 : response.status).json({ error: userFriendlyMsg });
     }
 
     // Delete local cache record
