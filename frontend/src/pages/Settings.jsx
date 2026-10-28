@@ -376,7 +376,7 @@ export default function Settings() {
             return {
                 name: 'Pro',
                 price: '₹3,499/mo',
-                features: ['50,000 contacts', '10 agents', 'API & Webhooks']
+                features: ['25,000 contacts', '10 agents', 'API & Webhooks']
             }
         }
         // If starter or no active plan
