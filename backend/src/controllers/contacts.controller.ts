@@ -44,40 +44,60 @@ export async function getContacts(req: any, res: Response) {
     }
 
     try {
-        let query = supabase
-            .from('w_contacts')
-            .select(CONTACT_SELECT)
-            .eq('organization_id', organization_id)
-            .order('created_at', { ascending: false });
+        const allContacts: any[] = [];
+        const CHUNK_SIZE = 1000;
+        let from = 0;
 
-        if (!includeGroups) {
-            query = query.or('contact_type.eq.individual,contact_type.is.null');
+        while (true) {
+            let query = supabase
+                .from('w_contacts')
+                .select(CONTACT_SELECT)
+                .eq('organization_id', organization_id)
+                .order('created_at', { ascending: false })
+                .range(from, from + CHUNK_SIZE - 1);
+
+            if (!includeGroups) {
+                query = query.or('contact_type.eq.individual,contact_type.is.null');
+            }
+
+            if (!includeUnsaved) {
+                query = query.not('saved_at', 'is', null);
+            }
+
+            const { data, error } = await query;
+            if (error) throw error;
+            if (!data || data.length === 0) break;
+            allContacts.push(...data);
+            if (data.length < CHUNK_SIZE) break;
+            from += CHUNK_SIZE;
         }
-
-        if (!includeUnsaved) {
-            query = query.not('saved_at', 'is', null);
-        }
-
-        let { data, error } = await query;
-        if (error) throw error;
 
         // Fetch broadcast message counts grouped by contact_id
-        const { data: broadcastMessages, error: broadcastErr } = await supabase
-            .from('w_messages')
-            .select('contact_id')
-            .eq('organization_id', organization_id)
-            .eq('automation_source', 'broadcast');
-
         const broadcastCounts: Record<string, number> = {};
-        if (!broadcastErr && broadcastMessages) {
-            for (const msg of broadcastMessages) {
-                if (msg.contact_id) {
-                    broadcastCounts[msg.contact_id] = (broadcastCounts[msg.contact_id] || 0) + 1;
+        try {
+            let bFrom = 0;
+            while (true) {
+                const { data: broadcastMessages, error: broadcastErr } = await supabase
+                    .from('w_messages')
+                    .select('contact_id')
+                    .eq('organization_id', organization_id)
+                    .eq('automation_source', 'broadcast')
+                    .range(bFrom, bFrom + CHUNK_SIZE - 1);
+
+                if (broadcastErr || !broadcastMessages || broadcastMessages.length === 0) break;
+                for (const msg of broadcastMessages) {
+                    if (msg.contact_id) {
+                        broadcastCounts[msg.contact_id] = (broadcastCounts[msg.contact_id] || 0) + 1;
+                    }
                 }
+                if (broadcastMessages.length < CHUNK_SIZE) break;
+                bFrom += CHUNK_SIZE;
             }
+        } catch (bErr) {
+            console.warn('Could not fetch broadcast message counts:', bErr);
         }
 
-        const rows = (data || []).map((c: any) => {
+        const rows = allContacts.map((c: any) => {
             const next = { ...c };
             next.broadcast_count = broadcastCounts[c.id] || 0;
             const phone = String(next.phone || '').trim();
