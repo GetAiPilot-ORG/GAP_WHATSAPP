@@ -871,6 +871,9 @@ export default function LiveChat() {
             durationSeconds: Number.isFinite(Number(durationSeconds)) ? Number(durationSeconds) : null,
             transcript: m.transcript ?? m.content?.transcript ?? null,
             sender: m.direction === 'outbound' ? 'agent' : 'user',
+            direction: m.direction || (m.sender === 'agent' ? 'outbound' : 'inbound'),
+            from_me: m.direction === 'outbound',
+            fromMe: m.direction === 'outbound',
             time: format(createdAt, 'h:mm a'),
             type: m.type === 'note' ? 'note' : (m.type || 'text'),
             messageType: m.type || 'text',
@@ -946,6 +949,9 @@ export default function LiveChat() {
             createdAt,
             text: msg.text || msg.content?.text || msg.content?.caption || '',
             sender: msg.sender || 'user',
+            direction: msg.direction || (msg.sender === 'agent' ? 'outbound' : 'inbound'),
+            from_me: msg.sender === 'agent' || msg.direction === 'outbound',
+            fromMe: msg.sender === 'agent' || msg.direction === 'outbound',
             time: format(createdAt, 'h:mm a'),
             type: msg.type === 'note' ? 'note' : (msg.type || 'text'),
             messageType: msg.type || 'text',
@@ -3896,8 +3902,8 @@ export default function LiveChat() {
                                             setFocusAliasOnOpen(false)
                                             setIsContactDrawerOpen(true)
                                         }}
-                                        className="hidden sm:flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-gray-100 shrink-0"
-                                        title="Contact info"
+                                        className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-gray-100 shrink-0"
+                                        title="Contact info & AI brief"
                                     >
                                         <Info className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
                                     </button>
@@ -4613,6 +4619,7 @@ export default function LiveChat() {
                     onToggleBot={(enabled) => toggleBotForConversation(enabled, selectedBotId)}
                     messages={filteredMessages}
                     conversationId={selectedChat?.id || null}
+                    socket={socket}
                     contact={selectedChat?.contact ? {
                         ...selectedChat.contact,
                         // UI fallbacks
