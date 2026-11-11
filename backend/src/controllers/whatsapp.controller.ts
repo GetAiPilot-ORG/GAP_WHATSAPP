@@ -334,6 +334,20 @@ export async function addMetaAccount(req: any, res: Response) {
       console.error("Supabase upsert error:", error);
       throw new Error(error.message);
     }
+
+    if (waba_id && access_token) {
+      fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${String(waba_id).trim()}/message_templates?fields=id,name,language,status,category,components,quality_score,rejected_reason&limit=250`, {
+        headers: { Authorization: `Bearer ${String(access_token).trim()}` }
+      })
+      .then(res => res.json())
+      .then(async (json) => {
+        if (json?.data && Array.isArray(json.data)) {
+          await bulkUpsertLocalTemplateSubmissions(orgId, data.id, String(waba_id).trim(), json.data);
+        }
+      })
+      .catch(tErr => console.warn('[addMetaAccount] Background template sync error:', tErr.message));
+    }
+
     res.json({ success: true, account: toSafeWhatsappAccount(data) });
   } catch (err: any) {
     console.error("Error saving Meta account:", err);
@@ -827,7 +841,7 @@ export async function getTemplates(req: any, res: Response) {
 
     if (!response.ok) {
       console.error('Meta API Error:', json);
-      return res.status(response.status).json({ error: json.error?.message || 'Failed to fetch templates from Meta' });
+      return res.status(response.status === 401 ? 400 : response.status).json({ error: json.error?.message || 'Failed to fetch templates from Meta' });
     }
     const metaTemplates = json.data || [];
     // Filter out recently deleted templates before syncing and merging
@@ -1256,7 +1270,7 @@ export async function createTemplate(req: any, res: Response) {
         meta_response: json,
         submitted_by: req.user?.id || null,
       });
-      return res.status(response.status).json({
+      return res.status(response.status === 401 ? 400 : response.status).json({
         error: clientError,
         code: authVerificationBlocked
           ? 'AUTH_BUSINESS_VERIFICATION_REQUIRED'
@@ -1379,7 +1393,7 @@ export async function deleteTemplate(req: any, res: Response) {
         userFriendlyMsg =
           "Permission denied by Meta. Your connected account needs WhatsApp Business Management admin access to delete templates. You can delete it directly from Meta Business Manager.";
       }
-      return res.status(response.status).json({ error: userFriendlyMsg });
+      return res.status(response.status === 401 ? 400 : response.status).json({ error: userFriendlyMsg });
     }
 
     // Delete local cache record

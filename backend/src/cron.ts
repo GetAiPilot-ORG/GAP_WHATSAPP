@@ -109,5 +109,69 @@ export function startCronJobs() {
         }
     });
 
+    // Follow-up flow sessions every 15 mins
+    cron.schedule('*/15 * * * *', async () => {
+        try {
+            const { data: sessions, error } = await supabase
+                .from('w_flow_sessions')
+                .select('*')
+                .eq('status', 'waiting');
+
+            if (error || !sessions) return;
+
+            for (const session of sessions) {
+                try {
+                    const stateData = session.state_data || {};
+                    if (stateData.follow_up_sent) continue;
+
+                    // Fetch the flow configuration to find current node's follow-up settings
+                    const { data: flow } = await supabase.from('w_flows').select('nodes').eq('id', session.flow_id).maybeSingle();
+                    if (!flow?.nodes) continue;
+
+                    const currentNode = flow.nodes.find((n: any) => n.id === session.current_node_id);
+                    const followUpConfig = currentNode?.data?.config?.followUp;
+                    
+                    if (!followUpConfig?.enabled) continue;
+
+                    const waitHours = followUpConfig.hours || 2;
+                    const followUpMessage = followUpConfig.message || "Hi, we noticed you haven't replied. Please let us know if you need any help to continue!";
+
+                    // Check if elapsed time is greater than configured wait time
+                    const updatedAt = new Date(session.updated_at || session.created_at).getTime();
+                    const elapsedHours = (Date.now() - updatedAt) / (1000 * 60 * 60);
+
+                    if (elapsedHours < waitHours) continue; // Not enough time has passed
+
+                    // Fetch contact phone
+                    const { data: contact } = await supabase.from('w_contacts').select('phone').eq('id', session.contact_id).maybeSingle();
+                    if (!contact?.phone) continue;
+
+                    // Fetch wa_account_id to get phone_number_id
+                    let phoneNumberId = null;
+                    if (session.conversation_id) {
+                        const { data: conv } = await supabase.from('w_conversations').select('wa_account_id').eq('id', session.conversation_id).maybeSingle();
+                        if (conv?.wa_account_id) {
+                            const { data: acc } = await supabase.from('w_wa_accounts').select('phone_number_id').eq('id', conv.wa_account_id).maybeSingle();
+                            phoneNumberId = acc?.phone_number_id || null;
+                        }
+                    }
+
+                    const { sendTextMessage } = await import('./services/messages.sender.js');
+                    await sendTextMessage(contact.phone, followUpMessage, phoneNumberId);
+
+                    // Update session to mark follow-up sent
+                    stateData.follow_up_sent = true;
+                    await supabase.from('w_flow_sessions').update({ state_data: stateData }).eq('id', session.id);
+                    
+                    console.log(`[FlowFollowUp] Sent follow-up to ${contact.phone} (Node: ${session.current_node_id})`);
+                } catch (e) {
+                    console.error('[FlowFollowUp] Error sending to session', session.id, e);
+                }
+            }
+        } catch (e) {
+            console.error('[FlowFollowUp] Cron error:', e);
+        }
+    });
+
     console.log('✅ Cron jobs started');
 }

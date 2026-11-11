@@ -21,6 +21,7 @@ import webhookRoutes from './routes/webhook.routes.js';
 import googleAuthRoutes from './routes/googleAuth.routes.js';
 import appointmentsRoutes from './routes/appointments.routes.js';
 import pushRoutes from './routes/push.routes.js';
+import ecosystemRoutes from './routes/ecosystem.routes.js';
 import { maintenanceGuard } from './middleware/maintenance.middleware.js';
 
 dotenv.config({ path: "./.env" });
@@ -53,6 +54,7 @@ export const corsAllowedHeaders = [
     "Authorization",
     "X-Auth-Portal",
     "X-N8N-Secret",
+    "x-ecosystem-secret",
     "ngrok-skip-browser-warning"
 ];
 
@@ -131,6 +133,7 @@ app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/integrations/google', googleAuthRoutes);
 app.use('/api/appointments', appointmentsRoutes);
 app.use('/api/push', pushRoutes);
+app.use('/api', ecosystemRoutes);
 app.use(webhookRoutes); // Root level /webhook
 
 export default app;

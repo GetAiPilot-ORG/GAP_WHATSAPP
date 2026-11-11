@@ -437,16 +437,22 @@ export async function getMyProfile(req: any, res: Response) {
             subscription = sub;
         }
 
-        // Also fallback to organization plan if subscription in app_user_subscriptions is missing
-        if (!subscription && orgId) {
+        // Also fallback to organization plan if subscription in app_user_subscriptions is missing or empty
+        if ((!subscription || (!subscription.plan_id && !subscription.plan_label)) && orgId) {
             const { data: org } = await supabase
                 .from('organizations')
-                .select('plan_id, plan_status, is_active')
+                .select('plan_id, plan_status, is_active, subscription_tier')
                 .eq('id', orgId)
                 .maybeSingle();
-            if (org && (org.plan_status === 'active' || org.plan_status === 'trial')) {
+            if (
+                org &&
+                org.subscription_tier !== 'free' &&
+                (org.plan_status === 'active' || org.plan_status === 'trial') &&
+                org.plan_id &&
+                org.plan_id !== 'free'
+            ) {
                 subscription = {
-                    plan_id: org.plan_id || 'starter',
+                    plan_id: org.plan_id,
                     plan_label: org.plan_id === 'pro' ? 'WA Pro' : org.plan_id === 'growth' ? 'WA Growth' : 'WA Starter',
                     status: 'active',
                     expires_at: null

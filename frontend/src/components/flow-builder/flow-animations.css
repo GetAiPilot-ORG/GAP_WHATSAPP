@@ -118,9 +118,23 @@
     border-bottom-color: #e8edf3;
 }
 
-/* Smooth transitions for handles */
+/* Smooth transitions and larger hit area for handles */
 .react-flow__handle {
     transition: all 0.2s ease;
+    width: 10px !important;
+    height: 10px !important;
+}
+
+/* Expand the clickable area invisibly around the dot */
+.react-flow__handle::after {
+    content: '';
+    position: absolute;
+    top: -12px;
+    left: -12px;
+    right: -12px;
+    bottom: -12px;
+    background: transparent;
+    border-radius: 50%;
 }
 
 .react-flow__handle:hover {

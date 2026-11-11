@@ -10,8 +10,8 @@ export const FALLBACK_PLANS = [
         description: 'Simple WhatsApp workspace for small shops and service businesses.',
         monthly_price_paise: 99900,
         yearly_price_paise: 999000,
-        limits: { numbers: 1, contacts: 1000, agents: 5, flows: 5, ai_agents: 1, broadcasts_per_month: 100, allow_broadcasts: true, allow_scheduling: false, allow_api_webhooks: false, allow_exports: false },
-        features: ['1 WhatsApp number', '1,000 contacts', '5 automation flows', 'Manual broadcasts', 'Basic bot replies'],
+        limits: { numbers: 1, contacts: 2000, agents: 5, flows: 5, ai_agents: 1, broadcasts_per_month: 100, allow_broadcasts: true, allow_scheduling: false, allow_api_webhooks: false, allow_exports: false },
+        features: ['1 WhatsApp number', '2,000 contacts', '5 automation flows', 'Manual broadcasts', 'Basic bot replies'],
     },
     {
         id: 'growth',
@@ -29,8 +29,8 @@ export const FALLBACK_PLANS = [
         description: 'Advanced automation, campaigns, AI agents, and reporting.',
         monthly_price_paise: 349900,
         yearly_price_paise: 3499000,
-        limits: { numbers: 2, contacts: 50000, agents: 10, flows: -1, ai_agents: 10, broadcasts_per_month: -1, allow_broadcasts: true, allow_scheduling: true, allow_api_webhooks: true, allow_exports: true },
-        features: ['2 WhatsApp numbers', '50,000 contacts', '10 agents included', 'Campaign scheduler', 'API and webhooks'],
+        limits: { numbers: 2, contacts: 25000, agents: 10, flows: -1, ai_agents: 10, broadcasts_per_month: -1, allow_broadcasts: true, allow_scheduling: true, allow_api_webhooks: true, allow_exports: true },
+        features: ['2 WhatsApp numbers', '25,000 contacts', '10 agents included', 'Campaign scheduler', 'API and webhooks'],
     },
 ]
 

@@ -4,7 +4,7 @@ import {
     AlertCircle, Check, ChevronDown, CreditCard, Hexagon, Loader2,
     Megaphone, ReceiptText, ShieldCheck, Wallet, Plus, ArrowRight, X,
     Send, Zap, Crown, ThumbsUp, MessageSquare, Bot, Workflow, Tag,
-    Calendar, BarChart3, FileDown, Code2, Users2, Headphones
+    Calendar, BarChart3, FileDown, Code2, Users2, Headphones, Sparkles
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
@@ -763,7 +763,7 @@ export default function BillingPage() {
                                         <div className="flex flex-wrap items-center gap-2">
                                             <p className="text-sm font-semibold text-gray-900">{getMessageChargeTitle(charge)}</p>
                                             <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${charge.billing_status === 'charged' ? 'bg-green-50 text-green-700 ring-green-600/20' : charge.billing_status === 'failed' ? 'bg-red-50 text-red-700 ring-red-600/10' : 'bg-gray-50 text-gray-600 ring-gray-200'}`}>
-                                                {String(charge.billing_status || 'recorded').replaceAll('_', ' ')}
+                                                {String(charge.billing_status || 'recorded').replace(/_/g, ' ')}
                                             </span>
                                         </div>
                                         <p className="mt-1 truncate text-xs text-gray-500">
@@ -1142,6 +1142,99 @@ export default function BillingPage() {
                     </div>
                 </section>
 
+                {/* GAP Pro & Enterprise All-in-One Ecosystem Banner */}
+                <section className="rounded-2xl border-2 border-emerald-500/30 bg-gradient-to-br from-neutral-900 via-neutral-950 to-black p-6 md:p-8 text-white shadow-xl relative overflow-hidden">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-white/10">
+                        <div>
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold uppercase tracking-wider border border-emerald-500/30 mb-3">
+                                <Sparkles className="w-3.5 h-3.5" /> Full Growth Ecosystem
+                            </span>
+                            <h2 className="text-xl md:text-2xl font-extrabold text-white">
+                                Want WhatsApp + AI Calling + Telegram + Social + CRM in One Plan?
+                            </h2>
+                            <p className="mt-1.5 text-xs md:text-sm text-neutral-400 max-w-2xl">
+                                Upgrade to GAP Pro or Enterprise to get WhatsApp bundled with AI Calling (up to 250 mins), Telegram, Instagram automation, and GAP CRM.
+                            </p>
+                        </div>
+                        <a
+                            href="https://getaipilot.in/pricing"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-bold px-5 py-2.5 text-xs uppercase tracking-wider shadow-lg transition-all shrink-0"
+                        >
+                            <span>View All Plans</span>
+                            <ArrowRight className="h-4 w-4" />
+                        </a>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                        {/* GAP Pro */}
+                        <div className="rounded-xl border border-white/10 bg-white/5 p-5 flex flex-col justify-between">
+                            <div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">All-in-One Essential</span>
+                                    <span className="text-[11px] bg-white/10 px-2.5 py-0.5 rounded-full text-neutral-300">1, 3, 6 & 12 Mo</span>
+                                </div>
+                                <h3 className="text-lg font-bold text-white mt-1">GAP Pro</h3>
+                                <div className="mt-3 flex items-baseline gap-1.5">
+                                    <span className="text-2xl font-black text-white">₹4,999</span>
+                                    <span className="text-xs text-neutral-400">/month</span>
+                                </div>
+                                <ul className="mt-4 space-y-2 text-xs text-neutral-300 border-t border-white/10 pt-4">
+                                    <li className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-emerald-400" /> WhatsApp Growth Plan Included</li>
+                                    <li className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-emerald-400" /> 100 AI Calling Minutes Included</li>
+                                    <li className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-emerald-400" /> Telegram Lite Plan Included</li>
+                                    <li className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-emerald-400" /> Social Pilot Lite Plan Included</li>
+                                    <li className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-emerald-400" /> GAP CRM - 5 Users Included</li>
+                                </ul>
+                            </div>
+                            <a
+                                href="https://getaipilot.in/pricing"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="mt-5 inline-flex items-center justify-center gap-2 rounded-lg bg-white/10 hover:bg-white/20 text-white font-semibold py-2 text-xs transition"
+                            >
+                                Upgrade to GAP Pro
+                            </a>
+                        </div>
+
+                        {/* GAP Enterprise */}
+                        <div className="rounded-xl border-2 border-emerald-500 bg-gradient-to-b from-emerald-500/10 to-white/5 p-5 flex flex-col justify-between relative shadow-lg">
+                            <span className="absolute -top-3 right-4 rounded-full bg-emerald-500 px-3 py-0.5 text-[10px] font-black uppercase text-neutral-950">
+                                Most Popular
+                            </span>
+                            <div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">Full Power Enterprise</span>
+                                    <span className="text-[11px] bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full font-bold">1, 3, 6 & 12 Mo</span>
+                                </div>
+                                <h3 className="text-lg font-bold text-white mt-1">GAP Enterprise</h3>
+                                <div className="mt-3 flex items-baseline gap-1.5">
+                                    <span className="text-2xl font-black text-white">₹8,999</span>
+                                    <span className="text-xs text-neutral-400">/month</span>
+                                </div>
+                                <ul className="mt-4 space-y-2 text-xs text-neutral-300 border-t border-white/10 pt-4">
+                                    <li className="flex items-center gap-2 font-medium text-white"><Check className="h-3.5 w-3.5 text-emerald-400" /> <strong>WhatsApp Pro Plan</strong> Included</li>
+                                    <li className="flex items-center gap-2 font-medium text-white"><Check className="h-3.5 w-3.5 text-emerald-400" /> <strong>250 AI Calling Minutes</strong> Included Monthly</li>
+                                    <li className="flex items-center gap-2 font-medium text-white"><Check className="h-3.5 w-3.5 text-emerald-400" /> <strong>1 Dedicated Virtual Business Number</strong> Included</li>
+                                    <li className="flex items-center gap-2 font-medium text-white"><Check className="h-3.5 w-3.5 text-emerald-400" /> Telegram Pro Plan Included</li>
+                                    <li className="flex items-center gap-2 font-medium text-white"><Check className="h-3.5 w-3.5 text-emerald-400" /> Social Pilot Pro Plan Included</li>
+                                    <li className="flex items-center gap-2 font-medium text-white"><Check className="h-3.5 w-3.5 text-emerald-400" /> GAP CRM - 15 Users Included</li>
+                                    <li className="flex items-center gap-2 font-medium text-white"><Check className="h-3.5 w-3.5 text-emerald-400" /> 24/7 Dedicated Support</li>
+                                </ul>
+                            </div>
+                            <a
+                                href="https://getaipilot.in/pricing"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="mt-5 inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-bold py-2 text-xs transition shadow-md"
+                            >
+                                Upgrade to GAP Enterprise
+                            </a>
+                        </div>
+                    </div>
+                </section>
+
                 <section className="rounded-xl border border-gray-200 bg-white">
                     <div className="border-b border-gray-100 p-5">
                         <h2 className="text-base font-semibold text-gray-950">Subscription Plan Activity</h2>
@@ -1202,7 +1295,7 @@ export default function BillingPage() {
                             return (
                                 <div key={tx.id} className="flex items-center justify-between gap-4 p-4">
                                     <div>
-                                        <p className="text-sm font-semibold capitalize text-gray-900">{String(tx.type || '').replaceAll('_', ' ')}</p>
+                                        <p className="text-sm font-semibold capitalize text-gray-900">{String(tx.type || '').replace(/_/g, ' ')}</p>
                                         <div className="mt-1 flex items-center gap-2">
                                             {isPending ? (
                                                 <span className="inline-flex rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/10">
@@ -1379,7 +1472,7 @@ export default function BillingPage() {
 
 function getMessageChargeTitle(charge) {
     const source = String(charge.source || '').toLowerCase()
-    const category = String(charge.category || 'message').replaceAll('_', ' ')
+    const category = String(charge.category || 'message').replace(/_/g, ' ')
     if (source === 'broadcast') return `Broadcast ${category} charge`
     if (source === 'flow') return `Flow automation ${category} charge`
     if (source === 'ai_agent') return `AI agent ${category} charge`
@@ -1401,7 +1494,7 @@ function getPlanDisplayName(planId, plans = []) {
 
     return plans.find(plan => String(plan.id).toLowerCase() === normalized)?.name
         || FALLBACK_PLANS.find(plan => String(plan.id).toLowerCase() === normalized)?.name
-        || (planId ? String(planId).replaceAll('_', ' ') : 'Plan')
+        || (planId ? String(planId).replace(/_/g, ' ') : 'Plan')
 }
 
 function SubscriptionInvoiceRow({ invoice, plans }) {
@@ -1431,7 +1524,7 @@ function SubscriptionInvoiceRow({ invoice, plans }) {
                                     ? 'bg-red-50 text-red-700 ring-red-600/10'
                                     : 'bg-gray-50 text-gray-600 ring-gray-200'
                     }`}>
-                        {status.replaceAll('_', ' ')}
+                        {status.replace(/_/g, ' ')}
                     </span>
                     <span className="text-xs text-gray-500">
                         {invoice.created_at ? new Date(invoice.created_at).toLocaleDateString('en-IN') : 'Recorded'}

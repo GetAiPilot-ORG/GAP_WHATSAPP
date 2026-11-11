@@ -23,14 +23,26 @@ const urlBase64ToUint8Array = (base64String) => {
     return outputArray;
 };
 
+const getNotificationPermission = () => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+        return window.Notification.permission;
+    }
+    return 'default';
+};
+
 export const PushProvider = ({ children }) => {
-    const [permissionStatus, setPermissionStatus] = useState(Notification.permission);
+    const [permissionStatus, setPermissionStatus] = useState(() => {
+        if (typeof window !== 'undefined' && 'Notification' in window) {
+            return Notification.permission;
+        }
+        return 'default';
+    });
     const [isSubscribed, setIsSubscribed] = useState(false);
 
     // Ensure we only run this once we have an active session
     useEffect(() => {
         const checkSubscription = async () => {
-            if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+            if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
                 return;
             }
 
@@ -43,13 +55,13 @@ export const PushProvider = ({ children }) => {
     }, []);
 
     const subscribeToPush = async (orgId) => {
-        if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        if (typeof window === 'undefined' || !('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
             console.error('Push notifications are not supported by this browser.');
             return false;
         }
 
         try {
-            const permission = await Notification.requestPermission();
+            const permission = await window.Notification.requestPermission();
             setPermissionStatus(permission);
 
             if (permission !== 'granted') {

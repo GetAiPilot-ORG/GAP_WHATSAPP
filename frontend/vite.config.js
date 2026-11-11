@@ -1,10 +1,11 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import basicSsl from '@vitejs/plugin-basic-ssl'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { VitePWA } from 'vite-plugin-pwa'
+import legacy from '@vitejs/plugin-legacy'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -134,76 +135,105 @@ const notificationSoundsPlugin = () => ({
 })
 
 // https://vite.dev/config/
-export default defineConfig({
-  plugins: [
-    react(), 
-    basicSsl(), 
-    notificationSoundsPlugin(),
-    VitePWA({
-      registerType: 'prompt',
-      includeAssets: [],
-      manifest: {
-        name: 'GAP WhatsApp CRM',
-        short_name: 'GAP CRM',
-        description: 'WhatsApp Marketing and Automation',
-        theme_color: '#ffffff',
-        background_color: '#ffffff',
-        display: 'standalone',
-        start_url: '/',
-        icons: [
-          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
-          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
-        ]
-      },
-      strategies: 'injectManifest',
-      srcDir: 'src',
-      filename: 'sw.js',
-      injectManifest: {
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-        globPatterns: [
-          'assets/**/*.{js,css}',
-          'index.html',
-          'favicon.ico',
-          'apple-touch-icon.png',
-          'masked-icon.svg'
-        ]
-      },
-      devOptions: {
-        enabled: true,
-        type: 'module',
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, __dirname, '')
+  const backendTarget = env.VITE_BACKEND_URL || 'https://whatsapp.getaipilot.in'
+
+  return {
+    // Keep dev prebundles separate from build-time optimizer cache.
+    cacheDir: mode === 'development' ? 'node_modules/.vite-dev' : 'node_modules/.vite',
+    optimizeDeps: {
+      include: ['socket.io-client'],
+    },
+    plugins: [
+      react(),
+      basicSsl(),
+      // legacy({
+      //   targets: ['defaults', 'not IE 11', 'iOS >= 12', 'Safari >= 13']
+      // }),
+      notificationSoundsPlugin(),
+      VitePWA({
+        registerType: 'prompt',
+        includeAssets: [],
+        manifest: {
+          name: 'GAP WhatsApp CRM',
+          short_name: 'GAP CRM',
+          description: 'WhatsApp Marketing and Automation',
+          theme_color: '#ffffff',
+          background_color: '#ffffff',
+          display: 'standalone',
+          start_url: '/',
+          icons: [
+            { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+            { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+            { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+          ]
+        },
+        strategies: 'injectManifest',
+        srcDir: 'src',
+        filename: 'sw.js',
+        injectManifest: {
+          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+          globPatterns: [
+            'assets/**/*.{js,css}',
+            'index.html',
+            'favicon.ico',
+            'apple-touch-icon.png',
+            'masked-icon.svg'
+          ]
+        },
+        devOptions: {
+          enabled: true,
+          type: 'module',
+        }
+      })
+    ],
+    server: {
+      host: true,
+      port: 3000,
+      strictPort: true,
+      allowedHosts: ['.ngrok-free.dev', '.ngrok-free.app', '.loca.lt'],
+      proxy: {
+        '/api': {
+          target: backendTarget,
+          changeOrigin: true,
+          secure: false
+        },
+        '/socket.io': {
+          target: backendTarget,
+          ws: true,
+          changeOrigin: true,
+          secure: false
+        },
+        '/webhook': {
+          target: backendTarget,
+          changeOrigin: true,
+          secure: false
+        }
       }
-    })
-  ],
-  server: {
-    port: 3000,
-    strictPort: true,
-    allowedHosts: ['.ngrok-free.dev', '.ngrok-free.app', '.loca.lt'],
-    proxy: {
-      '/api': {
-        target: 'http://localhost:3001',
-        changeOrigin: true
+    },
+    build: {
+      chunkSizeWarningLimit: 2500,
+      rolldownOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              const normalizedId = id.replaceAll('\\', '/')
+              if (normalizedId.includes('/node_modules/exceljs/') || normalizedId.includes('/node_modules/xlsx/')) {
+                return 'vendor-sheets'
+              }
+            }
+          }
+        }
       },
-      '/socket.io': {
-        target: 'http://localhost:3001',
-        ws: true,
-        changeOrigin: true
-      },
-      '/webhook': {
-        target: 'http://localhost:3001',
-        changeOrigin: true
-      }
-    }
-  },
-  build: {
-    chunkSizeWarningLimit: 2500,
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (id.includes('node_modules')) {
-            const normalizedId = id.replaceAll('\\', '/')
-            if (normalizedId.includes('/node_modules/exceljs/') || normalizedId.includes('/node_modules/xlsx/')) {
-              return 'vendor-sheets'
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              const normalizedId = id.replaceAll('\\', '/')
+              if (normalizedId.includes('/node_modules/exceljs/') || normalizedId.includes('/node_modules/xlsx/')) {
+                return 'vendor-sheets'
+              }
             }
           }
         }

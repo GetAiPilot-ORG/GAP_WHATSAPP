@@ -148,8 +148,8 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                     ...item,
                     id: `meta-${item.id || `${item.name}-${item.language}`}`,
                     source: 'meta_library',
-                    displayName: item.name.replaceAll('_', ' '),
-                    industry: (item.industry || ['General']).map(value => value.replaceAll('_', ' ').replace(/\b\w/g, letter => letter.toUpperCase())),
+                    displayName: item.name.replace(/_/g, ' '),
+                    industry: (item.industry || ['General']).map(value => value.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase())),
                     useCase: item.usecase || item.topic || 'ACCOUNT_UPDATES',
                     components,
                 }
@@ -985,9 +985,9 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                                                 }
                                             </span>
                                         </span>
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex shrink-0 items-center gap-1.5">
                                             {/* Status Badge */}
-                                            <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${template.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                            <span className={`inline-flex shrink-0 whitespace-nowrap items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${template.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                                                 template.status === 'PENDING' ? 'bg-amber-50 text-amber-700 border-amber-200' :
                                                     template.status === 'DRAFT' ? 'bg-gray-50 text-gray-650 border-gray-250' :
                                                         'bg-rose-50 text-rose-700 border-rose-100'
@@ -1000,7 +1000,7 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                                             </span>
 
                                             {/* Action group */}
-                                            <div className="flex items-center gap-1">
+                                            <div className="flex shrink-0 items-center gap-1">
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); handleDelete(template.name); }}
                                                     className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 hover:text-red-600 hover:bg-red-50/50 hover:border-red-200 transition-colors"
@@ -1497,7 +1497,7 @@ function CreateTemplateModal({ isOpen, onClose, onSuccess, apiCall, initialData,
             <Modal isOpen={isOpen} onClose={closeModal} title={initialData.name} maxWidth="max-w-3xl">
                 <div className="grid overflow-hidden rounded-xl border border-slate-200 bg-white md:grid-cols-[minmax(0,1fr)_280px]">
                     <div className="p-5 sm:p-6">
-                        <p className="text-xs text-slate-500">{initialData.category} · {initialData.useCase?.replaceAll('_', ' ')}</p>
+                        <p className="text-xs text-slate-500">{initialData.category} · {initialData.useCase?.replace(/_/g, ' ')}</p>
                         <h3 className="mt-4 text-sm font-semibold text-slate-900">Enter template details</h3>
                         <p className="mt-1 text-xs text-slate-500">
                             {usesAuthenticationModel

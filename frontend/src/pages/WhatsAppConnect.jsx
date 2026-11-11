@@ -1,5 +1,5 @@
 import InfoHelp from '../components/InfoHelp'
-import { createElement, useEffect, useMemo, useRef, useState } from 'react'
+import React, { Component, createElement, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
     AlertCircle,
@@ -17,7 +17,6 @@ import {
     QrCode,
     ShieldCheck,
     Smartphone,
-    Sparkles,
     Wallet,
     X,
 } from 'lucide-react'
@@ -35,7 +34,20 @@ const META_CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID || '1108075894853600'
 const META_EMBEDDED_SIGNUP_VERSION = import.meta.env.VITE_META_EMBEDDED_SIGNUP_VERSION || 'v4'
 const META_EMBEDDED_SESSION_INFO_VERSION = import.meta.env.VITE_META_EMBEDDED_SESSION_INFO_VERSION || '3'
 
-export default function WhatsAppConnect() {
+function SafeIcon({ icon, className = "h-4 w-4", fallback: Fallback = HelpCircle }) {
+    const candidate = icon || Fallback
+    if (!candidate) return null
+    const resolved = (typeof candidate === 'object' && candidate !== null && candidate.default) ? candidate.default : candidate
+    if (typeof resolved === 'function' || (typeof resolved === 'object' && resolved !== null && (resolved.$$typeof || resolved.render))) {
+        return createElement(resolved, { className })
+    }
+    if (HelpCircle && (typeof HelpCircle === 'function' || (typeof HelpCircle === 'object' && HelpCircle !== null && (HelpCircle.$$typeof || HelpCircle.render)))) {
+        return createElement(HelpCircle, { className })
+    }
+    return null
+}
+
+function WhatsAppConnectContent() {
     const { session, apiCall } = useAuth()
     const { alertDialog, confirmDialog } = useDialog()
     const { accounts, isLoading: loadingAccounts, error: accountsLoadError, refetchAccounts: fetchAccounts } = useWhatsAppAccounts()
@@ -371,8 +383,7 @@ export default function WhatsAppConnect() {
     return (
         <div className="mx-auto max-w-7xl space-y-4 sm:space-y-6 pb-12 sm:pb-20">
             <section className="rounded-lg border border-[#b9dcfb] bg-[#eef7ff] p-4 sm:p-5">
-                <div className="inline-flex items-center gap-1.5 rounded-full border border-[#b9dcfb] bg-white px-2 py-0.5 text-[10px] sm:text-xs font-semibold text-[#0064b7]">
-                    <Sparkles className="h-3.5 w-3.5" />
+                <div className="inline-flex items-center rounded-full border border-[#b9dcfb] bg-white px-2 py-0.5 text-[10px] sm:text-xs font-semibold text-[#0064b7]">
                     Start here
                 </div>
                 <h1 className="mt-2.5 sm:mt-3 max-w-2xl text-base sm:text-2xl font-semibold leading-normal sm:leading-snug text-gray-950">Connect WhatsApp so your dashboard, chats, broadcasts and automations can start working.</h1>
@@ -416,8 +427,7 @@ export default function WhatsAppConnect() {
             <section className="overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50/80 via-teal-50/40 to-white p-4 sm:p-6 shadow-sm">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="max-w-3xl">
-                        <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1 text-xs font-bold text-white shadow-xs">
-                            <Sparkles className="h-3.5 w-3.5 text-emerald-200" />
+                        <div className="inline-flex items-center rounded-full bg-emerald-600 px-3 py-1 text-xs font-bold text-white shadow-xs">
                             Official WhatsApp Messaging Rules
                         </div>
                         <h2 className="mt-3 text-base sm:text-xl font-bold text-gray-950">
@@ -446,9 +456,8 @@ export default function WhatsAppConnect() {
                         <button
                             type="button"
                             onClick={() => setIsGuideModalOpen(true)}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-emerald-700 transition-colors"
+                            className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-5 py-3 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-emerald-700 transition-colors"
                         >
-                            <Sparkles className="h-4 w-4 text-emerald-200" />
                             Open Messaging Manual
                         </button>
                         <Link
@@ -850,7 +859,7 @@ function GuideCard({ icon, title, items, stepNumber, isExpanded, onToggle }) {
             >
                 <div className="flex items-center gap-2 md:gap-2.5 sm:gap-3 min-w-0">
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#eef7ff] text-[#0064b7] md:h-8 md:w-8 md:sm:h-10 md:sm:w-10">
-                        {createElement(icon, { className: 'h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-4 md:w-4 md:sm:h-5 md:sm:w-5' })}
+                        <SafeIcon icon={icon} className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-4 md:w-4 md:sm:h-5 md:sm:w-5" fallback={Building2} />
                     </span>
                     {/* Step badge */}
                     <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#0064b7] text-[10px] font-bold text-white md:hidden">
@@ -907,7 +916,7 @@ function MiniMetric({ icon, label, value, tone }) {
             <div className="flex items-center justify-between gap-1.5">
                 <p className="text-[10px] sm:text-xs font-semibold tracking-tight text-gray-500 truncate">{label}</p>
                 <span className={`flex h-6 w-6 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-lg ${toneClass}`}>
-                    {createElement(icon, { className: 'h-3.5 w-3.5 sm:h-4 sm:w-4' })}
+                    <SafeIcon icon={icon} className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </span>
             </div>
             <p className="mt-1.5 sm:mt-3 text-sm sm:text-xl font-bold tracking-tight text-gray-900 truncate">{value}</p>
@@ -1057,13 +1066,13 @@ function AccountCard({ account, diagnostics, loading, disconnecting, onCheck, on
                     <div className="flex min-w-0 items-start gap-2.5">
                         {businessVerified
                             ? <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-                            : <Building2 className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />}
+                            : <SafeIcon icon={Building2} className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" fallback={ShieldCheck} />}
                         <div className="min-w-0">
                             <p className={`text-xs font-semibold ${businessVerified ? 'text-emerald-900' : 'text-amber-950'}`}>
                                 Business verification: {businessVerified ? 'Verified' : 'Action required'}
                             </p>
                             <p className={`mt-0.5 truncate text-[10px] ${businessVerified ? 'text-emerald-700' : 'text-amber-800'}`}>
-                                {businessVerification.business_name || 'Meta Business Portfolio'} · {String(businessVerification.status || 'unknown').replaceAll('_', ' ')}
+                                {businessVerification.business_name || 'Meta Business Portfolio'} · {String(businessVerification.status || 'unknown').replace(/_/g, ' ')}
                             </p>
                         </div>
                     </div>
@@ -1177,4 +1186,51 @@ function maskId(value) {
     const text = String(value)
     if (text.length <= 8) return text
     return `${text.slice(0, 4)}...${text.slice(-4)}`
+}
+
+class WhatsAppErrorBoundary extends Component {
+    constructor(props) {
+        super(props)
+        this.state = { hasError: false, error: null }
+    }
+
+    static getDerivedStateFromError(error) {
+        return { hasError: true, error }
+    }
+
+    componentDidCatch(error, errorInfo) {
+        console.error('WhatsAppConnect caught error:', error, errorInfo)
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="mx-auto max-w-4xl p-6">
+                    <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
+                        <AlertCircle className="mx-auto h-12 w-12 text-red-500" />
+                        <h2 className="mt-3 text-lg font-bold text-red-900">WhatsApp Account Manager load nahi ho paya</h2>
+                        <p className="mt-1 text-sm text-red-700">
+                            Browser script issue ya cache ki wajah se load nahi hua. Kripya page ko refresh karein.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => window.location.reload()}
+                            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 transition"
+                        >
+                            Page Refresh Karein
+                        </button>
+                    </div>
+                </div>
+            )
+        }
+        return this.props.children
+    }
+}
+
+export default function WhatsAppConnect() {
+    return (
+        <WhatsAppErrorBoundary>
+            <WhatsAppConnectContent />
+        </WhatsAppErrorBoundary>
+    )
 }

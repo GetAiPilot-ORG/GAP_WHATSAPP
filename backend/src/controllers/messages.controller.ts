@@ -7,9 +7,11 @@ import { applyReactionUpdate, sendReactionMessage, sendTextMessage, sendMediaMes
 import { sessions } from '../services/whatsapp.service.js';
 import { io } from '../socket.js';
 import { triggerHandoffWebhook } from '../services/n8n.service.js';
+import { sendOutboundMessage } from '../services/outboundDispatch.service.js';
 import dotenv from "dotenv";
 import { uploadMediaToStorage } from '../services/broadcast.service.js';
 import { decryptToken } from '../utils/crypto.js';
+import { generateConversationSummaryDirect } from '../services/summary.service.js';
 dotenv.config({ path: "./.env" });
 
 const N8N_HANDOFF_WEBHOOK_URL = process.env.N8N_HANDOFF_WEBHOOK_URL;
@@ -98,9 +100,6 @@ export async function requestSummary(req: any, res: Response) {
             .maybeSingle();
         if (convErr) throw convErr;
         if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
-        if (!N8N_HANDOFF_WEBHOOK_URL) {
-            return res.status(400).json({ error: 'N8N_HANDOFF_WEBHOOK_URL is not configured' });
-        }
 
         await supabase
             .from('w_conversations')
@@ -113,32 +112,34 @@ export async function requestSummary(req: any, res: Response) {
             .eq('id', conversationId)
             .eq('organization_id', orgId);
 
-        await triggerHandoffWebhook({
-            event: 'manual_summary_requested',
-            organization_id: orgId,
-            conversation_id: conversationId,
-            contact_id: conversation.contact_id,
-            handoff_reason: 'Manual summary requested',
-            requested_by_user_id: req.user?.id || null,
-            summary_required: true,
+        if (io && typeof io.to === 'function') {
+            io.to(`org:${orgId}`).emit('conversation_summary_updated', {
+                conversation_id: conversationId,
+                summary_status: 'pending',
+            });
+        }
+
+        // Direct AI summary generation (No n8n!)
+        const result = await generateConversationSummaryDirect(
+            conversationId,
+            orgId,
+            req.user?.id || null
+        );
+
+        res.json({
+            success: true,
+            conversation: result.conversation,
+            summary: result.summary,
         });
-
-        const { data: latestConversation } = await supabase
-            .from('w_conversations')
-            .select('id, handoff_status, handoff_reason, handoff_requested_at, summary_status, latest_summary_id')
-            .eq('id', conversationId)
-            .eq('organization_id', orgId)
-            .maybeSingle();
-
-        io.to(`org:${orgId}`).emit('conversation_summary_updated', {
-            conversation_id: conversationId,
-            summary_status: latestConversation?.summary_status || 'pending',
-        });
-
-        res.json({ success: true, conversation: latestConversation || null });
     } catch (err: any) {
-        console.error('[n8n] Error requesting summary:', err);
-        res.status(500).json({ error: err.message || 'Failed to request summary' });
+        console.error('[Summary] Error requesting summary:', err);
+        await supabase
+            .from('w_conversations')
+            .update({ summary_status: 'failed' })
+            .eq('id', conversationId)
+            .eq('organization_id', orgId);
+
+        res.status(500).json({ error: err.message || 'Failed to generate AI summary' });
     }
 }
 
@@ -321,146 +322,40 @@ export async function sendMessage(req: any, res: Response) {
 
         if (convErr) throw convErr;
         if (!conv?.contact?.wa_id) throw new Error('Conversation contact missing wa_id');
-        if (!conv?.account?.phone_number_id) throw new Error('Conversation account missing phone_number_id');
-
         if (!orgId) throw new Error('Organization not configured');
 
-        const toPhone = String(conv.contact.wa_id);
-        const accountPhoneOrId = String(conv.account.phone_number_id);
-
-        let sendResult: any = null;
-        let wa_message_id: string | null = null;
-        let sentViaCloud = false;
-
-        // Try Cloud API first if we have a token
-        if (conv.account.access_token_encrypted) {
-            try {
-                const toMeta = normalizeWaIdToPhone(toPhone);
-                if (!toMeta) throw new Error('Meta send requires a numeric recipient phone number');
-                sendResult = await sendTextMessage(toMeta, text, accountPhoneOrId, reply_to_message_id || null);
-                wa_message_id = sendResult?.messages?.[0]?.id || null;
-                sentViaCloud = true;
-            } catch (cloudErr: any) {
-                console.warn(`[Cloud API] Failed to send message for account ${accountPhoneOrId}, attempting Baileys fallback:`, cloudErr.message);
-                // We will fall through to Baileys if Cloud API fails (e.g. expired token)
-            }
-        }
-
-        // Fallback or default to Baileys
-        if (!sentViaCloud) {
-            const sock = session_id ? sessions.get(session_id) : null;
-            let resolvedSock = sock;
-            if (!resolvedSock) {
-                const accountDisplayPhone = String(conv.account.display_phone_number || '').replace(/\D+/g, '');
-                console.log(`[Baileys Match] Looking for phone: ${accountPhoneOrId} or ${accountDisplayPhone}`);
-                
-                for (const s of sessions.values()) {
-                    const connectedJid = s?.user?.id || '';
-                    const connectedPhone = connectedJid ? connectedJid.split(':')[0] : '';
-                    console.log(`[Baileys Match] Checking session with phone: ${connectedPhone}`);
-                    if (connectedPhone && (connectedPhone === accountPhoneOrId || connectedPhone === accountDisplayPhone)) {
-                        resolvedSock = s;
-                        break;
-                    }
-                }
-
-                // Aggressive fallback: if there's only one connected session or we failed to match, just use the first available one.
-                if (!resolvedSock && sessions.size > 0) {
-                    console.warn(`[Baileys Fallback] Could not match phone strictly. Falling back to the first available connected session.`);
-                    resolvedSock = Array.from(sessions.values()).find(s => s?.user?.id) || null;
-                }
-            }
-
-            if (!resolvedSock) {
-                throw new Error(conv.account.access_token_encrypted ? 'Cloud API token expired and no active Baileys session found. Reconnect via QR.' : 'No active Baileys session found for this account. Reconnect via QR.');
-            }
-
-            if (!resolvedSock?.user?.id) {
-                return res.status(409).json({
-                    error: 'WhatsApp session is not connected yet. Click Generate QR and connect, then try again.'
-                });
-            }
-
-            const normalizeForBaileys = (raw: string) => {
-                const v = String(raw || '').trim();
-                if (!v) return null;
-                if (v.includes('@')) return v;
-                const digits = v.replace(/[^0-9]/g, '');
-                if (!digits) return null;
-                return `${digits}@s.whatsapp.net`;
-            };
-
-            const jid = normalizeForBaileys(toPhone);
-            if (!jid) throw new Error('Invalid recipient wa_id for Baileys');
-            sendResult = await resolvedSock.sendMessage(jid, { text });
-            wa_message_id = sendResult?.key?.id || null;
-        }
-
-        let quotedMessage: any = null;
-        if (reply_to_message_id) {
-            const { data: quotedMsg } = await supabase
-                .from('w_messages')
-                .select('id, text_body, type, content, wa_message_id, direction')
-                .eq('wa_message_id', reply_to_message_id)
-                .maybeSingle();
-            quotedMessage = {
-                wa_message_id: reply_to_message_id,
-                text: quotedMsg?.text_body || quotedMsg?.content?.text || null,
-                type: quotedMsg?.type || 'text',
-                direction: quotedMsg?.direction || null,
-                found: !!quotedMsg,
-            };
-        }
-
-        const stored = await storeMessage({
-            organization_id: orgId,
-            contact_id: conv.contact.id,
-            conversation_id: conv.id,
-            wa_message_id,
-            direction: 'outbound',
+        const dispatchResult = await sendOutboundMessage({
+            organizationId: orgId,
+            conversationId: conv.id,
+            contactId: conv.contact.id,
+            waAccountId: conv.wa_account_id,
+            phoneNumberId: conv.account?.phone_number_id,
+            sessionId: session_id,
+            to: String(conv.contact.wa_id),
             type: 'text',
-            content: { text, quoted: quotedMessage, forwarded: !!forward_from_message_id, client_message_id: client_message_id || null },
-            status: 'sent',
-            sender_type: 'human_agent',
-            sender_user_id: (req as any).user?.id || null,
-            automation_source: 'manual',
-        } as any);
-
-        await upsertConversation(orgId, conv.wa_account_id, conv.contact.id, {
-            direction: 'outbound',
-            preview: text
-        });
-
-        io.to(`org:${orgId}`).emit('new_message', {
-            organization_id: orgId,
-            wa_account_id: conv.wa_account_id,
-            phone_number_id: conv.account?.phone_number_id,
-            from: toPhone,
             text,
-            quoted: quotedMessage,
-            sender: 'agent',
-            conversation_id: conv.id,
-            contact_id: conv.contact.id,
-            message_id: stored?.id || null,
-            wa_message_id,
-            client_message_id: client_message_id || null,
-            created_at: stored?.created_at || new Date().toISOString(),
-            status: 'sent',
-            content: { text, quoted: quotedMessage, forwarded: !!forward_from_message_id, client_message_id: client_message_id || null }
+            replyToWaMessageId: reply_to_message_id,
+            forwardFromMessageId: forward_from_message_id,
+            clientMessageId: client_message_id,
+            senderType: 'agent',
+            automationSource: 'manual',
+            metadata: {
+                sender_user_id: (req as any).user?.id || null,
+            },
         });
 
         res.json({
             success: true,
-            result: sendResult,
+            result: dispatchResult.raw,
             message: {
-                id: stored?.id || null,
-                wa_message_id,
-                created_at: stored?.created_at || null,
+                id: dispatchResult.storedMessageId,
+                wa_message_id: dispatchResult.waMessageId,
+                created_at: new Date().toISOString(),
                 conversation_id: conv.id,
                 contact_id: conv.contact.id,
                 direction: 'outbound',
                 type: 'text',
-                content: { text, quoted: quotedMessage, forwarded: !!forward_from_message_id, client_message_id: client_message_id || null },
+                content: { text, forwarded: !!forward_from_message_id, client_message_id: client_message_id || null },
                 status: 'sent',
             }
         });
@@ -589,11 +484,7 @@ export async function sendMediaMessage(req: any, res: Response) {
     const orgId = req.organization_id;
     const caption = String(req.body?.caption || "").trim();
     const session_id = String(req.body?.session_id || "");
-    const duration_seconds_raw = req.body?.duration_seconds;
-    const duration_seconds =
-        duration_seconds_raw != null && duration_seconds_raw !== ""
-            ? Number(duration_seconds_raw)
-            : null;
+    const client_message_id = String(req.body?.client_message_id || "");
     const file = req.file;
 
     if (!file) return res.status(400).json({ error: "file required" });
@@ -614,14 +505,16 @@ export async function sendMediaMessage(req: any, res: Response) {
 
         if (convErr) throw convErr;
         if (!conv?.contact?.wa_id) throw new Error("Conversation contact missing wa_id");
-        if (!conv?.account?.phone_number_id) throw new Error("Conversation account missing phone_number_id");
-
         if (!orgId) throw new Error("Organization not configured");
 
         const mimeType = file.mimetype || "application/octet-stream";
         const fileName = file.originalname || "file";
 
-        // Store media in Supabase Storage or local fallback
+        let msgType: "image" | "video" | "audio" | "document" = "document";
+        if (mimeType.startsWith("image/")) msgType = "image";
+        else if (mimeType.startsWith("video/")) msgType = "video";
+        else if (mimeType.startsWith("audio/")) msgType = "audio";
+
         const uploaded = await uploadMediaToStorage({
             organization_id: orgId,
             conversation_id: conv.id,
@@ -630,180 +523,39 @@ export async function sendMediaMessage(req: any, res: Response) {
             buffer: file.buffer,
         });
 
-        let msgType: "image" | "video" | "audio" | "document" = "document";
-        if (mimeType.startsWith("image/")) msgType = "image";
-        else if (mimeType.startsWith("video/")) msgType = "video";
-        else if (mimeType.startsWith("audio/")) msgType = "audio";
-
-        const preview =
-            caption ||
-            (msgType === "image"
-                ? "[Image]"
-                : msgType === "video"
-                    ? "[Video]"
-                    : msgType === "audio"
-                        ? "[Audio]"
-                        : "[Document]");
-
-        let wa_message_id: string | null = null;
-        let sendRaw: any = null;
-        let sentViaCloud = false;
-
-        if (conv.account.access_token_encrypted) {
-            try {
-                const toMeta = normalizeWaIdToPhone(conv.contact.wa_id);
-                if (!toMeta) throw new Error("Meta send requires a numeric recipient phone number");
-
-                const token = decryptToken(conv.account.access_token_encrypted);
-                const sent = await sendMediaMessageMeta({
-                    phone_number_id: String(conv.account.phone_number_id),
-                    to: toMeta,
-                    token,
-                    buffer: file.buffer,
-                    mimeType,
-                    fileName,
-                    type: msgType,
-                    caption: caption || undefined,
-                });
-                wa_message_id = sent.wa_message_id;
-                sendRaw = sent.raw;
-                sentViaCloud = true;
-            } catch (cloudErr: any) {
-                console.warn(`[Cloud API] Media send failed, attempting Baileys fallback:`, cloudErr.message);
-            }
-        }
-
-        if (!sentViaCloud) {
-            const accountPhoneOrId = String(conv.account.phone_number_id);
-            const sock = session_id ? sessions.get(session_id) : null;
-            let resolvedSock = sock;
-            if (!resolvedSock) {
-                const accountDisplayPhone = String(conv.account.display_phone_number || '').replace(/\D+/g, '');
-                for (const s of sessions.values()) {
-                    const connectedJid = s?.user?.id || "";
-                    const connectedPhone = connectedJid ? connectedJid.split(":")[0] : "";
-                    if (connectedPhone && (connectedPhone === accountPhoneOrId || connectedPhone === accountDisplayPhone)) {
-                        resolvedSock = s;
-                        break;
-                    }
-                }
-                if (!resolvedSock && sessions.size > 0) {
-                    resolvedSock = Array.from(sessions.values()).find(s => s?.user?.id) || null;
-                }
-            }
-            if (!resolvedSock) {
-                throw new Error("No active WhatsApp session found. Reconnect via QR.");
-            }
-
-            const jid = conv.contact.wa_id.includes("@")
-                ? conv.contact.wa_id
-                : `${conv.contact.wa_id}@s.whatsapp.net`;
-            let result: any = null;
-            if (msgType === "image")
-                result = await resolvedSock.sendMessage(jid, {
-                    image: file.buffer,
-                    caption: caption || undefined,
-                });
-            else if (msgType === "video")
-                result = await resolvedSock.sendMessage(jid, {
-                    video: file.buffer,
-                    caption: caption || undefined,
-                });
-            else if (msgType === "audio")
-                result = await resolvedSock.sendMessage(jid, {
-                    audio: file.buffer,
-                    mimetype: mimeType,
-                });
-            else
-                result = await resolvedSock.sendMessage(jid, {
-                    document: file.buffer,
-                    fileName,
-                    mimetype: mimeType,
-                    caption: caption || undefined,
-                });
-
-            wa_message_id = result?.key?.id || null;
-            sendRaw = result;
-        }
-
-        const stored = await storeMessage({
-            organization_id: orgId,
-            contact_id: conv.contact.id,
-            conversation_id: conv.id,
-            wa_message_id,
-            direction: "outbound",
+        const dispatchResult = await sendOutboundMessage({
+            organizationId: orgId,
+            conversationId: conv.id,
+            contactId: conv.contact.id,
+            waAccountId: conv.wa_account_id,
+            phoneNumberId: conv.account?.phone_number_id,
+            sessionId: session_id,
+            to: String(conv.contact.wa_id),
             type: msgType,
-            content: {
-                text: caption || null,
-                media_url: uploaded.publicUrl,
-                mime_type: mimeType,
-                file_name: fileName,
-                size: file.size,
-                duration_seconds:
-                    msgType === "audio" && duration_seconds !== null && Number.isFinite(duration_seconds)
-                        ? Math.max(0, Math.round(duration_seconds))
-                        : null,
-                raw_send: sendRaw,
+            text: caption || undefined,
+            media: {
+                buffer: file.buffer,
+                url: uploaded.publicUrl,
+                mimeType,
+                fileName,
+                caption: caption || undefined,
+                type: msgType,
             },
-            status: "sent",
-            sender_type: "human_agent",
-            sender_user_id: (req as any).user?.id || null,
-            automation_source: "manual",
-        } as any);
-
-        await upsertConversation(orgId, conv.wa_account_id, conv.contact.id, {
-            direction: "outbound",
-            preview,
+            clientMessageId: client_message_id,
+            senderType: 'agent',
+            automationSource: 'manual',
+            metadata: {
+                sender_user_id: (req as any).user?.id || null,
+            },
         });
-
-        const targetRoom = orgId ? `org:${orgId}` : null;
-        const msgPayload = {
-            organization_id: orgId,
-            wa_account_id: conv.wa_account_id,
-            from: conv.contact.wa_id,
-            text: caption || preview,
-            sender: "agent",
-            conversation_id: conv.id,
-            contact_id: conv.contact.id,
-            message_id: stored?.id || null,
-            wa_message_id,
-            created_at: stored?.created_at || new Date().toISOString(),
-            type: msgType,
-            media_url: uploaded.publicUrl,
-            mime_type: mimeType,
-            file_name: fileName,
-            duration_seconds:
-                msgType === "audio" && duration_seconds !== null && Number.isFinite(duration_seconds)
-                    ? Math.max(0, Math.round(duration_seconds))
-                    : undefined,
-            status: "sent",
-            content: {
-                text: caption || null,
-                media_url: uploaded.publicUrl,
-                mime_type: mimeType,
-                file_name: fileName,
-                size: file.size,
-                duration_seconds:
-                    msgType === "audio" && duration_seconds !== null && Number.isFinite(duration_seconds)
-                        ? Math.max(0, Math.round(duration_seconds))
-                        : null,
-            }
-        };
-
-        if (targetRoom) {
-            io.to(targetRoom).emit("new_message", msgPayload);
-        } else {
-            io.emit("new_message", msgPayload);
-        }
 
         res.json({
             success: true,
-            wa_message_id,
+            wa_message_id: dispatchResult.waMessageId,
             media_url: uploaded.publicUrl,
             message: {
-                id: stored?.id || null,
-                wa_message_id,
-                created_at: stored?.created_at || null,
+                id: dispatchResult.storedMessageId,
+                wa_message_id: dispatchResult.waMessageId,
                 conversation_id: conv.id,
                 contact_id: conv.contact.id,
                 direction: "outbound",
@@ -814,10 +566,6 @@ export async function sendMediaMessage(req: any, res: Response) {
                     mime_type: mimeType,
                     file_name: fileName,
                     size: file.size,
-                    duration_seconds:
-                        msgType === "audio" && duration_seconds !== null && Number.isFinite(duration_seconds)
-                            ? Math.max(0, Math.round(duration_seconds))
-                            : null,
                 },
                 status: "sent",
             },

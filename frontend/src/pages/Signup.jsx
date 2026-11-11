@@ -57,9 +57,7 @@ export default function Signup() {
                 <section className="flex items-center justify-center rounded-[24px] px-5 py-10 sm:px-8 lg:px-12 xl:px-20">
                     <div className="w-full max-w-md rounded-[24px]">
                         <div className="mb-9 flex items-center gap-3 rounded-[24px]">
-                            <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-gray-200 bg-white">
-                                <img src="/logo.png" alt="GAP WhatsApp Pilot" className="h-7 w-7 object-contain" />
-                            </span>
+                            <img src="/logo.png" alt="GAP WhatsApp Pilot" className="h-10 w-10 shrink-0 object-contain" />
                             <div>
                                 <p className="text-sm font-bold text-gray-950">GAP WhatsApp Pilot</p>
                                 <p className="text-xs text-gray-500">Create workspace access</p>

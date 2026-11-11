@@ -1,0 +1,3 @@
+# Outbound Transport Arbiter with Cloud-First Fallback
+
+Outbound message delivery was previously fragmented across controllers, background queues, and services, duplicating transport selection, token decryption, and Baileys session lookups. We decided to consolidate all outbound routing into a deep Outbound Dispatch module (`outboundDispatch.service.ts`) behind a single interface (`sendOutboundMessage`). The arbiter defaults to Meta Cloud API whenever an account possesses valid credentials, automatically falling back to an active Baileys socket connection on retryable Meta errors (or utilizing Baileys directly for QR-onboarded numbers). This prevents transport leakage into caller modules like LiveChat, Flow Engine, and Campaigns.

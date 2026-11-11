@@ -154,7 +154,7 @@ export function MaintenanceGuard({ children, productKey }: MaintenanceGuardProps
           });
         }
       } catch (error) {
-        console.error("Maintenance check failed:", error);
+        if (error.name !== "AbortError") console.error("Maintenance check failed:", error); else console.warn("Maintenance check timeout");
         if (mounted) setStatus({ maintenance: false });
       } finally {
         if (mounted) {

@@ -1,209 +1,68 @@
+import { Response, NextFunction } from 'express';
 import { supabase } from '../config/supabase.js';
+import {
+  resolveUserOrganizationContext,
+  checkOrganizationSubscription,
+} from '../services/organizationContext.service.js';
 
-export async function checkSubscription(orgId: string): Promise<boolean> {
-    if (!supabase) return true; // Debug mode fallback
-    try {
-        // 1. Check organization row directly
-        const { data: org } = await supabase
-            .from('organizations')
-            .select('plan_id, plan_status, is_active')
-            .eq('id', orgId)
-            .maybeSingle();
+/**
+ * Express Authentication and Tenant Context Middleware.
+ * Verifies Bearer JWT tokens and delegates tenant resolution and subscription
+ * gating to the deep Organization Context module.
+ */
+export async function authMiddleware(req: any, res: Response, next: NextFunction) {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token) return res.status(401).json({ error: 'Unauthorized - missing token' });
 
-        if (org && org.is_active && (org.plan_status === 'active' || org.plan_status === 'trial')) {
-            return true;
-        }
+  if (!supabase) return res.status(503).json({ error: 'Service unavailable - Supabase not configured' });
 
-        // 2. Check organization owner
-        const { data: ownerMember, error: ownerErr } = await supabase
-            .from('organization_members')
-            .select('user_id')
-            .eq('organization_id', orgId)
-            .eq('role', 'owner')
-            .maybeSingle();
-
-        const targetUserId = ownerMember?.user_id;
-        let sub: any = null;
-        if (targetUserId) {
-            const { data: s } = await supabase
-                .from('app_user_subscriptions')
-                .select('plan_id, plan_label, expires_at, status')
-                .eq('user_id', targetUserId)
-                .maybeSingle();
-            sub = s;
-        }
-
-        if (!sub) {
-            // Fallback: If org is active or no subscription explicitly restricting, allow access
-            return org?.is_active ?? true;
-        }
-
-        const expiresAt = sub.expires_at ? new Date(sub.expires_at).getTime() : 0;
-        const isActive = sub.status === 'active' || !sub.expires_at || expiresAt > Date.now();
-        if (!isActive) return false;
-
-        const plan = `${sub.plan_id || ''} ${sub.plan_label || ''}`.toLowerCase();
-        const isWhatsAppPlan = plan.includes('whatsapp') || plan.includes('all_in_one') || plan.includes('bundle') || plan.includes('ultimate') || plan.includes('starter') || plan.includes('growth') || plan.includes('pro') || plan.includes('gap') || plan.includes('max') || plan.includes('core') || plan.includes('trial') || plan.includes('enterprise');
-        return isWhatsAppPlan;
-    } catch (err: any) {
-        console.error(`[Subscription Check] Error checking subscription for org ${orgId}:`, err.message);
-        return true;
+  try {
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser(token);
+    if (error || !user) {
+      return res.status(401).json({ error: 'Unauthorized - invalid or expired token' });
     }
-}
 
-export async function authMiddleware(req: any, res: any, next: any) {
-    const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-    if (!token) return res.status(401).json({ error: 'Unauthorized - missing token' });
+    req.user = user;
 
-    if (!supabase) return res.status(503).json({ error: 'Service unavailable - Supabase not configured' });
+    const portal = (req.headers['x-auth-portal'] as string) || 'owner';
+    const targetOrgId =
+      (req.headers['x-organization-id'] as string) ||
+      user.user_metadata?.organization_id ||
+      null;
 
-    try {
-        const { data: { user }, error } = await supabase.auth.getUser(token);
-        if (error || !user) {
-            console.error("Supabase Auth Error:", error?.message || error);
-            return res.status(401).json({ error: 'Unauthorized - invalid or expired token' });
-        }
+    const context = await resolveUserOrganizationContext({
+      user,
+      portal,
+      targetOrgId,
+    });
 
-        req.user = user;
+    req.role = context.role;
+    req.organization_id = context.organizationId;
 
-        const portal = req.headers['x-auth-portal'] || 'owner';
-        const targetOrgId = req.headers['x-organization-id'] || user.user_metadata?.organization_id || null;
-
-        // Fetch all memberships for this user
-        let { data: memberRows } = await supabase
-            .from('organization_members')
-            .select('id, user_id, role, organization_id, is_active')
-            .eq('user_id', user.id);
-
-        // Fallback: If no rows found by user.id, check by verified email
-        const isEmailVerified = Boolean(user.email_confirmed_at || user.user_metadata?.email_verified || user.app_metadata?.provider === 'google');
-        if ((!memberRows || memberRows.length === 0) && user.email && isEmailVerified) {
-            const { data: byEmail } = await supabase
-                .from('organization_members')
-                .select('id, user_id, role, organization_id, is_active')
-                .ilike('email', user.email);
-
-            if (byEmail && byEmail.length > 0) {
-                memberRows = byEmail;
-                // Auto-heal user_id for all matching rows
-                const unlinked = byEmail.some((m: any) => m.user_id !== user.id);
-                if (unlinked) {
-                    await supabase
-                        .from('organization_members')
-                        .update({ user_id: user.id })
-                        .ilike('email', user.email);
-                }
-            }
-        }
-
-        // Pick the most relevant membership
-        let member: any = null;
-        if (memberRows && memberRows.length > 0) {
-            if (targetOrgId) {
-                member = memberRows.find((m: any) => m.organization_id === targetOrgId);
-            }
-            if (!member && portal === 'agent') {
-                // For agent portal, prioritize active agent memberships
-                member = memberRows.find((m: any) => m.role === 'agent' && m.is_active) || memberRows.find((m: any) => m.role === 'agent') || memberRows[0];
-            } else if (!member) {
-                // For owner portal, prioritize owner/admin memberships
-                member = memberRows.find((m: any) => m.role === 'owner' || m.role === 'admin') || memberRows[0];
-            }
-        }
-
-        const dbRole = member?.role;
-
-        if (portal === 'agent') {
-            if (!member) {
-                return res.status(403).json({ error: 'Forbidden - Agent profile was not found' });
-            }
-            if (dbRole !== 'agent') {
-                return res.status(403).json({ error: 'Forbidden - This login page is only for team agents' });
-            }
-            if (member.is_active === false) {
-                return res.status(403).json({ error: 'Forbidden - Agent invitation is pending or expired' });
-            }
-            req.role = 'agent';
-        } else {
-            req.role = dbRole || 'owner';
-        }
-
-        let orgId = member?.organization_id || targetOrgId || null;
-
-        if (!orgId && req.role !== 'agent') {
-            console.log(`[Auth] Auto-provisioning organization for: ${user.email}`);
-            try {
-                const { data: checkAgain } = await supabase
-                    .from('organization_members')
-                    .select('organization_id')
-                    .eq('user_id', user.id)
-                    .maybeSingle();
-
-                if (checkAgain?.organization_id) {
-                    orgId = checkAgain.organization_id;
-                } else {
-                    const orgName = `${user.email.split('@')[0]}'s Workspace`;
-                    const slug = orgName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-                    const { data: newOrg, error: orgErr } = await supabase
-                        .from('organizations')
-                        .insert({
-                            name: orgName,
-                            slug: slug,
-                            plan_id: 'starter',
-                            plan_status: 'trial',
-                            is_active: true
-                        })
-                        .select()
-                        .single();
-
-                    if (orgErr) throw orgErr;
-
-                    const { error: memberErr } = await supabase
-                        .from('organization_members')
-                        .insert({
-                            user_id: user.id,
-                            organization_id: newOrg.id,
-                            role: 'owner',
-                            name: user.user_metadata?.full_name || user.email.split('@')[0],
-                            email: user.email
-                        });
-
-                    if (memberErr) throw memberErr;
-
-                    await supabase.auth.admin.updateUserById(user.id, {
-                        user_metadata: { ...user.user_metadata, organization_id: newOrg.id }
-                    });
-
-                    orgId = newOrg.id;
-                    console.log(`[Auth] Successfully provisioned org ${orgId} for ${user.email}`);
-                }
-            } catch (err: any) {
-                console.error(`[Auth] Provisioning failed for ${user.email}:`, err.message);
-            }
-        }
-
-        if (!orgId) {
-            console.warn(`⚠️ User ${user.email} (${user.id}) has no organization_id.`);
-            return res.status(403).json({ error: 'Forbidden - User does not belong to any organization' });
-        }
-
-        req.organization_id = orgId;
-
-        const bypassPaths = [
-            '/api/team/my-profile',
-            '/api/wa/logout'
-        ];
-        if (!bypassPaths.includes(req.path)) {
-            const hasSub = await checkSubscription(orgId);
-            if (!hasSub) {
-                return res.status(403).json({ error: 'Subscription expired or plan does not include GAP WhatsApp access. Please upgrade.' });
-            }
-        }
-
-        next();
-    } catch (err: any) {
-        console.error("Auth Middleware Exception:", err.message);
-        return res.status(500).json({ error: 'Internal server error during authentication' });
+    const bypassPaths = ['/api/team/my-profile', '/api/wa/logout'];
+    if (!bypassPaths.includes(req.path)) {
+      const hasSub = await checkOrganizationSubscription(context.organizationId);
+      if (!hasSub) {
+        return res.status(403).json({
+          error:
+            'Subscription expired or plan does not include GAP WhatsApp access. Please upgrade.',
+        });
+      }
     }
+
+    next();
+  } catch (err: any) {
+    console.error('[AuthMiddleware] Error:', err.message);
+    const statusCode =
+      err.message?.includes('Forbidden') ||
+      err.message?.includes('Agent') ||
+      err.message?.includes('invitation')
+        ? 403
+        : 500;
+    return res.status(statusCode).json({ error: err.message || 'Authentication error' });
+  }
 }

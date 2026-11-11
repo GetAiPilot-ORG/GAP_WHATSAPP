@@ -8,16 +8,16 @@ export const useAuth = () => useContext(AuthContext)
 
 // Map raw plan IDs → display names
 function resolvePlanName(plan) {
-    if (!plan) return 'No active plan'
+    if (!plan) return 'Free Plan'
     const p = String(plan).toLowerCase()
-    if (p === 'free' || p === 'whatsapp_free' || p === '') return 'No active plan'
+    if (p === 'free' || p === 'whatsapp_free' || p === '' || p === 'free plan' || p === 'no active plan') return 'Free Plan'
     if (p.includes('max')) return 'GAP Max'
     if (p.includes('all_in_one') || p.includes('bundle')) return 'GAP Max'
     if (p.includes('pro')) return 'GAP Pro'
     if (p.includes('growth')) return 'GAP Growth'
     if (p.includes('core')) return 'GAP Core'
     if (p.includes('starter')) return 'GAP Starter'
-    return plan
+    return String(plan || 'Free Plan')
 }
 
 export function AuthProvider({ children }) {
@@ -49,13 +49,15 @@ export function AuthProvider({ children }) {
                     setMemberProfile(data);
 
                     if (data?.subscription) {
+                        console.log('[AUTH_DEBUG] Profile Subscription data:', data.subscription);
                         const expiresAt = data.subscription.expires_at ? new Date(data.subscription.expires_at).getTime() : 0;
-                        const isSubActive = !data.subscription.expires_at || expiresAt > Date.now() || data.subscription.status === 'active';
+                        const isSubActive = (data.subscription.status === 'active' || data.subscription.status === 'trial') && (!data.subscription.expires_at || expiresAt > Date.now());
                         let resolvedPlan = isSubActive
                             ? (data.subscription.plan_label || data.subscription.plan_id || 'GAP Max')
-                            : 'No active plan';
+                            : 'Free Plan';
                         const resolvedStatus = isSubActive ? 'active' : (data.subscription ? 'expired' : 'inactive');
                         resolvedPlan = resolvePlanName(resolvedPlan);
+                        console.log('[AUTH_DEBUG] Profile Resolved post-format:', resolvedPlan);
 
                         setUser(prev => prev ? {
                             ...prev,
@@ -70,6 +72,8 @@ export function AuthProvider({ children }) {
             }
 
             // Fallback for direct owners if endpoint is loading or unreachable
+            setUserRole(prev => prev || (loginType === 'agent' ? 'agent' : 'owner'));
+
             const { data: sub } = await supabase
                 .from('app_user_subscriptions')
                 .select('plan_id, plan_label, expires_at, status')
@@ -77,16 +81,17 @@ export function AuthProvider({ children }) {
                 .maybeSingle();
 
             const expiresAt = sub?.expires_at ? new Date(sub.expires_at).getTime() : 0;
-            const isSubActive = sub ? (!sub.expires_at || expiresAt > Date.now() || sub.status === 'active') : false;
+            const isSubActive = sub && (sub.status === 'active' || sub.status === 'trial') && (!sub.expires_at || expiresAt > Date.now());
             let resolvedPlan = isSubActive
                 ? (sub?.plan_label || sub?.plan_id || 'GAP Max')
-                : 'No active plan';
+                : 'Free Plan';
             const resolvedStatus = isSubActive ? 'active' : (sub ? 'expired' : 'inactive');
             resolvedPlan = resolvePlanName(resolvedPlan);
 
             setUser(prev => prev ? { ...prev, plan: resolvedPlan, subscription_status: resolvedStatus, subscription_checked: true } : null);
         } catch (err) {
             console.error('[AUTH] fetchUserProfile error:', err);
+            setUserRole(prev => prev || (loginType === 'agent' ? 'agent' : 'owner'));
             setUser(prev => prev ? { ...prev, subscription_checked: true } : null);
         }
     }, [loginType]);
@@ -121,13 +126,15 @@ export function AuthProvider({ children }) {
 
                 // Inherit the organization's subscription status
                 if (data?.subscription) {
+                    console.log('[AUTH_DEBUG] Subscription data:', data.subscription);
                     const expiresAt = data.subscription.expires_at ? new Date(data.subscription.expires_at).getTime() : 0
-                    const isSubActive = !data.subscription.expires_at || expiresAt > Date.now() || data.subscription.status === 'active'
+                    const isSubActive = (data.subscription.status === 'active' || data.subscription.status === 'trial') && (!data.subscription.expires_at || expiresAt > Date.now())
                     let resolvedPlan = isSubActive
                         ? (data.subscription.plan_label || data.subscription.plan_id || 'GAP Max')
-                        : 'No active plan'
+                        : 'Free Plan'
                     const resolvedStatus = isSubActive ? 'active' : (data.subscription ? 'expired' : 'inactive')
                     resolvedPlan = resolvePlanName(resolvedPlan)
+                    console.log('[AUTH_DEBUG] Resolved post-format:', resolvedPlan);
 
                     setUser(prev => prev ? {
                         ...prev,
@@ -347,13 +354,19 @@ export function AuthProvider({ children }) {
                     if (!tokenOverride && isExpiring) {
                         const { data, error } = await supabase.auth.refreshSession()
                         if (error) {
-                            supabase.auth.signOut().catch(() => {});
+                            supabase.auth.signOut().catch(() => { });
                             throw error;
                         }
                         currentSession = data.session
                         if (data.session) {
                             setSession(data.session)
-                            setUser(data.session.user)
+                            setUser(prev => prev ? {
+                                ...data.session.user,
+                                subscription_checked: prev.subscription_checked,
+                                role: prev.role,
+                                plan: prev.plan,
+                                subscription_status: prev.subscription_status
+                            } : data.session.user)
                         }
                     }
 
@@ -378,7 +391,7 @@ export function AuthProvider({ children }) {
                     if (response.status === 401 && retryCount === 0) {
                         const { data, error } = await supabase.auth.refreshSession();
                         if (error) {
-                            supabase.auth.signOut().catch(() => {});
+                            supabase.auth.signOut().catch(() => { });
                             throw error;
                         }
                         if (data.session) {
