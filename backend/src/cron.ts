@@ -91,7 +91,7 @@ export function startCronJobs() {
                             : (diag.business_verification?.status ? 'ACTION_REQUIRED' : 'UNKNOWN');
 
                         await AccountHealthService.updateHealth(account.id, {
-                            connection_status: tokenStatus === 'EXPIRED' ? 'TOKEN_INVALID' : 'CONNECTED',
+                            connection_status: tokenStatus === 'EXPIRED' ? 'TOKEN_INVALID' : (tokenStatus === 'MISSING' ? 'DISCONNECTED' : 'CONNECTED'),
                             token_status: tokenStatus,
                             business_verification_status: bizStatus,
                             business_name: diag.business_verification?.business_name || null,

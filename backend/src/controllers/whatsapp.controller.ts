@@ -347,21 +347,64 @@ export async function deleteAccount(req: any, res: Response) {
   const { id } = req.params;
   const orgId = req.organization_id;
   try {
+    // 1. Fetch current account record
+    const { data: account } = await supabase
+      .from("w_wa_accounts")
+      .select("id, organization_id, whatsapp_business_account_id, access_token_encrypted, phone_number_id")
+      .eq("id", id)
+      .eq("organization_id", orgId)
+      .maybeSingle();
+
+    if (!account) {
+      return res.status(404).json({ error: "WhatsApp account not found" });
+    }
+
+    // 2. If Meta Cloud API, attempt to unsubscribe webhooks so Meta stops pinging this server
+    if (account.whatsapp_business_account_id && account.access_token_encrypted) {
+      try {
+        const token = decryptToken(account.access_token_encrypted);
+        await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${encodeURIComponent(account.whatsapp_business_account_id)}/subscribed_apps`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } catch (e: any) {
+        console.warn(`[deleteAccount] Unsubscribe from Meta failed:`, e?.message);
+      }
+    }
+
+    // 3. If active Baileys socket session exists, cleanly end and remove it
+    try {
+      const { sessions } = await import("../services/whatsapp.service.js");
+      if (sessions instanceof Map) {
+        const active = sessions.get(id) || (account.phone_number_id ? sessions.get(account.phone_number_id) : null);
+        if (active) {
+          active.end?.();
+          sessions.delete(id);
+          if (account.phone_number_id) sessions.delete(account.phone_number_id);
+        }
+      }
+    } catch (sessionErr: any) {
+      console.warn(`[deleteAccount] Could not clear socket session:`, sessionErr?.message);
+    }
+
+    // 4. Update health state safely
     await AccountHealthService.updateHealth(id, {
       connection_status: 'DISCONNECTED',
       token_status: 'MISSING',
-    });
+    }).catch(err => console.warn('[deleteAccount] Health update warning:', err?.message));
 
+    // 5. Delete the account record permanently
     const { error } = await supabase
       .from("w_wa_accounts")
-      .update({ status: "disconnected", connection_status: "DISCONNECTED", access_token_encrypted: null })
+      .delete()
       .eq("id", id)
       .eq("organization_id", orgId);
 
     if (error) throw error;
-    res.json({ success: true });
+    res.json({ success: true, message: "Account disconnected successfully" });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error("[deleteAccount] Error disconnecting account:", err);
+    res.status(500).json({ error: err.message || "Failed to disconnect account" });
   }
 }
 

@@ -178,7 +178,8 @@ export class AccountHealthService {
     static async backfillAllAccounts(): Promise<{ total: number; succeeded: number; failed: number }> {
         const { data: accounts, error } = await supabase
             .from('w_wa_accounts')
-            .select('*');
+            .select('*')
+            .neq('status', 'disconnected');
 
         if (error || !accounts) {
             console.error('[AccountHealthService] Failed to fetch accounts for backfill:', error);
@@ -212,7 +213,7 @@ export class AccountHealthService {
                     const webhookStatus = diag.webhook_subscription && !diag.webhook_subscription.error ? 'SUBSCRIBED' : 'NOT_SUBSCRIBED';
 
                     await this.updateHealth(account.id, {
-                        connection_status: tokenStatus === 'EXPIRED' ? 'TOKEN_INVALID' : 'CONNECTED',
+                        connection_status: tokenStatus === 'EXPIRED' ? 'TOKEN_INVALID' : (tokenStatus === 'MISSING' ? 'DISCONNECTED' : 'CONNECTED'),
                         token_status: tokenStatus as any,
                         business_verification_status: bizStatus as any,
                         business_name: diag.business_verification?.business_name || null,
