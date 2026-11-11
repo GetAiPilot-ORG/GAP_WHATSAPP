@@ -12,6 +12,7 @@ import { notify } from '../services/notificationService'
 import MetaTemplateLibrary from '../components/MetaTemplateLibrary'
 import { getPendingReviewInfo } from '../utils/templateReview'
 import { placeholderCopy, suggestTemplateCategory } from '../utils/templateApproval'
+import { formatMetaAccountLabel, resolveTemplateAccount } from '../utils/metaAccount'
 import { gsap } from 'gsap'
 import { useGSAP } from '@gsap/react'
 
@@ -104,8 +105,18 @@ const TOPIC_LABELS = {
 export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
     const navigate = useNavigate();
     const { session, apiCall } = useAuth();
-    const { accounts: waAccounts, selectedAccount } = useWhatsAppAccounts();
-    const templateAccountId = selectedAccount?.id || waAccounts[0]?.id || '';
+    const { accounts: waAccounts, selectedAccount, isLoading: accountsLoading } = useWhatsAppAccounts();
+    const {
+        account: templateAccount,
+        accountId: templateAccountId,
+        fallbackReason: templateAccountFallbackReason,
+    } = useMemo(() => resolveTemplateAccount(waAccounts, selectedAccount), [waAccounts, selectedAccount]);
+    const noMetaAccountError = !accountsLoading && !templateAccountId
+        ? 'No connected Meta Cloud API WhatsApp account found for this organization. Connect a Meta account to manage templates.'
+        : '';
+    const nonMetaFallbackNotice = templateAccountFallbackReason === 'non_meta_selected' && templateAccount
+        ? `Selected account (${formatMetaAccountLabel(selectedAccount)}) is not linked to Meta Cloud API. Showing templates for ${formatMetaAccountLabel(templateAccount)}.`
+        : '';
     const { alertDialog, confirmDialog } = useDialog();
     const queryClient = useQueryClient();
     const [viewMode, setViewMode] = useState(defaultView);
@@ -158,7 +169,7 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
         enabled: !!session?.access_token && !!templateAccountId && viewMode === 'INDUSTRIES',
         staleTime: 5 * 60 * 1000,
     })
-    const fetchError = queryError?.message || ''
+    const fetchError = queryError?.message || noMetaAccountError || ''
     const libraryTemplates = officialLibrary
 
     // Prefill state
@@ -336,8 +347,9 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                 <MetaTemplateLibrary
                     templates={libraryTemplates}
                     filteredTemplates={filteredLibrary}
-                    loading={libraryLoading}
-                    error={libraryError?.message}
+                    loading={accountsLoading || libraryLoading}
+                    error={libraryError?.message || noMetaAccountError}
+                    notice={nonMetaFallbackNotice}
                     topic={libraryTopic}
                     setTopic={setLibraryTopic}
                     industry={activeIndustry}
@@ -771,6 +783,13 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
                 </div>
             </div>
 
+            {nonMetaFallbackNotice && (
+                <div className="flex items-start gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs text-sky-900">
+                    <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-sky-700" />
+                    <div className="flex-1">{nonMetaFallbackNotice}</div>
+                </div>
+            )}
+
             {fetchError && (
                 <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                     <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
@@ -819,7 +838,7 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
             )}
 
             {/* Loader / Skeletons */}
-            {loading && (
+            {(accountsLoading || loading) && (
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {[0, 1, 2, 3, 4, 5].map(i => (
                         <div key={i} className="h-[340px] animate-pulse rounded-2xl border border-slate-150 bg-white p-5 flex flex-col justify-between">
@@ -840,7 +859,7 @@ export default function Templates({ defaultView = 'MY_TEMPLATES' }) {
             )}
 
             {/* Grid Layout */}
-            {!loading && (
+            {!(accountsLoading || loading) && (
                 <div ref={containerRef} className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {filteredTemplates.length === 0 ? (
                         <div className="col-span-full py-16 px-6 flex flex-col items-center justify-center text-center bg-white border border-dashed border-slate-205 rounded-3xl max-w-md mx-auto w-full shadow-2xs my-6">
@@ -1285,6 +1304,9 @@ function CreateTemplateModal({ isOpen, onClose, onSuccess, apiCall, initialData,
     const canSubmit = Boolean(waAccountId) && normalizedName && /^[a-z0-9_]+$/.test(normalizedName) && (isOfficialLibrary ? libraryInputsComplete : (data.bodyText.trim() && !hasPlaceholderCopy && bodyLength <= 1024 && data.headerText.length <= 60 && data.footerText.length <= 60 && data.buttons.every(b => (b.text || '').length <= 25) && samplesComplete && buttonsComplete && !(data.headerType === 'TEXT' && !data.headerText.trim()) && !((data.headerType === 'IMAGE' || data.headerType === 'VIDEO') && !file)))
 
     useEffect(() => {
+        if (isOpen) {
+            setSubmitError('')
+        }
         if (initialData && isOpen) {
             const headerComp = initialData.components?.find(c => c.type === 'HEADER');
             const bodyComp = initialData.components?.find(c => c.type === 'BODY');
@@ -1471,7 +1493,7 @@ function CreateTemplateModal({ isOpen, onClose, onSuccess, apiCall, initialData,
                 body: formData
             });
 
-            const json = await res.json();
+            const json = await res.json().catch(() => ({}));
             if (res.ok) {
                 if (onSuccess) onSuccess(json.data?.status || json.data?.data?.status || 'PENDING');
                 closeModal();

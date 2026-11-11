@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useWhatsAppAccounts } from '../context/WhatsAppAccountContext';
 import { useDialog } from '../context/DialogContext';
 import { META_LANGUAGES, getMetaLanguage } from '../data/metaLanguages';
+import { formatMetaAccountLabel, resolveTemplateAccount } from '../utils/metaAccount';
 import { BACKEND_URL as API_URL } from '../config/api';
 const fieldClass = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-100 disabled:text-slate-500';
 const initialForm = {
@@ -157,7 +158,11 @@ export default function TemplateWizard() {
   const queryClient = useQueryClient();
   const { apiCall, memberProfile } = useAuth();
   const { accounts: waAccounts, selectedAccount, isLoading: accountsLoading } = useWhatsAppAccounts();
-  const templateAccountId = selectedAccount?.id || waAccounts[0]?.id || '';
+  const {
+    account: templateAccount,
+    accountId: templateAccountId,
+    fallbackReason: templateAccountFallbackReason,
+  } = useMemo(() => resolveTemplateAccount(waAccounts, selectedAccount), [waAccounts, selectedAccount]);
   const { confirmDialog } = useDialog();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(initialForm);
@@ -305,6 +310,12 @@ export default function TemplateWizard() {
           <span className="text-xs text-slate-500">{context.account.display_phone_number || 'Meta account'}</span>
         </div>
       </header>
+
+      {templateAccountFallbackReason === 'non_meta_selected' && templateAccount && (
+        <div className="mx-auto mt-4 max-w-[1280px] rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-xs text-sky-900">
+          Selected account ({formatMetaAccountLabel(selectedAccount)}) is not linked to Meta Cloud API. New templates will be created on <strong>{formatMetaAccountLabel(templateAccount)}</strong>.
+        </div>
+      )}
 
       {restored && <div className="mx-auto mt-4 flex max-w-[1280px] items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800"><span>Your saved draft was restored. Media files need to be selected again.</span><button onClick={() => setRestored(false)} aria-label="Dismiss"><X className="h-4 w-4" /></button></div>}
 

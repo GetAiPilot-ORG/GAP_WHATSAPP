@@ -62,6 +62,7 @@ function WhatsAppConnectContent() {
     const [manualError, setManualError] = useState('')
     const [diagnostics, setDiagnostics] = useState({})
     const [diagnosticsLoadingId, setDiagnosticsLoadingId] = useState(null)
+    const [disconnectingId, setDisconnectingId] = useState(null)
     const [isGuideModalOpen, setIsGuideModalOpen] = useState(false)
     const capturedMetaSessionRef = useRef(null)
     const [hasIntegrationConsent, setHasIntegrationConsent] = useState(() => {
@@ -191,6 +192,7 @@ function WhatsAppConnectContent() {
         })
         if (!confirmed) return
 
+        setDisconnectingId(id)
         try {
             const res = await apiCall(`${API_BASE}/whatsapp/accounts/${id}`, {
                 method: 'DELETE',
@@ -203,6 +205,8 @@ function WhatsAppConnectContent() {
         } catch (err) {
             console.error('[WhatsAppConnect] Disconnect error:', err)
             alertDialog(err?.message || 'Failed to disconnect account', { title: 'Disconnect failed', tone: 'danger' })
+        } finally {
+            setDisconnectingId(null)
         }
     }
 
@@ -271,17 +275,16 @@ function WhatsAppConnectContent() {
             await loadFacebookSDK()
             setIsSdkLoading(false)
             // Trigger login immediately
+            capturedMetaSessionRef.current = null
             setEmbedStatus('loading')
             setEmbedError('')
             window.FB.login((response) => handleEmbeddedSignupResponse(response), {
-                config_id: META_CONFIG_ID,
+                scope: 'business_management,whatsapp_business_management,whatsapp_business_messaging,public_profile',
                 response_type: 'code',
                 override_default_response_type: true,
                 extras: {
-                    setup: {},
-                    featureType: '',
+                    feature: 'whatsapp_embedded_signup',
                     sessionInfoVersion: META_EMBEDDED_SESSION_INFO_VERSION,
-                    version: META_EMBEDDED_SIGNUP_VERSION,
                 },
             })
         } catch (err) {
@@ -305,17 +308,16 @@ function WhatsAppConnectContent() {
             return
         }
 
+        capturedMetaSessionRef.current = null
         setEmbedStatus('loading')
         setEmbedError('')
         window.FB.login((response) => handleEmbeddedSignupResponse(response), {
-            config_id: META_CONFIG_ID,
+            scope: 'business_management,whatsapp_business_management,whatsapp_business_messaging,public_profile',
             response_type: 'code',
             override_default_response_type: true,
             extras: {
-                setup: {},
-                featureType: '',
+                feature: 'whatsapp_embedded_signup',
                 sessionInfoVersion: META_EMBEDDED_SESSION_INFO_VERSION,
-                version: META_EMBEDDED_SIGNUP_VERSION,
             },
         })
     }
@@ -550,6 +552,7 @@ function WhatsAppConnectContent() {
                                 account={account}
                                 diagnostics={diagnostics[account.id]}
                                 loading={diagnosticsLoadingId === account.id}
+                                disconnecting={disconnectingId === account.id}
                                 onCheck={() => runAccountDiagnostics(account.id)}
                                 onReconnect={handleEmbeddedSignup}
                                 onDisconnect={() => handleDeleteAccount(account.id)}
@@ -993,7 +996,7 @@ function getAccountStatus(account, diagnostics) {
     return 'connected';
 }
 
-function AccountCard({ account, diagnostics, loading, onCheck, onReconnect, onDisconnect }) {
+function AccountCard({ account, diagnostics, loading, disconnecting, onCheck, onReconnect, onDisconnect }) {
     const isMeta = account.connection_type !== 'qr_session';
     const hasToken = Boolean(account.has_access_token || account.access_token_encrypted || diagnostics?.has_access_token);
     const issueCodes = diagnostics?.issue_codes || [];
@@ -1118,7 +1121,7 @@ function AccountCard({ account, diagnostics, loading, onCheck, onReconnect, onDi
                 <button
                     type="button"
                     onClick={onCheck}
-                    disabled={loading}
+                    disabled={loading || disconnecting}
                     className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-white border border-gray-200 px-4 text-xs font-semibold text-gray-700 transition-all hover:bg-gray-50 disabled:opacity-50 w-full sm:w-auto"
                 >
                     {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-500" /> : <ShieldCheck className="h-3.5 w-3.5 text-gray-500" />}
@@ -1136,9 +1139,11 @@ function AccountCard({ account, diagnostics, loading, onCheck, onReconnect, onDi
                 <button
                     type="button"
                     onClick={onDisconnect}
-                    className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-white border border-gray-200 px-4 text-xs font-semibold text-red-600 transition-all hover:bg-red-50 hover:border-red-200 w-full sm:w-auto"
+                    disabled={disconnecting || loading}
+                    className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-white border border-gray-200 px-4 text-xs font-semibold text-red-600 transition-all hover:bg-red-50 hover:border-red-200 disabled:opacity-50 w-full sm:w-auto"
                 >
-                    Disconnect
+                    {disconnecting ? <Loader2 className="h-3.5 w-3.5 animate-spin text-red-500" /> : null}
+                    {disconnecting ? 'Disconnecting...' : 'Disconnect'}
                 </button>
             </div>
         </div>
