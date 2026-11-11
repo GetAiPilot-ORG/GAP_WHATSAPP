@@ -68,6 +68,23 @@ async function resolveTemplateMetaAccount(orgId: string, requestedAccountId?: un
   const { data: accounts, error } = await query.order('created_at', { ascending: false });
   if (error) throw error;
   if (!accounts?.length) {
+    if (cleanAccountId && cleanAccountId !== 'All') {
+      const { data: requestedRow } = await supabase
+        .from('w_wa_accounts')
+        .select('id, display_phone_number, whatsapp_business_account_id, status')
+        .eq('organization_id', orgId)
+        .eq('id', cleanAccountId)
+        .maybeSingle();
+
+      if (requestedRow && requestedRow.status !== 'disconnected' && !requestedRow.whatsapp_business_account_id) {
+        const label = requestedRow.display_phone_number ? ` (${requestedRow.display_phone_number})` : '';
+        const err: any = new Error(
+          `WhatsApp account${label} is not linked to Meta Cloud API (missing WABA ID). Select a Meta Cloud API account or "All WhatsApp accounts" to manage templates.`
+        );
+        err.statusCode = 400;
+        throw err;
+      }
+    }
     const err: any = new Error(cleanAccountId && cleanAccountId !== 'All'
       ? 'Selected Meta account was not found for this organization.'
       : 'No connected Meta account found');
@@ -1056,12 +1073,16 @@ export async function createTemplate(req: any, res: Response) {
       // Fetch official library buttons from Meta to guarantee exact button count and structure.
       // Inputs are matched positionally after removing non-parameterized buttons.
       try {
+        const cleanLibraryName = String(libraryTemplateName).trim();
         const libRes = await fetch(
-          `https://graph.facebook.com/${GRAPH_API_VERSION}/message_template_library?name=${encodeURIComponent(String(libraryTemplateName).trim())}&language=${encodeURIComponent(cleanLang)}&fields=category,buttons`,
+          `https://graph.facebook.com/${GRAPH_API_VERSION}/message_template_library?name=${encodeURIComponent(cleanLibraryName)}&language=${encodeURIComponent(cleanLang)}&fields=id,name,category,buttons&limit=50`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         const libJson = await libRes.json();
-        const libTemplate = (libJson.data || []).find((t: any) => t.name === String(libraryTemplateName).trim());
+        const libItems: any[] = Array.isArray(libJson.data) ? libJson.data : [];
+        const libTemplate =
+          libItems.find((t: any) => String(t?.name || '').trim() === cleanLibraryName) ||
+          (libItems.length === 1 && !libItems[0]?.name ? libItems[0] : null);
         if (!libRes.ok || !libTemplate) {
           return res.status(502).json({
             error: libJson.error?.message || 'Could not verify this template definition with Meta.',
