@@ -3,6 +3,19 @@ import { supabase } from './config/supabase.js';
 import { processCampaign } from './services/broadcast.service.js';
 
 export function startCronJobs() {
+    // Periodic AI agent Google Calendar schedule sync to bot_agents DB (every 5 mins)
+    cron.schedule('*/5 * * * *', async () => {
+        try {
+            const { syncAllEnabledAgentCalendars } = await import('./services/agentCalendar.service.js');
+            const summary = await syncAllEnabledAgentCalendars();
+            if (summary.synced > 0 || summary.failed > 0) {
+                console.log(`[AgentCalendarSync] Cron completed: ${summary.synced} synced, ${summary.failed} failed, ${summary.skipped} skipped.`);
+            }
+        } catch (e) {
+            console.error('[AgentCalendarSync] Cron error:', e);
+        }
+    });
+
     if (process.env.BROADCAST_QUEUE_ENABLED === 'true') {
         console.log('[broadcast] Legacy campaign cron disabled; BullMQ owns scheduling and recovery');
         return;

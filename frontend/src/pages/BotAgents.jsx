@@ -8,8 +8,11 @@ gsap.registerPlugin(useGSAP);
 import { Dialog as HeadlessDialog, Transition as HeadlessTransition } from '@headlessui/react'
 import {
     AlertCircle,
+    CalendarDays,
     ChevronDown,
     Loader2,
+    MessageSquare,
+    Send,
 } from 'lucide-react'
 import {
     ArrowRight,
@@ -48,7 +51,7 @@ const defaultAgent = {
     systemPrompt: '',
     isActive: true,
     selectedKnowledgeIds: [],
-    calendar: { enabled: false, calendar_id: '', timezone: 'Asia/Kolkata' },
+    calendar: { enabled: false, calendar_id: '', timezone: 'Asia/Kolkata', synced_events: null, last_synced_at: null, sync_error: null },
     automation: {
         reply_on_keywords: true,
         auto_reply_unknown: true,
@@ -71,6 +74,7 @@ export default function BotAgents() {
     const [showGuideModal, setShowGuideModal] = useState(false)
     const [showAutoGenerateModal, setShowAutoGenerateModal] = useState(false)
     const [drawerOpen, setDrawerOpen] = useState(false)
+    const [testChatAgent, setTestChatAgent] = useState(null)
     const [draft, setDraft] = useState(defaultAgent)
     const [isSaving, setIsSaving] = useState(false)
     const [query, setQuery] = useState('')
@@ -268,7 +272,11 @@ export default function BotAgents() {
         system_prompt: draft.systemPrompt.trim(),
         selected_knowledge_document_ids: draft.selectedKnowledgeIds,
         automation_settings: draft.automation,
-        calendar_settings: draft.calendar,
+        calendar_settings: {
+            enabled: Boolean(draft.calendar?.enabled),
+            calendar_id: draft.calendar?.calendar_id || '',
+            timezone: draft.calendar?.timezone || 'Asia/Kolkata',
+        },
         is_active: draft.isActive,
     })
 
@@ -463,7 +471,7 @@ export default function BotAgents() {
                             {filteredAgents.length === 0 ? (
                                 <EmptyAgentsState hasAgents={hasAgents} query={query} onCreate={openCreate} isLimitReached={isLimitReached} />
                             ) : filteredAgents.map(agent => (
-                                <AgentCard key={agent.id} agent={agent} onEdit={openEdit} onToggle={toggleAgentStatus} onDelete={deleteAgent} />
+                                <AgentCard key={agent.id} agent={agent} onEdit={openEdit} onTest={setTestChatAgent} onToggle={toggleAgentStatus} onDelete={deleteAgent} />
                             ))}
                         </div>
                     </section>
@@ -563,7 +571,24 @@ export default function BotAgents() {
                     selectedCharacters={selectedCharacters}
                     onClose={() => setDrawerOpen(false)}
                     onSave={saveAgent}
+                    onTest={draft.id ? () => {
+                        const saved = agents.find(a => a.id === draft.id)
+                        if (saved) setTestChatAgent(saved)
+                    } : null}
+                    onAgentSynced={(updated) => {
+                        if (!updated?.id) return
+                        const normalized = normalizeAgent(updated)
+                        setAgents(prev => prev.map(item => item.id === normalized.id ? normalized : item))
+                    }}
                     isSaving={isSaving}
+                />
+            ) : null}
+
+            {testChatAgent ? (
+                <AgentTestChatModal
+                    agent={testChatAgent}
+                    apiCall={apiCall}
+                    onClose={() => setTestChatAgent(null)}
                 />
             ) : null}
 
@@ -589,12 +614,15 @@ export default function BotAgents() {
     )
 }
 
-function AgentCard({ agent, onEdit, onToggle, onDelete }) {
+function AgentCard({ agent, onEdit, onTest, onToggle, onDelete }) {
     const automationLabel = agent.automation.default_for_new_chats
         ? 'Default for new chats'
         : agent.automation.auto_reply_unknown
             ? 'Unknown chats ready'
             : 'Keyword only'
+    const syncedSessions = Array.isArray(agent.calendar?.synced_events)
+        ? agent.calendar.synced_events.length
+        : null
 
     return (
         <div className="agent-card-item group relative flex flex-col justify-between h-full rounded-lg border border-gray-200 bg-white p-4 shadow-2xs hover:border-gray-300 transition-all">
@@ -622,7 +650,14 @@ function AgentCard({ agent, onEdit, onToggle, onDelete }) {
                 <div className="mt-4 space-y-3 pt-4 border-t border-gray-50">
                     <div className="flex items-center gap-2 text-xs">
                         <div className="flex h-5 w-5 items-center justify-center rounded bg-indigo-50 text-indigo-500"><ChatCircleText size={12} weight="fill" /></div>
-                        <span className="font-semibold text-gray-700">{automationLabel}{agent.calendar?.enabled ? ' · Calendar enabled' : ''}</span>
+                        <span className="font-semibold text-gray-700">
+                            {automationLabel}
+                            {agent.calendar?.enabled
+                                ? syncedSessions !== null
+                                    ? ` · Calendar (${syncedSessions} synced)`
+                                    : ' · Calendar enabled'
+                                : ''}
+                        </span>
                     </div>
 
                     {((agent.triggerKeywords && agent.triggerKeywords.length > 0) || agent.automation.auto_reply_unknown || agent.automation.default_for_new_chats) && (
@@ -657,19 +692,33 @@ function AgentCard({ agent, onEdit, onToggle, onDelete }) {
                         <span className="text-[10px] uppercase tracking-wider text-gray-400 block mb-0.5">Chars</span>
                         <span className="text-sm font-semibold text-gray-900">{Number(agent.characterCount || 0).toLocaleString()}</span>
                     </div>
+                    {agent.calendar?.enabled && (
+                        <div>
+                            <span className="text-[10px] uppercase tracking-wider text-gray-400 block mb-0.5">Schedule</span>
+                            <span className="text-sm font-semibold text-blue-700">{syncedSessions !== null ? `${syncedSessions} events` : 'Live'}</span>
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex gap-2">
                     <button
                         onClick={() => onEdit(agent)}
-                        className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-[#f8f9fa] border border-gray-200 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-100 hover:border-gray-300 transition-colors"
+                        className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-[#f8f9fa] border border-gray-200 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-100 hover:border-gray-300 transition-colors"
                     >
                         <GearSix size={14} className="text-gray-500" />
                         Configure
                     </button>
                     <button
+                        onClick={() => onTest(agent)}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors"
+                        title="Test this agent with sample customer messages"
+                    >
+                        <MessageSquare size={14} />
+                        Test
+                    </button>
+                    <button
                         onClick={() => onToggle(agent)}
-                        className={`inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-lg border text-xs font-semibold transition-all active:scale-[0.98] ${agent.isActive
+                        className={`inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg border text-xs font-semibold transition-all active:scale-[0.98] ${agent.isActive
                             ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300'
                             : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100 hover:text-gray-800'
                             }`}
@@ -706,7 +755,7 @@ function EmptyAgentsState({ hasAgents, query, onCreate, isLimitReached }) {
     )
 }
 
-function AgentDrawer({ draft, setDraft, docs, models, selectedDocs, selectedCharacters, onClose, onSave, isSaving }) {
+function AgentDrawer({ draft, setDraft, docs, models, selectedDocs, selectedCharacters, onClose, onSave, onTest, onAgentSynced, isSaving }) {
     const toggleDoc = (id) => {
         setDraft(prev => ({
             ...prev,
@@ -733,7 +782,9 @@ function AgentDrawer({ draft, setDraft, docs, models, selectedDocs, selectedChar
                             </div>
                             <div className="rounded-lg border border-gray-200 bg-zinc-50/55 px-3 py-1.5 min-w-[110px]">
                                 <div className="text-[9px] font-bold uppercase tracking-wider text-gray-400">Knowledge</div>
-                                <div className="mt-0.5 text-xs font-bold text-gray-900">{selectedDocs.length} docs</div>
+                                <div className="mt-0.5 text-xs font-bold text-gray-900">
+                                    {selectedDocs.length} docs{draft.calendar?.enabled ? ' + Calendar' : ''}
+                                </div>
                             </div>
                             <div className="rounded-lg border border-gray-200 bg-zinc-50/55 px-3 py-1.5 min-w-[110px]">
                                 <div className="text-[9px] font-bold uppercase tracking-wider text-gray-400">Automation</div>
@@ -784,7 +835,12 @@ function AgentDrawer({ draft, setDraft, docs, models, selectedDocs, selectedChar
                             <Field label="Trigger keywords" className="mt-4"><input value={draft.triggerKeywords} onChange={event => setDraft({ ...draft, triggerKeywords: event.target.value })} className="field-input rounded-lg border-gray-200 focus:border-zinc-400 focus:ring-1 focus:ring-zinc-200" placeholder="help, support, price, booking, demo" /></Field>
                         </section>
 
-                        <AgentCalendarSettings value={draft.calendar} onChange={calendar => setDraft(prev => ({ ...prev, calendar }))} />
+                        <AgentCalendarSettings
+                            value={draft.calendar}
+                            agentId={draft.id}
+                            onAgentSynced={onAgentSynced}
+                            onChange={calendar => setDraft(prev => ({ ...prev, calendar }))}
+                        />
 
                         <section className="rounded-lg border border-gray-200 bg-white p-5">
                             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -850,12 +906,22 @@ function AgentDrawer({ draft, setDraft, docs, models, selectedDocs, selectedChar
                     </div>
                 </div>
 
-                <div className="flex flex-col-reverse gap-3 border-t border-gray-200 bg-white px-4 py-4 sm:flex-row sm:justify-end sm:px-6">
-                    <button onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-zinc-50">Cancel</button>
-                    <button onClick={onSave} disabled={!draft.name.trim() || isSaving} className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50">
-                        {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Brain size={18} weight="duotone" />}
-                        {isSaving ? 'Training...' : 'Save and train'}
-                    </button>
+                <div className="flex flex-col-reverse gap-3 border-t border-gray-200 bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                    <div>
+                        {onTest ? (
+                            <button type="button" onClick={onTest} className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">
+                                <MessageSquare size={16} />
+                                Test saved agent
+                            </button>
+                        ) : null}
+                    </div>
+                    <div className="flex flex-col-reverse gap-3 sm:flex-row">
+                        <button onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-zinc-50">Cancel</button>
+                        <button onClick={onSave} disabled={!draft.name.trim() || isSaving} className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50">
+                            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Brain size={18} weight="duotone" />}
+                            {isSaving ? 'Training...' : 'Save and train'}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1303,4 +1369,232 @@ INSTRUCTIONS FOR YOU (CHATGPT):
             </HeadlessDialog>
         </HeadlessTransition>
     )
+}
+
+function AgentTestChatModal({ agent, apiCall, onClose }) {
+    const [messages, setMessages] = useState([])
+    const [input, setInput] = useState('')
+    const [sending, setSending] = useState(false)
+    const [error, setError] = useState('')
+    const scrollRef = useRef(null)
+
+    const syncedCount = Array.isArray(agent.calendar?.synced_events)
+        ? agent.calendar.synced_events.length
+        : null
+
+    const quickPrompts = [
+        "What's the schedule of today?",
+        'When is the upcoming dance class?',
+        'What sessions are scheduled this week?',
+    ]
+
+    useEffect(() => {
+        if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+        }
+    }, [messages, sending])
+
+    const sendTestMessage = async (textOverride) => {
+        const message = String(textOverride !== undefined ? textOverride : input).trim()
+        if (!message || sending) return
+
+        const history = messages
+            .filter(m => m.role === 'user' || m.role === 'assistant')
+            .map(m => ({ role: m.role, content: m.content }))
+
+        const nextMessages = [...messages, { id: Date.now(), role: 'user', content: message }]
+        setMessages(nextMessages)
+        if (textOverride === undefined) setInput('')
+        setSending(true)
+        setError('')
+
+        try {
+            const res = await apiCall(`${API_BASE}/agents/${agent.id}/test-chat`, {
+                method: 'POST',
+                body: JSON.stringify({ message, history }),
+            })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) throw new Error(data.error || 'Failed to get agent reply')
+
+            setMessages(prev => [
+                ...prev,
+                {
+                    id: Date.now() + 1,
+                    role: 'assistant',
+                    content: data.reply,
+                    interactive: data.interactive || null,
+                    isFallback: Boolean(data.is_fallback),
+                    usedCalendarTool: Boolean(data.used_calendar_tool),
+                    scheduleSource: data.schedule_source,
+                },
+            ])
+        } catch (err) {
+            setError(err.message || 'Could not reach agent test endpoint')
+        } finally {
+            setSending(false)
+        }
+    }
+
+    const sourceBadgeLabel = (msg) => {
+        if (msg.isFallback) return 'Fallback triggered'
+        if (msg.scheduleSource === 'live') return 'Verified live Google Calendar'
+        if (msg.scheduleSource === 'database_cache') return 'Answered from Agent Schedule DB (cache)'
+        if (msg.scheduleSource === 'database_prompt') return 'Answered from Agent Schedule DB'
+        return 'Knowledge Base'
+    }
+
+    return (
+        <HeadlessTransition appear show={true} as={Fragment}>
+            <HeadlessDialog as="div" className="relative z-[70]" onClose={onClose}>
+                <HeadlessTransition.Child
+                    as={Fragment}
+                    enter="ease-out duration-200"
+                    enterFrom="opacity-0"
+                    enterTo="opacity-100"
+                    leave="ease-in duration-150"
+                    leaveFrom="opacity-100"
+                    leaveTo="opacity-0"
+                >
+                    <div className="fixed inset-0 bg-gray-950/35 backdrop-blur-xs" />
+                </HeadlessTransition.Child>
+
+                <div className="fixed inset-0 overflow-y-auto p-4">
+                    <div className="flex min-h-full items-center justify-center">
+                        <HeadlessTransition.Child
+                            as={Fragment}
+                            enter="ease-out duration-200"
+                            enterFrom="opacity-0 scale-95"
+                            enterTo="opacity-100 scale-100"
+                            leave="ease-in duration-150"
+                            leaveFrom="opacity-100 scale-100"
+                            leaveTo="opacity-0 scale-95"
+                        >
+                            <HeadlessDialog.Panel className="flex w-full max-w-xl flex-col overflow-hidden rounded-xl border border-gray-200 bg-white text-left shadow-2xl">
+                                <div className="flex items-start justify-between gap-3 border-b border-gray-200 bg-gray-50/70 px-5 py-4">
+                                    <div>
+                                        <h3 className="flex items-center gap-2 text-base font-bold text-gray-900">
+                                            <MessageSquare size={18} className="text-blue-600" />
+                                            Test Agent: {agent.name}
+                                        </h3>
+                                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                                            {agent.calendar?.enabled ? (
+                                                <span className="inline-flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">
+                                                    <CalendarDays size={12} />
+                                                    Calendar ON{syncedSessionsText(syncedCount)}
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center rounded border border-gray-200 bg-white px-2 py-0.5 font-medium text-gray-600">
+                                                    Calendar OFF
+                                                </span>
+                                            )}
+                                            <span>{agent.documentCount || 0} KB docs</span>
+                                            <span>&middot;</span>
+                                            <span>{agent.calendar?.timezone || 'Asia/Kolkata'}</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        {messages.length > 0 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => { setMessages([]); setError('') }}
+                                                className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+                                            >
+                                                Clear
+                                            </button>
+                                        )}
+                                        <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+                                            <X size={18} weight="bold" />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div ref={scrollRef} className="h-80 space-y-3 overflow-y-auto bg-[#f8f9fa] p-4">
+                                    {messages.length === 0 ? (
+                                        <div className="flex h-full flex-col items-center justify-center text-center">
+                                            <p className="text-sm font-semibold text-gray-800">Try asking your agent a customer question</p>
+                                            <p className="mt-1 max-w-sm text-xs text-gray-500">Uses your saved prompt, synced schedule database, and live Google Calendar lookup just like WhatsApp chat.</p>
+                                            <div className="mt-4 flex flex-wrap justify-center gap-2">
+                                                {quickPrompts.map(prompt => (
+                                                    <button
+                                                        key={prompt}
+                                                        type="button"
+                                                        onClick={() => sendTestMessage(prompt)}
+                                                        className="rounded-full border border-blue-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50"
+                                                    >
+                                                        {prompt}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        messages.map(msg => (
+                                            <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                                                <div
+                                                    className={`max-w-[85%] rounded-lg px-3.5 py-2.5 text-sm whitespace-pre-wrap leading-relaxed shadow-2xs ${
+                                                        msg.role === 'user'
+                                                            ? 'bg-blue-600 text-white'
+                                                            : 'border border-gray-200 bg-white text-gray-800'
+                                                    }`}
+                                                >
+                                                    {msg.content}
+                                                    {msg.interactive?.buttons?.length > 0 && (
+                                                        <div className="mt-2 flex flex-wrap gap-1.5 border-t border-gray-100 pt-2">
+                                                            {msg.interactive.buttons.map((btn, idx) => (
+                                                                <span key={btn.id || idx} className="rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                                                                    {btn.text}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {msg.role === 'assistant' && (
+                                                    <span className={`mt-1 text-[10px] font-medium ${msg.isFallback ? 'text-amber-600' : 'text-gray-400'}`}>
+                                                        {sourceBadgeLabel(msg)}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        ))
+                                    )}
+                                    {sending && (
+                                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                                            <Loader2 size={14} className="animate-spin text-blue-600" />
+                                            Thinking and checking schedule…
+                                        </div>
+                                    )}
+                                </div>
+
+                                {error && <p role="alert" className="border-t border-red-100 bg-red-50 px-4 py-2 text-xs text-red-700">{error}</p>}
+
+                                <form
+                                    onSubmit={e => { e.preventDefault(); sendTestMessage() }}
+                                    className="flex items-center gap-2 border-t border-gray-200 bg-white p-3"
+                                >
+                                    <input
+                                        value={input}
+                                        onChange={e => setInput(e.target.value)}
+                                        placeholder="Ask e.g. When is the upcoming dance class?"
+                                        className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                        disabled={sending}
+                                    />
+                                    <button
+                                        type="submit"
+                                        disabled={!input.trim() || sending}
+                                        className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        <Send size={14} />
+                                        Send
+                                    </button>
+                                </form>
+                            </HeadlessDialog.Panel>
+                        </HeadlessTransition.Child>
+                    </div>
+                </div>
+            </HeadlessDialog>
+        </HeadlessTransition>
+    )
+}
+
+function syncedSessionsText(count) {
+    if (count === null || count === undefined) return ''
+    return ` · ${count} in DB`
 }
