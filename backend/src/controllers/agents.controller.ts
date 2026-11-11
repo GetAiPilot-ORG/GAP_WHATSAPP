@@ -1,3 +1,4 @@
+import { validateCalendarSettings } from '../services/agentCalendar.service.js';
 import { Response } from 'express';
 import { supabase } from '../config/supabase.js';
 import { enforcePlanResourceLimit } from '../services/billing.service.js';
@@ -55,6 +56,7 @@ async function buildAgentKnowledgePayload(organizationId: string, params: any) {
     {
       type: AGENT_SETTINGS_ITEM_TYPE,
       settings: automationSettings,
+      calendar: validateCalendarSettings(params.calendar_settings || { enabled: false }),
       selected_knowledge_document_ids: selectedDocs.map((doc: any) => doc.id),
       trained_at: new Date().toISOString(),
       training: {
@@ -195,12 +197,20 @@ export const updateAgent = async (req: any, res: Response) => {
       req.body.selected_knowledge_document_ids !== undefined ||
       req.body.knowledge_base !== undefined ||
       req.body.knowledge_base_content !== undefined ||
+      req.body.calendar_settings !== undefined ||
       req.body.automation_settings !== undefined
     ) {
-      const knowledgePayload = await buildAgentKnowledgePayload(
-        organization_id,
-        req.body || {},
-      );
+      const { data: existing, error: readError } = await supabase.from("bot_agents").select("*").eq("id", id).eq("organization_id", organization_id).single();
+      if (readError || !existing) return res.status(404).json({ error: "Agent not found" });
+      const meta = (existing.knowledge_base_content || []).find((i: any) => i?.type === AGENT_SETTINGS_ITEM_TYPE) || {};
+      const knowledgePayload = await buildAgentKnowledgePayload(organization_id, {
+        knowledge_base: existing.knowledge_base,
+        knowledge_base_content: (existing.knowledge_base_content || []).filter((i: any) => i?.source !== "workspace_knowledge_base"),
+        selected_knowledge_document_ids: meta.selected_knowledge_document_ids,
+        automation_settings: meta.settings,
+        calendar_settings: meta.calendar,
+        ...req.body,
+      });
       updateData.knowledge_base = knowledgePayload.knowledge_base;
       updateData.knowledge_base_content = knowledgePayload.knowledge_base_content;
     }

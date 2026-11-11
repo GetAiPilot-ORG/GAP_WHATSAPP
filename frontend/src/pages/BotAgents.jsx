@@ -1,3 +1,4 @@
+import AgentCalendarSettings from '../components/AgentCalendarSettings'
 import InfoHelp from '../components/InfoHelp'
 import { useEffect, useMemo, useRef, useState, Fragment } from 'react'
 import { gsap } from 'gsap'
@@ -18,7 +19,6 @@ import {
     Database,
     FileText,
     GearSix,
-    Key,
     MagnifyingGlass,
     Plus,
     Robot,
@@ -48,6 +48,7 @@ const defaultAgent = {
     systemPrompt: '',
     isActive: true,
     selectedKnowledgeIds: [],
+    calendar: { enabled: false, calendar_id: '', timezone: 'Asia/Kolkata' },
     automation: {
         reply_on_keywords: true,
         auto_reply_unknown: true,
@@ -66,9 +67,7 @@ export default function BotAgents() {
     const [knowledgeDocs, setKnowledgeDocs] = useState([])
     const [isLoading, setIsLoading] = useState(true)
     const [fetchError, setFetchError] = useState('')
-    const [apiKey, setApiKey] = useState('')
     const [apiKeyConfigured, setApiKeyConfigured] = useState(false)
-    const [showApiSettings, setShowApiSettings] = useState(false)
     const [showGuideModal, setShowGuideModal] = useState(false)
     const [showAutoGenerateModal, setShowAutoGenerateModal] = useState(false)
     const [drawerOpen, setDrawerOpen] = useState(false)
@@ -106,6 +105,7 @@ export default function BotAgents() {
                 handoff_on_human_reply: settings.handoff_on_human_reply !== false,
             },
             selectedKnowledgeIds: item.selected_knowledge_document_ids || trainedItems.map(entry => entry.id).filter(Boolean),
+            calendar: item.calendar || defaultAgent.calendar,
             trainedAt: item.trained_at || agent.created_at || null,
             documentCount: item.training?.document_count ?? trainedItems.length,
             characterCount: item.training?.character_count ?? trainedItems.reduce((sum, entry) => sum + String(entry?.content || '').length, 0),
@@ -251,6 +251,7 @@ export default function BotAgents() {
             isActive: agent.isActive,
             selectedKnowledgeIds: agent.selectedKnowledgeIds || [],
             automation: { ...defaultAgent.automation, ...agent.automation },
+            calendar: { ...defaultAgent.calendar, ...agent.calendar },
         })
         setDrawerOpen(true)
     }
@@ -267,11 +268,13 @@ export default function BotAgents() {
         system_prompt: draft.systemPrompt.trim(),
         selected_knowledge_document_ids: draft.selectedKnowledgeIds,
         automation_settings: draft.automation,
+        calendar_settings: draft.calendar,
         is_active: draft.isActive,
     })
 
     const saveAgent = () => {
         if (!draft.name.trim()) return
+        if (draft.calendar.enabled && !draft.calendar.calendar_id) { alertDialog('Select a sessions calendar before saving.', { title: 'Calendar required' }); return }
         const isEditing = Boolean(draft.id)
         setConfirmModal({
             isOpen: true,
@@ -340,26 +343,6 @@ export default function BotAgents() {
         })
     }
 
-    const saveApiKey = async () => {
-        if (!apiKey.trim()) {
-            await alertDialog('Please enter an API key.', { title: 'API key required', tone: 'warning' })
-            return
-        }
-        setIsSaving(true)
-        try {
-            const res = await apiCall(`${API_BASE}/settings/openai`, {
-                method: 'POST',
-                body: JSON.stringify({ api_key: apiKey }),
-            })
-            if (!res.ok) throw new Error('Failed to save API key')
-            setApiKey('')
-            setApiKeyConfigured(true)
-            setShowApiSettings(false)
-        } finally {
-            setIsSaving(false)
-        }
-    }
-
     const uploadKnowledgeFiles = async (files) => {
         const list = Array.from(files || [])
         if (!list.length) return
@@ -412,11 +395,10 @@ export default function BotAgents() {
                                 <Database size={18} weight="duotone" />
                                 Sync
                             </button>
-                            <button data-tour="agents-api" onClick={() => setShowApiSettings(true)} className={`inline-flex items-center justify-center gap-2 rounded-lg border px-3.5 py-2 text-sm font-semibold transition-all active:scale-[0.98] ${apiKeyConfigured ? 'border-green-200 bg-green-50 text-green-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
-                                <Key size={18} weight="duotone" />
-                                API Settings
-                                {apiKeyConfigured ? <Check size={16} weight="bold" /> : null}
-                            </button>
+                            <span role="status" className={`inline-flex items-center justify-center gap-2 rounded-lg border px-3.5 py-2 text-sm font-semibold ${apiKeyConfigured ? 'border-green-200 bg-green-50 text-green-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`} title={apiKeyConfigured ? 'AI replies are managed by the platform.' : 'AI service needs setup by the platform administrator.'}>
+                                <Brain size={18} weight="duotone" />
+                                {apiKeyConfigured ? 'AI ready' : 'AI setup pending'}
+                            </span>
                             <div className="col-span-2 sm:col-span-1">
                                 <button
                                     onClick={openCreate}
@@ -585,10 +567,6 @@ export default function BotAgents() {
                 />
             ) : null}
 
-            {showApiSettings ? (
-                <ApiKeyModal apiKey={apiKey} setApiKey={setApiKey} configured={apiKeyConfigured} isSaving={isSaving} onClose={() => setShowApiSettings(false)} onSave={saveApiKey} />
-            ) : null}
-
             {showGuideModal ? (
                 <KnowledgeGuideModal onClose={() => setShowGuideModal(false)} />
             ) : null}
@@ -644,7 +622,7 @@ function AgentCard({ agent, onEdit, onToggle, onDelete }) {
                 <div className="mt-4 space-y-3 pt-4 border-t border-gray-50">
                     <div className="flex items-center gap-2 text-xs">
                         <div className="flex h-5 w-5 items-center justify-center rounded bg-indigo-50 text-indigo-500"><ChatCircleText size={12} weight="fill" /></div>
-                        <span className="font-semibold text-gray-700">{automationLabel}</span>
+                        <span className="font-semibold text-gray-700">{automationLabel}{agent.calendar?.enabled ? ' · Calendar enabled' : ''}</span>
                     </div>
 
                     {((agent.triggerKeywords && agent.triggerKeywords.length > 0) || agent.automation.auto_reply_unknown || agent.automation.default_for_new_chats) && (
@@ -806,6 +784,8 @@ function AgentDrawer({ draft, setDraft, docs, models, selectedDocs, selectedChar
                             <Field label="Trigger keywords" className="mt-4"><input value={draft.triggerKeywords} onChange={event => setDraft({ ...draft, triggerKeywords: event.target.value })} className="field-input rounded-lg border-gray-200 focus:border-zinc-400 focus:ring-1 focus:ring-zinc-200" placeholder="help, support, price, booking, demo" /></Field>
                         </section>
 
+                        <AgentCalendarSettings value={draft.calendar} onChange={calendar => setDraft(prev => ({ ...prev, calendar }))} />
+
                         <section className="rounded-lg border border-gray-200 bg-white p-5">
                             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <SectionTitle title="Knowledge Base training" subtitle="Select indexed documents. Saving trains this agent with selected content." />
@@ -882,32 +862,6 @@ function AgentDrawer({ draft, setDraft, docs, models, selectedDocs, selectedChar
     )
 }
 
-function ApiKeyModal({ apiKey, setApiKey, configured, isSaving, onClose, onSave }) {
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/40 p-4">
-            <div className="w-full max-w-lg rounded-lg bg-white shadow-2xl">
-                <div className="flex items-start justify-between border-b border-gray-200 p-6">
-                    <div>
-                        <h2 className="text-xl font-bold text-gray-900">OpenAI API Settings</h2>
-                        <p className="mt-1 text-sm text-gray-500">Required for trained agents to generate replies.</p>
-                    </div>
-                    <button onClick={onClose} className="rounded-full p-2 text-gray-500 hover:bg-gray-100"><X size={20} weight="bold" /></button>
-                </div>
-                <div className="space-y-4 p-6">
-                    {configured ? <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-800">API key is configured. Add a new one only if you want to replace it.</div> : null}
-                    <Field label="OpenAI API key"><input type="password" value={apiKey} onChange={event => setApiKey(event.target.value)} className="field-input font-mono" placeholder="sk-..." /></Field>
-                </div>
-                <div className="flex justify-end gap-3 border-t border-gray-200 p-6">
-                    <button onClick={onClose} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-[#f8f9fa]">Cancel</button>
-                    <button onClick={onSave} disabled={isSaving} className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50">
-                        {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check size={18} weight="bold" />}
-                        Save key
-                    </button>
-                </div>
-            </div>
-        </div>
-    )
-}
 function StatCard({ icon, label, value, helper, info }) {
     const IconComponent = icon
     return (
