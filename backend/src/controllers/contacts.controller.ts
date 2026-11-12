@@ -393,7 +393,7 @@ export async function updateContact(req: any, res: Response) {
                     .filter(([key]) => Boolean(key)))
                 : {};
             const currentFields = existing.custom_fields && typeof existing.custom_fields === 'object' ? existing.custom_fields : {};
-            const protectedFields = ['profile_photo_url', 'profile_photo_checked_at'].reduce((acc: any, key) => {
+            const protectedFields = ['profile_photo_url', 'profile_photo_checked_at', 'lid'].reduce((acc: any, key) => {
                 if (currentFields[key]) acc[key] = currentFields[key];
                 return acc;
             }, {});

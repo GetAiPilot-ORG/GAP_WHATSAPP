@@ -9,6 +9,7 @@ import { processFlowEngine } from './flows.service.js';
 import { getBotAgentReply } from './ai.service.js';
 import { sendPushNotificationToOrg } from './push.service.js';
 import { sendOutboundMessage } from './outboundDispatch.service.js';
+import { isGroupOrChannelWaId, isNonIndividualThreadContact } from '../utils/format.js';
 
 export interface InboundMediaPayload {
   buffer?: Buffer;
@@ -173,9 +174,13 @@ export async function ingestInboundMessage(
       ? '[Document]'
       : 'Message');
 
+  const isNonIndividual =
+    isGroupOrChannelWaId(contactWaId) || isNonIndividualThreadContact(contact);
+
   const conv = await upsertConversation(organizationId, waAccountId || '', contact.id, {
     direction,
     preview: effectivePreview,
+    isNonIndividual,
   });
 
   // Check auto-assignment for new or unassigned conversations
@@ -282,11 +287,11 @@ export async function ingestInboundMessage(
     });
   }
 
-  // 8. Automation: Flow Engine & AI Bot Agent (Only for inbound)
+  // 8. Automation: Flow Engine & AI Bot Agent (Only for 1:1 inbound chats)
   let flowTriggered = false;
   let botReplied = false;
 
-  if (direction === 'inbound') {
+  if (direction === 'inbound' && !isNonIndividual) {
     const inboundText = text || caption || interactive?.title || interactive?.id || '';
 
     // Flow Engine Evaluation

@@ -177,6 +177,7 @@ function WhatsAppConnectContent() {
             const data = await res.json().catch(() => ({}))
             if (!res.ok) throw new Error(data.error || 'Failed to inspect account')
             setDiagnostics(prev => ({ ...prev, [id]: data }))
+            fetchAccounts().catch(() => {})
         } catch (err) {
             setDiagnostics(prev => ({ ...prev, [id]: { send_ready: false, issues: [err.message] } }))
         } finally {
@@ -824,7 +825,7 @@ function WhatsAppConnectContent() {
                     <h2 className="mt-2.5 sm:mt-4 text-base sm:text-lg font-semibold text-gray-950">QR session connection</h2>
                     <p className="mt-1 text-xs sm:text-sm leading-5 sm:leading-6 text-gray-600">Internal demo/testing ke liye QR use ho sakta hai. Production campaigns, approved templates, reliable delivery aur compliance ke liye official Cloud API hi recommended hai.</p>
                     <div className="mt-5">
-                        <WhatsAppLogin onAccountConnected={fetchAccounts} />
+                        <WhatsAppLogin onAccountConnected={() => { setDiagnostics({}); fetchAccounts(); }} />
                     </div>
                 </div>
             </section>
@@ -970,12 +971,18 @@ function getAccountStatus(account, diagnostics) {
     const isMeta = account.connection_type !== 'qr_session';
     const isReady = diagnostics?.send_ready ?? account.send_ready ?? true;
     const issueCodes = diagnostics?.issue_codes || [];
-    const tokenExpired = diagnostics?.reconnect_required || issueCodes.includes('token_expired');
+    const tokenExpired = isMeta && (diagnostics?.reconnect_required || issueCodes.includes('token_expired'));
     const hasToken = Boolean(account.has_access_token || account.access_token_encrypted || diagnostics?.has_access_token);
-    const tokenMissing = issueCodes.includes('token_missing') || (!hasToken && isMeta);
+    const tokenMissing = isMeta && (issueCodes.includes('token_missing') || !hasToken);
 
     if (tokenExpired || account.status === 'failed' || account.status === 'disconnected') {
         return 'failed';
+    }
+
+    if (!isMeta) {
+        const isReconnecting = Boolean(diagnostics?.reconnecting || account.reconnecting || account.status === 'connecting');
+        if (isReconnecting) return 'pending';
+        return isReady ? 'connected' : 'failed';
     }
 
     // Check Meta strict verification status
@@ -985,7 +992,6 @@ function getAccountStatus(account, diagnostics) {
         tokenMissing ||
         account.status === 'pending' ||
         account.status === 'connecting' ||
-        (!isMeta && !isReady) ||
         (isMeta && !account.whatsapp_business_account_id) ||
         isCodeNotVerified;
 
@@ -1000,16 +1006,17 @@ function AccountCard({ account, diagnostics, loading, disconnecting, onCheck, on
     const isMeta = account.connection_type !== 'qr_session';
     const hasToken = Boolean(account.has_access_token || account.access_token_encrypted || diagnostics?.has_access_token);
     const issueCodes = diagnostics?.issue_codes || [];
-    const tokenMissing = issueCodes.includes('token_missing') || (!hasToken && isMeta);
-    const tokenExpired = diagnostics?.reconnect_required || issueCodes.includes('token_expired');
+    const tokenMissing = isMeta && (issueCodes.includes('token_missing') || !hasToken);
+    const tokenExpired = isMeta && (diagnostics?.reconnect_required || issueCodes.includes('token_expired'));
     const reconnectRequired = tokenExpired || tokenMissing;
+    const isQrReconnecting = !isMeta && Boolean(diagnostics?.reconnecting || account.reconnecting || account.status === 'connecting');
     const summary = getAccountSummary(account, diagnostics, tokenExpired, tokenMissing);
 
     const currentStatus = getAccountStatus(account, diagnostics);
     const config = STATUS_CONFIG[currentStatus];
 
-    const statusLabel = currentStatus === 'connected' ? 'Connected' : tokenMissing ? 'Not Connected' : 'Disconnected';
-    const messagingStatus = currentStatus === 'connected' ? 'Send Ready' : 'Paused';
+    const statusLabel = currentStatus === 'connected' ? 'Connected' : isQrReconnecting ? 'Reconnecting' : tokenMissing ? 'Not Connected' : 'Disconnected';
+    const messagingStatus = currentStatus === 'connected' ? 'Send Ready' : isQrReconnecting ? 'Reconnecting' : 'Paused';
     const templateStatus = currentStatus === 'connected' ? 'Unlocked' : tokenMissing ? 'Link Required' : 'Reconnect Required';
     const noticeClass = config.bannerClass;
     const businessVerification = diagnostics?.business_verification;
@@ -1152,9 +1159,13 @@ function AccountCard({ account, diagnostics, loading, disconnecting, onCheck, on
 
 function getAccountSummary(account, diagnostics, tokenExpired, tokenMissing) {
     if (account.connection_type === 'qr_session') {
-        return diagnostics?.send_ready ?? account.send_ready
-            ? 'QR testing session is connected and ready for messaging.'
-            : 'QR testing session is disconnected. Scan the QR code below to reconnect.'
+        if (diagnostics?.send_ready ?? account.send_ready) {
+            return 'QR testing session is connected and ready for messaging.'
+        }
+        if (diagnostics?.reconnecting || account.reconnecting || account.status === 'connecting') {
+            return 'QR testing session is reconnecting automatically...'
+        }
+        return 'QR testing session is disconnected. Scan the QR code below to reconnect.'
     }
     if (diagnostics?.send_ready) return 'Cloud API send access verified. Ready for production.'
     if (tokenMissing) {

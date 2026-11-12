@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { supabase } from '../config/supabase.js';
 import { getIO } from '../config/socket.js';
-import { derivePhoneForStorage, normalizeIndianPhoneKey, isUuid } from '../utils/format.js';
+import { derivePhoneForStorage, normalizeIndianPhoneKey, isUuid, isNonIndividualThreadContact } from '../utils/format.js';
 
 const DEFAULT_CONVERSATION_PAGE_SIZE = 50;
 const MAX_CONVERSATION_PAGE_SIZE = 100;
@@ -56,7 +56,7 @@ export async function getConversations(req: any, res: Response) {
                 assigned_agent_id,
                 bot_enabled,
                 assigned_bot_id,
-                contact:w_contacts(id, name, custom_name, phone, wa_id, wa_key, created_at, tags, custom_fields, saved_at, saved_by_user_id, save_source)
+                contact:w_contacts(id, name, custom_name, phone, wa_id, wa_key, contact_type, created_at, tags, custom_fields, saved_at, saved_by_user_id, save_source)
             `)
             .eq("organization_id", organization_id)
             .order("last_message_at", { ascending: false, nullsFirst: false })
@@ -150,19 +150,25 @@ export async function getConversations(req: any, res: Response) {
             const userHasRead = lastReadAt ? new Date(lastReadAt) >= new Date(c.last_message_at) : false;
             const unread_for_user = userHasRead ? 0 : (unreadCountMap.get(c.id) || 0);
             const next = { ...c };
+            const isNonIndividual = isNonIndividualThreadContact(next?.contact);
 
             if (next?.contact) {
                 const phone = String(next.contact.phone || '').trim();
-                if (!phone) {
+                if (!phone && !isNonIndividual) {
                     const derived = derivePhoneForStorage(next.contact.wa_id);
                     if (derived) next.contact.phone = derived;
                 }
-                if (!next.contact.wa_key) {
+                if (!next.contact.wa_key && !isNonIndividual) {
                     next.contact.wa_key = normalizeIndianPhoneKey(next.contact.wa_id) || null;
                 }
                 const storedPhoto = next.contact.custom_fields?.profile_photo_url || null;
                 // Missing photos are refreshed by the existing background photo endpoint.
                 next.contact.profile_photo_url = storedPhoto;
+            }
+
+            if (isNonIndividual) {
+                next.bot_enabled = false;
+                next.assigned_bot_id = null;
             }
 
             return {
@@ -218,7 +224,7 @@ export async function startConversation(req: any, res: Response) {
             .from('w_conversations')
             .select(`
                 *,
-                contact:w_contacts(id, name, custom_name, phone, wa_id, wa_key, created_at, tags, custom_fields)
+                contact:w_contacts(id, name, custom_name, phone, wa_id, wa_key, contact_type, created_at, tags, custom_fields)
             `)
             .eq('organization_id', organization_id)
             .eq('wa_account_id', targetAccountId)
@@ -226,7 +232,20 @@ export async function startConversation(req: any, res: Response) {
             .maybeSingle();
 
         if (findErr) throw findErr;
-        if (existing) return res.json(existing);
+        if (existing) {
+            if (isNonIndividualThreadContact(existing.contact)) {
+                return res.json({ ...existing, bot_enabled: false, assigned_bot_id: null });
+            }
+            return res.json(existing);
+        }
+
+        const { data: targetContact } = await supabase
+            .from('w_contacts')
+            .select('id, contact_type, wa_id')
+            .eq('organization_id', organization_id)
+            .eq('id', contact_id)
+            .maybeSingle();
+        const isNonIndividual = isNonIndividualThreadContact(targetContact);
 
         const { data: newConv, error: createErr } = await supabase
             .from('w_conversations')
@@ -238,11 +257,11 @@ export async function startConversation(req: any, res: Response) {
                 last_message_preview: 'Conversation started',
                 unread_count: 0,
                 status: 'open',
-                bot_enabled: true
+                bot_enabled: !isNonIndividual
             })
             .select(`
                 *,
-                contact:w_contacts(id, name, custom_name, phone, wa_id, wa_key, created_at, tags, custom_fields)
+                contact:w_contacts(id, name, custom_name, phone, wa_id, wa_key, contact_type, created_at, tags, custom_fields)
             `)
             .single();
 

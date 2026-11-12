@@ -1,5 +1,6 @@
 import { supabase } from '../config/supabase.js';
 import { DEFAULT_BILLING_CURRENCY, DEFAULT_BILLING_MARKET, DEFAULT_WHATSAPP_RATE_CARD } from '../utils/billing.js';
+import { isNonIndividualThreadContact } from '../utils/format.js';
 import { io } from '../socket.js';
 
 
@@ -186,6 +187,16 @@ export async function upsertConversation(organization_id: string, wa_account_id:
         .eq('contact_id', contact_id)
         .maybeSingle();
 
+    let isNonIndividual = Boolean(lastMessageOpts?.isNonIndividual);
+    if (!isNonIndividual && contact_id) {
+        const { data: contactRow } = await supabase
+            .from('w_contacts')
+            .select('contact_type, wa_id')
+            .eq('id', contact_id)
+            .maybeSingle();
+        isNonIndividual = isNonIndividualThreadContact(contactRow);
+    }
+
     let newUnread = (existing?.unread_count || 0);
 
     if (lastMessageOpts.direction === 'inbound') {
@@ -205,9 +216,13 @@ export async function upsertConversation(organization_id: string, wa_account_id:
     };
 
     if (existing) {
+        const updatePayload: any = { ...payload };
+        if (isNonIndividual && existing.bot_enabled !== false) {
+            updatePayload.bot_enabled = false;
+        }
         const { data, error } = await supabase
             .from('w_conversations')
-            .update(payload)
+            .update(updatePayload)
             .eq('id', existing.id)
             .select()
             .single();
@@ -220,9 +235,12 @@ export async function upsertConversation(organization_id: string, wa_account_id:
 
         return data;
     } else {
+        const initialBotEnabled = isNonIndividual
+            ? false
+            : (typeof lastMessageOpts?.botEnabled === 'boolean' ? lastMessageOpts.botEnabled : true);
         const { data, error } = await supabase
             .from('w_conversations')
-            .insert({ ...payload, bot_enabled: true })
+            .insert({ ...payload, bot_enabled: initialBotEnabled })
             .select()
             .single();
         if (error) console.error("Conversation Insert Error:", error);

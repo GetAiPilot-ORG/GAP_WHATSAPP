@@ -203,6 +203,18 @@ function ChatListLoadingSkeleton() {
     )
 }
 
+function isGroupOrChannelContact(contact, waIdFallback = '') {
+    const contactType = String(contact?.contact_type || '').trim().toLowerCase()
+    if (contactType === 'group' || contactType === 'channel') return true
+    const rawWaId = String(contact?.wa_id || waIdFallback || '').trim().toLowerCase()
+    return rawWaId.includes('@g.us') || rawWaId.includes('@newsletter') || rawWaId.includes('@broadcast')
+}
+
+function isGroupOrChannelChat(chat) {
+    if (!chat) return false
+    return Boolean(chat.isGroupOrChannel) || isGroupOrChannelContact(chat.contact, chat.waId)
+}
+
 export default function LiveChat() {
     const navigate = useNavigate()
     const { user, session, loginType, memberProfile, userRole, isProfileLoading } = useAuth()
@@ -427,7 +439,8 @@ export default function LiveChat() {
             return settings.default_for_new_chats || settings.auto_reply_unknown
         }) || null
     ), [availableBots])
-    const effectiveBotEnabled = botEnabled === true
+    const isSelectedGroupOrChannel = isGroupOrChannelChat(selectedChat)
+    const effectiveBotEnabled = !isSelectedGroupOrChannel && botEnabled === true
 
     useEffect(() => {
         chatsRef.current = chats
@@ -1061,28 +1074,32 @@ export default function LiveChat() {
             if (res.ok) {
                 const data = await res.json();
                 const conversations = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : [])
-                const formatted = conversations.map(conv => ({
-                    id: conv.id, // Conversation ID
-                    contactId: conv.contact?.id,
-                    name: getDisplayName(conv.contact),
-                    phone: conv.contact?.phone,
-                    waId: conv.contact?.wa_id,
-                    contact: conv.contact || null,
-                    lastMessage: conv.last_message_preview || 'No messages',
-                    lastMessageAt: conv.last_message_at ? new Date(conv.last_message_at) : null,
-                    time: conv.last_message_at ? format(new Date(conv.last_message_at), 'h:mm a') : '',
-                    // Prefer computed unread (based on message read status) over the legacy global counter.
-                    unread: Number.isFinite(Number(conv.unread_for_user)) ? Number(conv.unread_for_user) : (Number(conv.unread_count) || 0),
-                    // Derive read state from unread count to keep the badge correct.
-                    userHasRead: (Number.isFinite(Number(conv.unread_for_user)) ? Number(conv.unread_for_user) : (Number(conv.unread_count) || 0)) === 0,
-                    status: conv.status,
-                    tags: conv.labels || [],
-                    assigned_to: conv.assigned_to,
-                    botEnabled: conv.bot_enabled !== false,
-                    assignedBotId: conv.assigned_bot_id || null,
-                    profilePhotoUrl: getProfilePhotoUrl(conv.contact),
-                    type: 'text'
-                }));
+                const formatted = conversations.map(conv => {
+                    const isGroupOrChannel = isGroupOrChannelContact(conv.contact);
+                    return {
+                        id: conv.id, // Conversation ID
+                        contactId: conv.contact?.id,
+                        name: getDisplayName(conv.contact),
+                        phone: conv.contact?.phone,
+                        waId: conv.contact?.wa_id,
+                        contact: conv.contact || null,
+                        isGroupOrChannel,
+                        lastMessage: conv.last_message_preview || 'No messages',
+                        lastMessageAt: conv.last_message_at ? new Date(conv.last_message_at) : null,
+                        time: conv.last_message_at ? format(new Date(conv.last_message_at), 'h:mm a') : '',
+                        // Prefer computed unread (based on message read status) over the legacy global counter.
+                        unread: Number.isFinite(Number(conv.unread_for_user)) ? Number(conv.unread_for_user) : (Number(conv.unread_count) || 0),
+                        // Derive read state from unread count to keep the badge correct.
+                        userHasRead: (Number.isFinite(Number(conv.unread_for_user)) ? Number(conv.unread_for_user) : (Number(conv.unread_count) || 0)) === 0,
+                        status: conv.status,
+                        tags: conv.labels || [],
+                        assigned_to: conv.assigned_to,
+                        botEnabled: isGroupOrChannel ? false : conv.bot_enabled !== false,
+                        assignedBotId: isGroupOrChannel ? null : (conv.assigned_bot_id || null),
+                        profilePhotoUrl: getProfilePhotoUrl(conv.contact),
+                        type: 'text'
+                    };
+                });
                 // Sort by time (newest first)
                 formatted.sort((a, b) => {
                     const aTime = a.lastMessageAt ? a.lastMessageAt.getTime() : 0;
@@ -1156,8 +1173,9 @@ export default function LiveChat() {
     const fetchConversationBotStatus = async (conversationId) => {
         const conversation = chatsRef.current.find(chat => chat.id === conversationId)
         if (conversation) {
-            setBotEnabled(conversation.botEnabled !== false)
-            setSelectedBotId(conversation.assignedBotId || null)
+            const disabledForGroup = isGroupOrChannelChat(conversation)
+            setBotEnabled(disabledForGroup ? false : conversation.botEnabled !== false)
+            setSelectedBotId(disabledForGroup ? null : (conversation.assignedBotId || null))
         }
     };
 
@@ -1176,6 +1194,12 @@ export default function LiveChat() {
     // Toggle bot for current conversation
     const toggleBotForConversation = async (enabled, botId = null) => {
         if (!selectedChat || !session?.access_token) return;
+        if (isGroupOrChannelChat(selectedChat)) {
+            setBotEnabled(false);
+            setSelectedBotId(null);
+            setShowBotMenu(false);
+            return;
+        }
 
         try {
             const res = await fetch(`${API_BASE}/conversations/${selectedChat.id}/bot`, {
@@ -1194,6 +1218,16 @@ export default function LiveChat() {
                 setBotEnabled(enabled);
                 setSelectedBotId(botId);
                 setShowBotMenu(false);
+                setChats(prev => prev.map(chat => (
+                    idsEqual(chat.id, selectedChat.id)
+                        ? { ...chat, botEnabled: enabled, assignedBotId: botId }
+                        : chat
+                )));
+                setSelectedChat(prev => (
+                    prev && idsEqual(prev.id, selectedChat.id)
+                        ? { ...prev, botEnabled: enabled, assignedBotId: botId }
+                        : prev
+                ));
             }
         } catch (e) {
             console.error("Failed to toggle bot", e);
@@ -1657,30 +1691,73 @@ export default function LiveChat() {
             const updated = payload?.contact
             if (!updated) return
 
-            setChats(prev => prev.map(c => {
-                const sameById = updated?.id && idsEqual(c?.contactId, updated.id)
-                const sameByWa = updated?.wa_id && String(c?.waId || '') === String(updated.wa_id)
-                if (!sameById && !sameByWa) return c
+            const mergedContactIds = new Set([
+                ...(payload?.merged_from_contact_id ? [String(payload.merged_from_contact_id)] : []),
+                ...(Array.isArray(payload?.merged_from_contact_ids)
+                    ? payload.merged_from_contact_ids.map((id) => String(id))
+                    : []),
+            ])
+            const previousWaIds = new Set([
+                ...(payload?.previous_wa_id ? [String(payload.previous_wa_id)] : []),
+                ...(Array.isArray(payload?.previous_wa_ids)
+                    ? payload.previous_wa_ids.map((id) => String(id))
+                    : []),
+                ...(updated?.custom_fields?.lid ? [String(updated.custom_fields.lid)] : []),
+            ])
+            const convRemap = new Map(
+                Array.isArray(payload?.merged_conversations)
+                    ? payload.merged_conversations
+                          .filter((m) => m?.from_conversation_id && m?.to_conversation_id)
+                          .map((m) => [String(m.from_conversation_id), String(m.to_conversation_id)])
+                    : [],
+            )
 
-                const nextContact = { ...(c.contact || {}), ...updated }
-                return {
-                    ...c,
-                    contactId: updated?.id || c.contactId,
-                    waId: updated?.wa_id || c.waId,
-                    phone: updated?.phone || c.phone,
-                    contact: nextContact,
-                    name: getDisplayName(nextContact),
-                    profilePhotoUrl: getProfilePhotoUrl(nextContact),
+            const matchesUpdatedChat = (c) => {
+                if (!c) return false
+                if (updated?.id && idsEqual(c?.contactId, updated.id)) return true
+                if (updated?.wa_id && String(c?.waId || '') === String(updated.wa_id)) return true
+                if (c?.contactId && mergedContactIds.has(String(c.contactId))) return true
+                if (c?.waId && previousWaIds.has(String(c.waId))) return true
+                return false
+            }
+
+            setChats(prev => {
+                const existingIds = new Set(prev.map(c => String(c?.id || '')))
+                const nextChats = []
+                for (const c of prev) {
+                    const remappedConvId = c?.id ? convRemap.get(String(c.id)) : null
+                    if (remappedConvId && existingIds.has(remappedConvId)) {
+                        continue
+                    }
+                    if (!matchesUpdatedChat(c) && !remappedConvId) {
+                        nextChats.push(c)
+                        continue
+                    }
+
+                    const nextContact = { ...(c.contact || {}), ...updated }
+                    nextChats.push({
+                        ...c,
+                        id: remappedConvId || c.id,
+                        contactId: updated?.id || c.contactId,
+                        waId: updated?.wa_id || c.waId,
+                        phone: updated?.phone || c.phone,
+                        contact: nextContact,
+                        name: getDisplayName(nextContact),
+                        profilePhotoUrl: getProfilePhotoUrl(nextContact),
+                    })
                 }
-            }))
+                return nextChats
+            })
 
             const active = selectedChatRef.current
-            if (active && updated?.id && idsEqual(active?.contactId, updated.id)) {
+            const activeRemappedId = active?.id ? convRemap.get(String(active.id)) : null
+            if (active && (matchesUpdatedChat(active) || activeRemappedId)) {
                 setSelectedChat(prev => {
                     if (!prev) return prev
                     const nextContact = { ...(prev.contact || {}), ...updated }
                     return {
                         ...prev,
+                        id: activeRemappedId || prev.id,
                         contactId: updated?.id || prev.contactId,
                         waId: updated?.wa_id || prev.waId,
                         phone: updated?.phone || prev.phone,
@@ -1689,6 +1766,13 @@ export default function LiveChat() {
                         profilePhotoUrl: getProfilePhotoUrl(nextContact),
                     }
                 })
+                if (activeRemappedId) {
+                    fetchMessages({ ...active, id: activeRemappedId }, { limit: 50 })
+                }
+            }
+
+            if (mergedContactIds.size > 0 || convRemap.size > 0) {
+                scheduleChatRefresh()
             }
         }
 
@@ -2904,8 +2988,8 @@ export default function LiveChat() {
             assigned: activeChats.filter(chat => !!chat.assigned_to).length,
             unassigned: activeChats.filter(chat => !chat.assigned_to).length,
             favorites: activeChats.filter(chat => hasChatLabel(chat, 'favorite')).length,
-            bot_enabled: activeChats.filter(chat => chat.botEnabled !== false).length,
-            bot_disabled: activeChats.filter(chat => chat.botEnabled === false).length,
+            bot_enabled: activeChats.filter(chat => !isGroupOrChannelChat(chat) && chat.botEnabled !== false).length,
+            bot_disabled: activeChats.filter(chat => !isGroupOrChannelChat(chat) && chat.botEnabled === false).length,
             archived: chats.filter(chat => ['archived', 'closed'].includes(String(chat.status || '').toLowerCase())).length,
         }
     }, [chats])
@@ -2922,8 +3006,8 @@ export default function LiveChat() {
             if (chatFilter === 'assigned' && !chat.assigned_to) return false
             if (chatFilter === 'unassigned' && chat.assigned_to) return false
             if (chatFilter === 'favorites' && !hasChatLabel(chat, 'favorite')) return false
-            if (chatFilter === 'bot_enabled' && chat.botEnabled === false) return false
-            if (chatFilter === 'bot_disabled' && chat.botEnabled !== false) return false
+            if (chatFilter === 'bot_enabled' && (isGroupOrChannelChat(chat) || chat.botEnabled === false)) return false
+            if (chatFilter === 'bot_disabled' && (isGroupOrChannelChat(chat) || chat.botEnabled !== false)) return false
             if (chatFilter === 'archived' && !['archived', 'closed'].includes(status)) return false
 
             if (!query) return true
@@ -3353,10 +3437,12 @@ export default function LiveChat() {
                                                 {chat.name ? chat.name.charAt(0).toUpperCase() : '?'}
                                             </div>
                                         )}
-                                        {chat.botEnabled !== false ? (
-                                            <span className="absolute bottom-0 right-0 block h-3 w-3 rounded-full bg-[#10b981] border-2 border-white" title="AI Agent active" />
-                                        ) : (
-                                            <span className="absolute bottom-0 right-0 block h-3 w-3 rounded-full bg-[#f59e0b] border-2 border-white animate-pulse" title="AI Agent paused" />
+                                        {!isGroupOrChannelChat(chat) && (
+                                            chat.botEnabled !== false ? (
+                                                <span className="absolute bottom-0 right-0 block h-3 w-3 rounded-full bg-[#10b981] border-2 border-white" title="AI Agent active" />
+                                            ) : (
+                                                <span className="absolute bottom-0 right-0 block h-3 w-3 rounded-full bg-[#f59e0b] border-2 border-white animate-pulse" title="AI Agent paused" />
+                                            )
                                         )}
                                     </div>
                                     <div className="flex-1 min-w-0">
@@ -3782,12 +3868,25 @@ export default function LiveChat() {
                                     {/* Bot Toggle Button - hidden on mobile, visible on sm+ */}
                                     <div className="relative shrink-0 hidden sm:block" data-bot-menu>
                                         <button
-                                            onClick={() => setShowBotMenu(!showBotMenu)}
-                                            className={`inline-flex h-8 sm:h-10 items-center justify-center gap-1 sm:gap-2 rounded-xl border px-2 sm:px-3 text-[10px] sm:text-xs font-semibold tracking-tight transition-all duration-150 outline-none ${effectiveBotEnabled
-                                                ? 'border-neutral-900 bg-neutral-900 text-white shadow-sm hover:bg-neutral-800'
-                                                : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100 hover:text-gray-800'
+                                            onClick={() => {
+                                                if (isSelectedGroupOrChannel) return
+                                                setShowBotMenu(!showBotMenu)
+                                            }}
+                                            disabled={isSelectedGroupOrChannel}
+                                            className={`inline-flex h-8 sm:h-10 items-center justify-center gap-1 sm:gap-2 rounded-xl border px-2 sm:px-3 text-[10px] sm:text-xs font-semibold tracking-tight transition-all duration-150 outline-none ${
+                                                isSelectedGroupOrChannel
+                                                    ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                    : effectiveBotEnabled
+                                                        ? 'border-neutral-900 bg-neutral-900 text-white shadow-sm hover:bg-neutral-800'
+                                                        : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100 hover:text-gray-800'
                                                 }`}
-                                            title={effectiveBotEnabled ? 'AI agent automation is active' : 'Enable AI agent'}
+                                            title={
+                                                isSelectedGroupOrChannel
+                                                    ? 'AI Agent & Flows are disabled for WhatsApp groups and channels'
+                                                    : effectiveBotEnabled
+                                                        ? 'AI agent automation is active'
+                                                        : 'Enable AI agent'
+                                            }
                                         >
                                             {effectiveBotEnabled ? (
                                                 <span className="relative flex h-1.5 w-1.5 shrink-0">
@@ -3798,7 +3897,11 @@ export default function LiveChat() {
                                                 <span className="h-1.5 w-1.5 rounded-full bg-gray-400 shrink-0"></span>
                                             )}
                                             <span>AI Agent</span>
-                                            {effectiveBotEnabled && (
+                                            {isSelectedGroupOrChannel ? (
+                                                <span className="px-1 py-0.5 text-[8px] sm:text-[9px] font-bold rounded uppercase bg-gray-200 text-gray-500 shrink-0">
+                                                    Groups Off
+                                                </span>
+                                            ) : effectiveBotEnabled && (
                                                 <span className="px-1 py-0.5 text-[8px] sm:text-[9px] font-bold rounded uppercase bg-white/20 text-white shrink-0">
                                                     {botEnabled ? 'On' : 'Auto'}
                                                 </span>
@@ -3806,7 +3909,7 @@ export default function LiveChat() {
                                         </button>
 
                                         {/* Bot Menu Dropdown */}
-                                        {showBotMenu && (
+                                        {showBotMenu && !isSelectedGroupOrChannel && (
                                             <>
                                                 {/* Backdrop for mobile */}
                                                 <div
@@ -3962,43 +4065,51 @@ export default function LiveChat() {
                                                     <div className="sm:hidden mb-2.5 p-3 bg-neutral-900 text-white rounded-2xl flex items-center justify-between">
                                                         <div className="flex items-center gap-2.5 min-w-0">
                                                             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 shrink-0">
-                                                                <Bot className="h-4 w-4 text-emerald-400" />
+                                                                <Bot className={`h-4 w-4 ${isSelectedGroupOrChannel ? 'text-gray-400' : 'text-emerald-400'}`} />
                                                             </div>
                                                             <div className="min-w-0">
                                                                 <div className="flex items-center gap-1.5">
                                                                     <span className="text-xs font-bold text-white">AI Agent</span>
                                                                     <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded uppercase ${effectiveBotEnabled ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/10 text-gray-400'}`}>
-                                                                        {effectiveBotEnabled ? (botEnabled ? 'On' : 'Auto') : 'Off'}
+                                                                        {isSelectedGroupOrChannel ? 'Groups Off' : effectiveBotEnabled ? (botEnabled ? 'On' : 'Auto') : 'Off'}
                                                                     </span>
                                                                 </div>
                                                                 <p className="text-[10px] text-gray-300 truncate mt-0.5">
-                                                                    {effectiveBotEnabled ? 'AI replies active for this chat' : 'AI replies paused'}
+                                                                    {isSelectedGroupOrChannel
+                                                                        ? 'Disabled for groups & channels'
+                                                                        : effectiveBotEnabled
+                                                                            ? 'AI replies active for this chat'
+                                                                            : 'AI replies paused'}
                                                                 </p>
                                                             </div>
                                                         </div>
                                                         <div className="flex items-center gap-1.5 shrink-0">
                                                             <button
                                                                 type="button"
+                                                                disabled={isSelectedGroupOrChannel}
                                                                 onClick={() => {
+                                                                    if (isSelectedGroupOrChannel) return
                                                                     toggleBotForConversation(!botEnabled, selectedBotId || workspaceAutoReplyBot?.id || null)
                                                                 }}
-                                                                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${effectiveBotEnabled ? 'bg-emerald-500' : 'bg-gray-600'}`}
+                                                                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${isSelectedGroupOrChannel ? 'bg-gray-700 opacity-50 cursor-not-allowed' : effectiveBotEnabled ? 'bg-emerald-500' : 'bg-gray-600'}`}
                                                             >
                                                                 <span
                                                                     className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${effectiveBotEnabled ? 'translate-x-6' : 'translate-x-1'}`}
                                                                 />
                                                             </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    setIsAutoAssignMenuOpen(false)
-                                                                    setShowBotMenu(true)
-                                                                }}
-                                                                className="p-1 text-gray-300 hover:text-white rounded-lg hover:bg-white/10"
-                                                                title="Choose AI Agent"
-                                                            >
-                                                                <ChevronDown className="h-4 w-4" />
-                                                            </button>
+                                                            {!isSelectedGroupOrChannel && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setIsAutoAssignMenuOpen(false)
+                                                                        setShowBotMenu(true)
+                                                                    }}
+                                                                    className="p-1 text-gray-300 hover:text-white rounded-lg hover:bg-white/10"
+                                                                    title="Choose AI Agent"
+                                                                >
+                                                                    <ChevronDown className="h-4 w-4" />
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     </div>
 
@@ -4363,7 +4474,7 @@ export default function LiveChat() {
 
                             {/* Input Area */}
                             <div data-tour="chat-composer" className={`px-2 py-1.5 sm:px-4 sm:py-2.5 lg:px-5 ${isInternalNote ? 'border-t border-amber-200 bg-amber-50' : 'bg-[#f0f2f5]'}`}>
-                                {!botEnabled && (!isCustomerWindowExpired || isInternalNote) && (
+                                {!isSelectedGroupOrChannel && !botEnabled && (!isCustomerWindowExpired || isInternalNote) && (
                                     <div className="mx-auto mb-2 flex w-full max-w-[1180px] items-center justify-between gap-3 rounded-xl border border-amber-200/80 bg-gradient-to-r from-amber-50/90 via-amber-50/70 to-white/90 px-3.5 py-2 shadow-xs backdrop-blur-md animate-in fade-in duration-200">
                                         <div className="flex items-center gap-2.5 min-w-0">
                                             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-800 ring-1 ring-amber-200/80">
@@ -4615,7 +4726,7 @@ export default function LiveChat() {
                         setFocusAliasOnOpen(false)
                     }}
                     focusAliasOnOpen={focusAliasOnOpen}
-                    botEnabled={botEnabled}
+                    botEnabled={effectiveBotEnabled}
                     onToggleBot={(enabled) => toggleBotForConversation(enabled, selectedBotId)}
                     messages={filteredMessages}
                     conversationId={selectedChat?.id || null}

@@ -10,6 +10,7 @@ import {
 import crypto from 'crypto';
 import { supabase } from '../config/supabase.js';
 import { decryptToken } from '../utils/crypto.js';
+import { isNonIndividualThreadContact } from '../utils/format.js';
 
 // Memory cache for active flows grouped by Organization ID
 const flowsCache = new Map<string, any[]>();
@@ -536,48 +537,64 @@ export async function getBotAgentReply(params: {
   const normalized = (text || "").toLowerCase().trim();
   if (!normalized) return null;
 
-  // Keywords to STOP/PAUSE the bot
-  const stopKeywords = ["talk to human", "human"];
-
-  const isStopKeyword = stopKeywords.some(
-    (k) => normalized === k || (k.length > 4 && normalized.includes(k)),
-  );
-
-  if (isStopKeyword) {
-    try {
-      await supabase
-        .from("w_conversations")
-        .update({
-          bot_enabled: false,
-          handoff_status: "handoff_requested",
-          handoff_requested_at: new Date().toISOString(),
-          handoff_reason: `User requested stop with keyword: "${text}"`,
-        })
-        .eq("id", conversation_id);
-
-      console.log(`🤖 Bot paused for conversation ${conversation_id} via stop keyword.`);
-
-      return {
-        reply: "I have paused the AI assistant. A human agent will connect with you shortly.",
-        agent: { name: "System Handoff", description: "Keyword triggered human handover" },
-      };
-    } catch (err: any) {
-      console.error("Error pausing bot on stop keyword:", err);
-    }
-  }
-
   try {
-    // First check if bot is enabled for this specific conversation
+    // First check conversation eligibility (skip groups/channels and paused chats)
     const { data: conv, error: convErr } = await supabase
       .from("w_conversations")
-      .select("bot_enabled, assigned_bot_id")
+      .select("bot_enabled, assigned_bot_id, contact_id, contact:w_contacts(contact_type, wa_id)")
       .eq("id", conversation_id)
       .single();
 
     if (convErr) throw convErr;
 
+    let contactRow = Array.isArray((conv as any)?.contact)
+      ? (conv as any).contact[0]
+      : (conv as any)?.contact;
+
+    if (!contactRow && (conv as any)?.contact_id) {
+      const { data: fetchedContact } = await supabase
+        .from("w_contacts")
+        .select("contact_type, wa_id")
+        .eq("id", (conv as any).contact_id)
+        .maybeSingle();
+      contactRow = fetchedContact || null;
+    }
+
+    // Never auto-reply or trigger stop-keyword handoffs in WhatsApp groups or channels.
+    if (isNonIndividualThreadContact(contactRow)) return null;
+
     // Per-chat toggle disables only AI-agent fallback. Flow Builder still runs first.
     if (conv?.bot_enabled === false) return null;
+
+    // Keywords to STOP/PAUSE the bot
+    const stopKeywords = ["talk to human", "human"];
+
+    const isStopKeyword = stopKeywords.some(
+      (k) => normalized === k || (k.length > 4 && normalized.includes(k)),
+    );
+
+    if (isStopKeyword) {
+      try {
+        await supabase
+          .from("w_conversations")
+          .update({
+            bot_enabled: false,
+            handoff_status: "handoff_requested",
+            handoff_requested_at: new Date().toISOString(),
+            handoff_reason: `User requested stop with keyword: "${text}"`,
+          })
+          .eq("id", conversation_id);
+
+        console.log(`🤖 Bot paused for conversation ${conversation_id} via stop keyword.`);
+
+        return {
+          reply: "I have paused the AI assistant. A human agent will connect with you shortly.",
+          agent: { name: "System Handoff", description: "Keyword triggered human handover" },
+        };
+      } catch (err: any) {
+        console.error("Error pausing bot on stop keyword:", err);
+      }
+    }
 
     // If no specific bot is selected for this conversation, check workspace bot rules.
     let targetAgent = null;
