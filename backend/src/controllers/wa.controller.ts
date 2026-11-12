@@ -275,7 +275,11 @@ export async function logout(req: any, res: Response) {
     try {
         console.log(`Logout requested for session ${sessionId}`);
         const sock = sessions.get(sessionId);
+        let derivedPhone = phone_number_id || null;
         if (sock) {
+            if (!derivedPhone && sock.user?.id) {
+                derivedPhone = String(sock.user.id).split(':')[0].split('@')[0].replace(/\D+/g, '') || null;
+            }
             try {
                 await sock.logout();
                 sock.end(undefined);
@@ -290,13 +294,13 @@ export async function logout(req: any, res: Response) {
             fs.rmSync(sessionPath, { recursive: true, force: true });
         }
 
-        if (phone_number_id) {
+        if (derivedPhone) {
             const { error: dbErr } = await supabase
                 .from('w_wa_accounts')
-                .update({ status: 'disconnected', is_active: false })
-                .eq('phone_number_id', phone_number_id);
+                .update({ status: 'disconnected', connection_status: 'DISCONNECTED' })
+                .eq('phone_number_id', derivedPhone);
 
-            if (dbErr) console.error(`DB Update Error for ${phone_number_id}:`, dbErr);
+            if (dbErr) console.error(`DB Update Error for ${derivedPhone}:`, dbErr);
         }
 
         res.json({ success: true });

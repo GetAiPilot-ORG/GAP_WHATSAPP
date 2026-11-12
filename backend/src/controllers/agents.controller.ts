@@ -10,6 +10,7 @@ import { supabase } from '../config/supabase.js';
 import { enforcePlanResourceLimit } from '../services/billing.service.js';
 import { getKnowledgeDocuments } from '../services/settings.service.js';
 import { getIO } from '../config/socket.js';
+import { isNonIndividualThreadContact } from '../utils/format.js';
 
 const AGENT_SETTINGS_ITEM_TYPE = "__agent_settings";
 
@@ -296,6 +297,26 @@ export const updateConversationBot = async (req: any, res: Response) => {
 
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ error: "No valid fields to update" });
+    }
+
+    const { data: existingConv, error: convLookupErr } = await supabase
+      .from("w_conversations")
+      .select("id, contact:w_contacts(contact_type, wa_id)")
+      .eq("id", id)
+      .eq("organization_id", organization_id)
+      .maybeSingle();
+
+    if (convLookupErr) throw convLookupErr;
+    if (!existingConv) return res.status(404).json({ error: "Conversation not found" });
+
+    const contactRow = Array.isArray((existingConv as any).contact)
+      ? (existingConv as any).contact[0]
+      : (existingConv as any).contact;
+
+    if (isNonIndividualThreadContact(contactRow) && (bot_enabled === true || Boolean(assigned_bot_id))) {
+      return res.status(400).json({
+        error: "AI Agent automation is disabled for WhatsApp groups and channels.",
+      });
     }
 
     const { data, error } = await supabase

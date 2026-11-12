@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import { supabase } from '../config/supabase.js';
+import { isNonIndividualThreadContact } from '../utils/format.js';
 
 export async function getDashboardStats(req: any, res: Response) {
     try {
@@ -55,7 +56,7 @@ export async function getDashboardStats(req: any, res: Response) {
                 .not('saved_at', 'is', null),
             supabase
                 .from('w_conversations')
-                .select('id, handoff_status, summary_status, bot_enabled, unread_count, last_message_at, created_at')
+                .select('id, handoff_status, summary_status, bot_enabled, unread_count, last_message_at, created_at, contact:w_contacts(contact_type, wa_id)')
                 .eq('organization_id', organization_id)
                 .order('last_message_at', { ascending: false })
                 .limit(1000),
@@ -193,6 +194,11 @@ export async function getDashboardStats(req: any, res: Response) {
                 ? contactsCountResult.count
                 : uniqueMessageChatIds.size);
 
+        const individualConversations = conversations.filter((c: any) => {
+            const contact = Array.isArray(c.contact) ? c.contact[0] : c.contact;
+            return !isNonIndividualThreadContact(contact);
+        });
+
         res.json({
             range,
             generated_at: new Date().toISOString(),
@@ -222,7 +228,7 @@ export async function getDashboardStats(req: any, res: Response) {
             conversations: {
                 total: totalConversationsCount,
                 humanHandoff,
-                botActive: conversations.filter((c: any) => c.bot_enabled !== false && c.handoff_status === 'bot_active').length,
+                botActive: individualConversations.filter((c: any) => c.bot_enabled !== false && c.handoff_status === 'bot_active').length,
                 summariesReady,
                 unread,
             },
@@ -239,7 +245,7 @@ export async function getDashboardStats(req: any, res: Response) {
             automation: {
                 flows: flows.length,
                 publishedFlows,
-                activeFlowSessions: conversations.filter((c: any) => c.bot_enabled !== false).length,
+                activeFlowSessions: individualConversations.filter((c: any) => c.bot_enabled !== false).length,
                 notesGenerated: notesCount,
             },
             campaigns: {

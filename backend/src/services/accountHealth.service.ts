@@ -28,7 +28,8 @@ export class AccountHealthService {
      */
     static async updateHealth(accountId: string, updates: Partial<{
         connection_status: AccountHealthState;
-        token_status: 'VALID' | 'EXPIRED' | 'MISSING' | 'INVALID';
+        status_override: 'connected' | 'pending' | 'failed' | 'disconnected';
+        token_status: 'VALID' | 'EXPIRED' | 'MISSING' | 'INVALID' | 'UNKNOWN';
         business_verification_status: 'VERIFIED' | 'ACTION_REQUIRED' | 'PENDING' | 'UNKNOWN';
         business_name: string | null;
         business_id: string | null;
@@ -70,14 +71,24 @@ export class AccountHealthService {
                 targetConnectionStatus = 'TOKEN_INVALID';
             }
 
+            const computedStatus = updates.status_override ?? (
+                targetConnectionStatus === 'DISCONNECTED'
+                    ? 'disconnected'
+                    : targetConnectionStatus === 'TOKEN_INVALID'
+                        ? 'failed'
+                        : targetConnectionStatus === 'WARNING' || targetConnectionStatus === 'VERIFICATION_PENDING'
+                            ? 'pending'
+                            : 'connected'
+            );
+
             const payload: any = {
                 connection_status: targetConnectionStatus,
-                status: targetConnectionStatus === 'DISCONNECTED' ? 'disconnected' : (targetConnectionStatus === 'TOKEN_INVALID' ? 'failed' : 'connected'),
+                status: computedStatus,
                 has_access_token: Boolean(current.access_token_encrypted),
                 health_version: nextVersion,
                 last_health_check_at: now,
                 last_sync_attempt_at: now,
-                last_sync_status: targetConnectionStatus === 'TOKEN_INVALID' ? 'FAILED' : 'SUCCESS',
+                last_sync_status: (targetConnectionStatus === 'TOKEN_INVALID' || targetConnectionStatus === 'DISCONNECTED' || targetConnectionStatus === 'WARNING') ? 'FAILED' : 'SUCCESS',
             };
 
             if (updates.token_status !== undefined) payload.token_status = updates.token_status;
@@ -139,23 +150,32 @@ export class AccountHealthService {
      */
     static buildHealthSummary(account: any): AccountHealthSummary {
         const hasToken = Boolean(account?.access_token_encrypted || account?.has_access_token);
+        const isMeta = Boolean(
+            account?.whatsapp_business_account_id ||
+            hasToken ||
+            account?.connection_type === 'meta_cloud_api'
+        );
         const rawStatus = String(account?.connection_status || account?.status || 'connected').toUpperCase();
 
         let connection: AccountHealthState = 'CONNECTED';
         if (rawStatus === 'DISCONNECTED' || account?.status === 'disconnected') {
             connection = 'DISCONNECTED';
         } else if (rawStatus === 'TOKEN_INVALID' || account?.status === 'failed') {
+            connection = isMeta ? 'TOKEN_INVALID' : 'DISCONNECTED';
+        } else if (!hasToken && isMeta) {
             connection = 'TOKEN_INVALID';
-        } else if (!hasToken && account?.connection_type !== 'qr_session') {
-            connection = 'TOKEN_INVALID';
-        } else if (rawStatus === 'CHECKING') {
+        } else if (rawStatus === 'CHECKING' || rawStatus === 'CONNECTING' || account?.status === 'connecting') {
             connection = 'CHECKING';
+        } else if (rawStatus === 'WARNING') {
+            connection = 'WARNING';
         } else if (rawStatus === 'VERIFICATION_PENDING' || account?.status === 'pending') {
             connection = 'VERIFICATION_PENDING';
         }
 
         const messagingStatus = (connection === 'CONNECTED' || connection === 'CHECKING') ? 'SEND_READY' : 'PAUSED';
-        const tokenStatus = hasToken ? (account?.token_status || (account?.access_token_encrypted ? 'VALID' : 'UNKNOWN')) : 'MISSING';
+        const tokenStatus = !isMeta
+            ? 'MISSING'
+            : (hasToken ? (account?.token_status || (account?.access_token_encrypted ? 'VALID' : 'UNKNOWN')) : 'MISSING');
         const verificationStatus = account?.business_verification_status || 'UNKNOWN';
         const qualityRating = account?.quality_rating || 'UNKNOWN';
 

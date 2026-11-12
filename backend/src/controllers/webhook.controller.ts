@@ -12,6 +12,7 @@ import { upsertContact } from '../services/contacts.service.js';
 import { getBotAgentReply } from '../services/ai.service.js';
 import { normalizeMetaTemplateStatus, upsertLocalTemplateSubmission } from './whatsapp.controller.js';
 import { encryptToken } from '../utils/crypto.js';
+import { isGroupOrChannelWaId, isNonIndividualThreadContact } from '../utils/format.js';
 import { uploadMediaToStorage } from '../services/broadcast.service.js';
 import { transcribeAudioBuffer } from '../services/voice.service.js';
 
@@ -85,6 +86,15 @@ export function queueBotAgentReply(params: {
     conversation_id: conv.id,
     textPreview: text.slice(0, 120),
   });
+
+  if (isNonIndividualThreadContact(contact) || isGroupOrChannelWaId(from)) {
+    webhookLog("bot_agent.process.skipped_non_individual", {
+      requestId,
+      conversation_id: conv?.id || null,
+      from: from || null,
+    });
+    return;
+  }
 
   const debounceKey = conv.id;
   if (botDebounceMap.has(debounceKey)) {
@@ -765,6 +775,17 @@ export async function handleWebhook(req: any, res: Response) {
       const contacts = value.contacts || [];
 
       const from = msg.from; // wa_id
+      if (msg?.group_id || isGroupOrChannelWaId(from)) {
+        webhookLog("message.skipped_unsupported_group_webhook", {
+          requestId,
+          wa_message_id: msg?.id || null,
+          group_id: msg?.group_id || null,
+          from: from || null,
+          type: msg?.type || null,
+        });
+        continue;
+      }
+
       const profileName =
         contacts.find((contact: any) => contact?.wa_id === from)?.profile?.name ||
         contacts[0]?.profile?.name ||
@@ -970,8 +991,10 @@ export async function handleWebhook(req: any, res: Response) {
         {
           direction: "inbound",
           preview: text,
+          isNonIndividual: isNonIndividualThreadContact(contact) || isGroupOrChannelWaId(from),
         },
       );
+      const isNonIndividualThread = isNonIndividualThreadContact(contact) || isGroupOrChannelWaId(from);
       webhookLog("conversation.upsert.ok", {
         requestId,
         conversation_id: conv?.id || null,
@@ -1246,7 +1269,7 @@ export async function handleWebhook(req: any, res: Response) {
                 }
 
                 // If this was an audio message with a transcript, trigger flows or AI bot agent!
-                if (type === "audio" && transcript && conv?.bot_enabled !== false) {
+                if (!isNonIndividualThread && type === "audio" && transcript && conv?.bot_enabled !== false) {
                   webhookLog("bot_agent.voice_transcript.intercepted", {
                     requestId,
                     conversation_id: conv.id,
@@ -1352,6 +1375,7 @@ export async function handleWebhook(req: any, res: Response) {
       }
 
       // E. Bot Auto-Reply
+      if (!isNonIndividualThread) {
       try {
         // Send Meta WhatsApp typing indicator immediately & non-blockingly if bot is enabled for automated response
         const isBotEnabled = conv?.bot_enabled !== false;
@@ -1818,6 +1842,7 @@ export async function handleWebhook(req: any, res: Response) {
           wa_message_id,
         });
         console.error("Bot auto-reply error:", botErr.message || botErr);
+      }
       }
       
       // Auto assign the conversation

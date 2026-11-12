@@ -97,7 +97,7 @@ const FIELD_GROUPS = [
 const FIELD_PRESETS = FIELD_GROUPS.flatMap(group => group.fields)
 const FIELD_PRESET_BY_KEY = FIELD_PRESETS.reduce((acc, field) => ({ ...acc, [field.key]: field }), {})
 
-const HIDDEN_CUSTOM_FIELDS = new Set(['profile_photo_url', 'profile_photo_checked_at'])
+const HIDDEN_CUSTOM_FIELDS = new Set(['profile_photo_url', 'profile_photo_checked_at', 'lid'])
 const IGNORED_IMPORT_COLUMNS = new Set(['sr no', 'sr. no', 's.no', 's no', 'serial no', 'serial number', 'no', '#'])
 
 const emptyDraft = {

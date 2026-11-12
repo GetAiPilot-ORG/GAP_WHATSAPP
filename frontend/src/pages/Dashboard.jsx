@@ -683,7 +683,13 @@ function SetupChecklist({ account, accountSelection, accountsLoading, diagnostic
         {
             id: 'verify_connection',
             title: 'Verify connection',
-            description: diagnosticsFailed ? (diagnostics?.issues?.[0] || diagnosticsError?.message || 'Connection needs attention. Open diagnostics to fix it.') : isVerified ? 'Meta permissions, phone number, WABA, and webhook are ready.' : 'Confirm permissions, webhook, WABA, and send readiness.',
+            description: diagnosticsFailed
+                ? (diagnostics?.issues?.[0] || diagnosticsError?.message || 'Connection needs attention. Open diagnostics to fix it.')
+                : isVerified
+                    ? (diagnostics?.connection_type === 'qr_session'
+                        ? 'QR session is live and connected for testing.'
+                        : 'Meta permissions, phone number, WABA, and webhook are ready.')
+                    : 'Confirm permissions, webhook, WABA, and send readiness.',
             href: '/whatsapp-connect',
             action: diagnosticsFailed ? 'Fix connection' : 'Check connection',
             complete: isVerified,

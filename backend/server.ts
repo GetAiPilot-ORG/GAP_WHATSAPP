@@ -57,27 +57,11 @@ httpServer.on('error', (err: any) => {
     process.exit(1);
 });
 
-// Global crash handlers
+// Global crash handlers (never wipe saved QR auth directories on transient 428/socket errors)
 process.on('uncaughtException', (err: any) => {
-    console.error('❌ Uncaught Exception:', err);
-    if (err.message && (err.message.includes('Connection Closed') || err.message.includes('Bad MAC'))) {
-        try {
-            if (fs.existsSync('baileys_auth_info')) {
-                fs.rmSync('baileys_auth_info', { recursive: true, force: true });
-                console.log("⚠️ Corrupted session cleared.");
-            }
-        } catch (e) { console.error("Cleanup failed:", e); }
-    }
+    console.error('❌ Uncaught Exception:', err?.message || err);
 });
 
-process.on('unhandledRejection', (reason: any, promise) => {
-    console.error('❌ Unhandled Rejection:', reason);
-    if (reason && (reason.output?.statusCode === 428 || reason.message?.includes('Connection Closed'))) {
-        try {
-            if (fs.existsSync('baileys_auth_info')) {
-                fs.rmSync('baileys_auth_info', { recursive: true, force: true });
-                console.log("⚠️ Corrupted session cleared.");
-            }
-        } catch (e) { console.error("Cleanup failed:", e); }
-    }
+process.on('unhandledRejection', (reason: any) => {
+    console.error('❌ Unhandled Rejection:', (reason as any)?.message || reason);
 });

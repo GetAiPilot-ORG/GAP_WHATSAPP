@@ -15,6 +15,8 @@ import {
   inspectMetaTokenPermissions,
   toSafeWhatsappAccount,
   getMetaAccountDiagnostics,
+  getQrAccountDiagnostics,
+  isMetaCloudAccount,
   getOrgWhatsappAccount,
   fetchMetaBusinessProfile,
   uploadMetaProfilePicture,
@@ -405,13 +407,37 @@ export async function deleteAccount(req: any, res: Response) {
 
     // 3. If active Baileys socket session exists, cleanly end and remove it
     try {
-      const { sessions } = await import("../services/whatsapp.service.js");
-      if (sessions instanceof Map) {
-        const active = sessions.get(id) || (account.phone_number_id ? sessions.get(account.phone_number_id) : null);
+      const {
+        sessions,
+        findLiveBaileysSessionForAccount,
+        initializingSessions,
+        reconnectAttempts,
+        latestQrBySession,
+        sessionPhoneMap,
+      } = await import("../services/whatsapp.service.js");
+      const liveSession = findLiveBaileysSessionForAccount(account);
+      const keysToClear = Array.from(new Set([
+        id,
+        account.phone_number_id,
+        liveSession?.sessionId,
+      ].filter(Boolean))) as string[];
+
+      for (const key of keysToClear) {
+        initializingSessions.delete(key);
+        reconnectAttempts.delete(key);
+        latestQrBySession.delete(key);
+        sessionPhoneMap.delete(key);
+        const active = sessions instanceof Map ? sessions.get(key) : null;
         if (active) {
-          active.end?.();
-          sessions.delete(id);
-          if (account.phone_number_id) sessions.delete(account.phone_number_id);
+          try { await active.logout?.(); } catch {}
+          try { active.end?.(); } catch {}
+          sessions.delete(key);
+        }
+        if (key.startsWith('session_') || key === 'dashboard_session') {
+          const dir = `baileys_auth_info/${key}`;
+          if (fs.existsSync(dir)) {
+            fs.rmSync(dir, { recursive: true, force: true });
+          }
         }
       }
     } catch (sessionErr: any) {
@@ -456,6 +482,18 @@ export async function getAccountDiagnostics(req: any, res: Response) {
     if (error) throw error;
     if (!account?.id)
       return res.status(404).json({ error: "WhatsApp account not found" });
+
+    if (!isMetaCloudAccount(account)) {
+      const diag = getQrAccountDiagnostics(account);
+      await AccountHealthService.updateHealth(account.id, {
+        connection_status: diag.send_ready ? 'CONNECTED' : (diag.reconnecting ? 'CHECKING' : 'WARNING'),
+        status_override: diag.send_ready ? 'connected' : 'pending',
+        token_status: 'UNKNOWN',
+        diagnostics_json: diag,
+      }).catch(err => console.error('[Diagnostics] Failed to persist QR health update:', err.message));
+
+      return res.json(diag);
+    }
 
     const diag = await getMetaAccountDiagnostics(account);
 
