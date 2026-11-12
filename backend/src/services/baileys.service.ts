@@ -967,6 +967,10 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                                             const parsed = JSON.parse(jsonCandidate);
                                                             if (parsed && typeof parsed === "object" && typeof parsed.text === "string") {
                                                                 replyText = parsed.text;
+                                                                // QR transport has no native URL CTA support. Preserve actions in its text fallback.
+                                                                if (Array.isArray(parsed.buttons)) {
+                                                                    replyText += parsed.buttons.map((button: any) => `\n${button.text || 'Open'}${button.url ? `: ${button.url}` : ''}`).join('');
+                                                                }
                                                             }
                                                         }
                                                     } catch (e) {

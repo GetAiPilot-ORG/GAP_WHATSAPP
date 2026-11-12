@@ -1,3 +1,4 @@
+import { agentButtonsEnabled, parseInteractiveReply } from "./agentButtons.js";
 import { supabase } from '../config/supabase.js';
 import { io } from '../socket.js';
 import { upsertContact } from './contacts.service.js';
@@ -299,7 +300,7 @@ export async function ingestInboundMessage(
       organizationId,
       contact.id,
       conv.id,
-      inboundText,
+      interactive?.id || inboundText,
       storedMessage?.id || null,
       waAccountId || null
     );
@@ -425,15 +426,16 @@ export async function ingestInboundMessage(
                 const botResult = await getBotAgentReply({
                   organization_id: organizationId,
                   conversation_id: conv.id,
-                  text: inboundText,
+                  text: interactive?.id || inboundText,
                 });
 
                 if (botResult?.reply) {
                   botReplied = true;
                   const isFallback = botResult.reply.startsWith('[FALLBACK]');
                   const cleanReply = botResult.reply.replace('[FALLBACK]', '').trim();
+                  const choices = !isFallback ? parseInteractiveReply(cleanReply) : null;
 
-                  if (isFallback) {
+                  if (isFallback && agentButtonsEnabled(botResult.agent)) {
                     await sendOutboundMessage({
                       organizationId,
                       to: contactWaId,
@@ -467,8 +469,9 @@ export async function ingestInboundMessage(
                       contactId: contact.id,
                       waAccountId,
                       phoneNumberId,
-                      type: 'text',
-                      text: cleanReply,
+                      type: choices ? 'interactive' : 'text',
+                      text: choices?.text || cleanReply,
+                      interactive: choices ? { type: choices.buttons[0]?.type === 'url' || choices.buttons[0]?.type === 'form' ? 'cta_url' : 'buttons', body: choices.text, buttons: choices.buttons, footer: choices.footer } : undefined,
                       senderType: 'ai_agent',
                       automationSource: 'ai_agent',
                       isBotReply: true,

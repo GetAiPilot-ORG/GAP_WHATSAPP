@@ -627,6 +627,8 @@ export async function processFlowEngine(
   triggerMessageId?: string | null,
   incomingWaAccountId?: string | null,
 ): Promise<FlowEngineResult> {
+  // Agent link choices are navigation actions, not Flow Builder answers.
+  if (text.startsWith('agent_open:')) return { consumed: false };
   const normalized = text.toLowerCase().trim();
 
   // Load conversation to get assigned_bot_id and guard against groups/channels

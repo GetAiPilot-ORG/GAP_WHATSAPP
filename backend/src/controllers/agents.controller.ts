@@ -49,6 +49,7 @@ async function buildAgentKnowledgePayload(organizationId: string, params: any) {
   }));
 
   const automationSettings = {
+    use_buttons: params.automation_settings?.use_buttons !== false,
     reply_on_keywords: params.automation_settings?.reply_on_keywords !== false,
     auto_reply_unknown: params.automation_settings?.auto_reply_unknown === true,
     default_for_new_chats:
@@ -224,10 +225,10 @@ export const updateAgent = async (req: any, res: Response) => {
         knowledge_base: existing.knowledge_base,
         knowledge_base_content: (existing.knowledge_base_content || []).filter((i: any) => i?.source !== "workspace_knowledge_base"),
         selected_knowledge_document_ids: meta.selected_knowledge_document_ids,
-        automation_settings: meta.settings,
         calendar_settings: meta.calendar,
         existing_calendar: meta.calendar,
         ...req.body,
+        automation_settings: { ...meta.settings, ...req.body.automation_settings },
       });
       updateData.knowledge_base = knowledgePayload.knowledge_base;
       updateData.knowledge_base_content = knowledgePayload.knowledge_base_content;

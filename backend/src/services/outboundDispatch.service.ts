@@ -299,7 +299,7 @@ export async function sendOutboundMessage(
       }
     } else {
       // Plain text or text fallback for interactive
-      const bodyText = interactive ? `${interactive.body}\n${(interactive.buttons || []).map((b) => `• ${b.text || b.title}`).join('\n')}` : text || '';
+      const bodyText = interactive ? `${interactive.body}\n${(interactive.buttons || []).map((b) => `• ${b.text || b.title}${b.url ? `: ${b.url}` : ''}`).join('\n')}` : text || '';
       sendResult = await sock.sendMessage(jid, { text: bodyText });
     }
 

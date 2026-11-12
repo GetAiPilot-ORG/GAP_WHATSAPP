@@ -1,3 +1,4 @@
+import { agentButtonsEnabled } from "../services/agentButtons.js";
 import { Response } from 'express';
 import crypto from "crypto";
 import * as fs from "fs";
@@ -133,7 +134,7 @@ export function queueBotAgentReply(params: {
             const isFallback = botResult.reply.startsWith("[FALLBACK]");
             const cleanReply = botResult.reply.replace("[FALLBACK]", "").trim();
 
-            if (isFallback) {
+            if (isFallback && agentButtonsEnabled(botResult.agent)) {
               console.log(`🤖 Bot "${botResult.agent?.name}" sending fallback interactive buttons`);
               const buttonBody =
                 cleanReply ||
@@ -358,7 +359,7 @@ export function queueBotAgentReply(params: {
                 });
               } else {
                 botDebugLog(`Replying with plain text for bot "${botResult.agent?.name}"`);
-                let plainTextReply = botResult.reply;
+                let plainTextReply = cleanReply;
                 if (isJsonButtons && parsedInteractive && parsedInteractive.text) {
                   plainTextReply = parsedInteractive.text;
                 }
