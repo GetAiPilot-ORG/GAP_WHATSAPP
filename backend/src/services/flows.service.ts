@@ -225,6 +225,7 @@ export function getFlowTriggerKeywords(flow: any, nodesOverride?: any[]): string
     ...parseFlowKeywords(flow?.trigger_keywords),
     ...parseFlowKeywords(flow?.triggers),
     ...parseFlowKeywords(startNode?.data?.config?.keywords),
+    ...(Array.isArray(startNode?.data?.config?.quickReplyKeywords) ? startNode.data.config.quickReplyKeywords.map((value: any) => String(value || '').trim()).filter(Boolean) : []),
   ])];
 }
 
@@ -1165,7 +1166,7 @@ export async function processFlowEngine(
 
           const gRes = await createGoogleCalendarEvent(organization_id, {
             summary: `Appointment: ${clientTitle}`,
-            description: `WhatsApp Booking Flow\nClient: ${clientTitle}\nDate: ${flowState.appointment_date}\nTime: ${displayTime}`,
+            description: `WhatsApp Booking Flow\nService / flow: ${flowMeta.flow_name}\nClient: ${clientTitle}\nDate: ${flowState.appointment_date}\nTime: ${displayTime}`,
             startDateTimeISO: startISO,
             endDateTimeISO: endISO,
           }).catch((err: any) => {
@@ -1181,6 +1182,8 @@ export async function processFlowEngine(
 
         nextState.google_event_id = googleEventId || null;
         nextState.appointment_status = "confirmed";
+        nextState.appointment_flow_id = currentFlowId;
+        nextState.appointment_flow_name = flowMeta.flow_name;
 
         await supabase
           .from("w_flow_sessions")

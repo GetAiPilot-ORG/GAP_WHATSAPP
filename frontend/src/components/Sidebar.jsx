@@ -1,4 +1,4 @@
-import { createElement, useEffect, useMemo, useState } from 'react'
+import { createElement, useMemo, useState } from 'react'
 import {
     Blocks,
     Calendar,
@@ -70,13 +70,13 @@ const COLLAPSED_WIDTH = 'w-12'
 export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobileClose }) {
     const location = useLocation()
     const navigate = useNavigate()
-    const { userRole, memberProfile, user, signOut, apiCall } = useAuth()
+    const { userRole, memberProfile, user, signOut } = useAuth()
     const [isHovered, setIsHovered] = useState(false)
     const [isOrgMenuOpen, setIsOrgMenuOpen] = useState(false)
     const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
-    const { accounts: waAccounts, selectedAccountId, selectedAccount, setSelectedAccount } = useWhatsAppAccounts()
+    const { accounts: waAccounts, numberCapacity, selectedAccountId, selectedAccount, setSelectedAccount } = useWhatsAppAccounts()
     const { isInstallable, promptInstall } = usePwaInstall()
-    const { permissionStatus, isSubscribed, subscribeToPush } = usePush()
+    const { permissionStatus, subscribeToPush } = usePush()
 
     const isOwner = userRole === 'owner'
     const usesCompactSidebar = location.pathname.startsWith('/live-chat')
@@ -98,8 +98,8 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
     })
 
     const selectedAccountLabel = useMemo(() => {
-        if (!selectedAccountId || selectedAccountId === 'All') return 'GAP WhatsApp Pilot'
-        const account = selectedAccount || waAccounts.find(item => String(getAccountSwitchKey(item)) === String(selectedAccountId) || String(item.id) === String(selectedAccountId))
+        if ((!selectedAccountId || selectedAccountId === 'All') && waAccounts.length !== 1) return 'GAP WhatsApp Pilot'
+        const account = selectedAccount || (waAccounts.length === 1 ? waAccounts[0] : null) || waAccounts.find(item => String(getAccountSwitchKey(item)) === String(selectedAccountId) || String(item.id) === String(selectedAccountId))
         return account?.name || account?.display_phone_number || account?.phone_number_id || 'Selected account'
     }, [selectedAccountId, selectedAccount, waAccounts])
     const shouldHighlightConnect = isOwner && waAccounts.length === 0
@@ -178,7 +178,7 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
 
                         {isOrgMenuOpen && !isCollapsed ? (
                             <div className="absolute left-2 top-12 z-50 w-56 overflow-hidden rounded-lg border border-gray-200 bg-white p-1.5 shadow-lg shadow-gray-900/10">
-                                <button
+                                {waAccounts.length > 1 && <button
                                     type="button"
                                     onClick={() => selectWaAccount('All')}
                                     className={clsx(
@@ -188,7 +188,7 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
                                 >
                                     <Blocks className="h-4 w-4 text-gray-500" />
                                     All WhatsApp accounts
-                                </button>
+                                </button>}
                                 {waAccounts.map(account => {
                                     const isSelected = String(selectedAccountId) === String(account.id) || String(selectedAccountId) === String(getAccountSwitchKey(account))
                                     return (
@@ -209,7 +209,7 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
                                         </button>
                                     )
                                 })}
-                                {isOwner ? (
+                                {isOwner && numberCapacity?.canConnect ? (
                                     <button
                                         type="button"
                                         onClick={() => {
@@ -276,9 +276,9 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
                                 </span>
                             </button>
                         )}
-                        {(!isSubscribed && permissionStatus !== 'denied') && (
+                        {permissionStatus === 'default' && (
                             <button
-                                onClick={() => subscribeToPush(organization.id)}
+                                onClick={() => subscribeToPush(selectedAccount?.organization_id || waAccounts[0]?.organization_id || memberProfile?.organization_id)}
                                 className={clsx(
                                     'mb-2 flex h-9 w-full items-center rounded-lg bg-blue-50 text-[14px] font-medium text-blue-700 transition-colors hover:bg-blue-100',
                                     isCollapsed ? 'justify-center px-0' : 'gap-2 px-2'
@@ -400,14 +400,14 @@ export default function Sidebar({ onRequestLogout, isMobileOpen = false, onMobil
 
                         {isOrgMenuOpen ? (
                             <div className="border-b border-gray-100 bg-gray-50 p-2">
-                                <button
+                                {waAccounts.length > 1 && <button
                                     type="button"
                                     onClick={() => selectWaAccount('All')}
                                     className={clsx('flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm', (!selectedAccountId || selectedAccountId === 'All') ? 'bg-white font-semibold text-black' : 'text-gray-700')}
                                 >
                                     <Blocks className="h-4 w-4 text-gray-500" />
                                     All WhatsApp accounts
-                                </button>
+                                </button>}
                                 {waAccounts.map(account => {
                                     const isSelected = String(selectedAccountId) === String(account.id) || String(selectedAccountId) === String(getAccountSwitchKey(account))
                                     return (

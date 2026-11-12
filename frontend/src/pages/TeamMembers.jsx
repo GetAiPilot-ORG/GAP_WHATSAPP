@@ -34,6 +34,7 @@ export default function TeamMembers() {
 
     const [members, setMembers] = useState([])
     const [isLoadingMembers, setIsLoadingMembers] = useState(true)
+    const [membersError, setMembersError] = useState('')
     const [isInviteOpen, setIsInviteOpen] = useState(false)
     const [inviteForm, setInviteForm] = useState({ name: '', email: '', password: '', role: 'agent' })
     const [isInviting, setIsInviting] = useState(false)
@@ -49,8 +50,10 @@ export default function TeamMembers() {
     const fetchMembers = async () => {
         if (!session?.access_token) return
         setIsLoadingMembers(true)
+        setMembersError('')
         try {
             const res = await apiCall(`${BACKEND_BASE}/api/team/members`)
+            if (!res.ok) throw new Error('Could not load team members. Please try again.')
             if (res.ok) {
                 const data = await res.json()
                 setMembers(data)
@@ -63,6 +66,7 @@ export default function TeamMembers() {
             }
         } catch (e) {
             console.error("Failed to fetch members", e)
+            setMembersError(e.message || 'Could not load team members.')
         } finally {
             setIsLoadingMembers(false)
         }
@@ -73,6 +77,15 @@ export default function TeamMembers() {
             fetchMembers()
         }
     }, [session])
+
+    useEffect(() => {
+        if (!isInviteOpen && !selectedMember) return
+        const closeOnEscape = event => {
+            if (event.key === 'Escape') { setIsInviteOpen(false); setSelectedMember(null) }
+        }
+        window.addEventListener('keydown', closeOnEscape)
+        return () => window.removeEventListener('keydown', closeOnEscape)
+    }, [isInviteOpen, selectedMember])
 
     const handleInvite = async (e) => {
         e.preventDefault()
@@ -214,130 +227,64 @@ export default function TeamMembers() {
         return members.find(m => m.role === 'owner')
     }, [members])
 
-    // Filter & Search List
-    const filteredMembers = useMemo(() => {
-        return members.filter((member) => {
-            // Exclude owner from main table list
-            if (member.role === 'owner') return false
-
-            // Search filter
-            const matchesSearch =
-                searchQuery === '' ||
-                member.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                member.email?.toLowerCase().includes(searchQuery.toLowerCase())
-
-            // Role filter
-            const matchesRole =
-                roleFilter === 'all' ||
-                member.role === roleFilter
-
-            // Status filter
-            let matchesStatus = true
-            if (statusFilter === 'online') {
-                matchesStatus = ['agent', 'admin'].includes(member.role) && member.is_online === true
-            } else if (statusFilter === 'offline') {
-                matchesStatus = ['agent', 'admin'].includes(member.role) && member.is_online !== true
-            }
-
-            return matchesSearch && matchesRole && matchesStatus
-        })
-    }, [members, searchQuery, roleFilter, statusFilter])
+    const hasFilters = Boolean(searchQuery.trim() || roleFilter !== 'all' || statusFilter !== 'all')
+    const memberMatchesFilters = (member) => {
+        const query = searchQuery.trim().toLowerCase()
+        const matchesSearch = !query || member.name?.toLowerCase().includes(query) || member.email?.toLowerCase().includes(query)
+        const matchesRole = roleFilter === 'all' || member.role === roleFilter
+        const online = member.role === 'owner' || (['agent', 'admin'].includes(member.role) && member.is_online === true)
+        const matchesStatus = statusFilter === 'all' || (statusFilter === 'online' ? online : ['agent', 'admin'].includes(member.role) && !member.is_online)
+        return matchesSearch && matchesRole && matchesStatus
+    }
+    const filteredMembers = members.filter(member => member.role !== 'owner' && memberMatchesFilters(member))
+    const showOwner = ownerMember && memberMatchesFilters(ownerMember)
+    const clearFilters = () => {
+        const params = new URLSearchParams(searchParams)
+        for (const key of ['search', 'role', 'status']) params.delete(key)
+        setSearchParams(params)
+    }
 
     return (
-        <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-3 sm:gap-6 px-4 py-4 sm:py-8 text-gray-900">
-            {/* Header Section */}
-            <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:justify-between">
+        <div className="space-y-5 px-4 pb-8 text-gray-900 sm:px-6 lg:px-8">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <div className="inline-flex items-center gap-1.5 rounded-none border border-zinc-200 bg-white px-2.5 py-0.5 text-[10px] sm:text-xs font-semibold text-zinc-700 tracking-wider uppercase font-mono mb-2 w-fit">
-                        <Users size={14} className="text-zinc-650" />
-                        Workspace Access
-                    </div>
-                    <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Team Members</h1>
-                    <p className="text-xs sm:text-sm text-gray-500 mt-0.5 sm:mt-1">Manage your agents, availability, assignments and access</p>
+                    <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-slate-950">Team Members</h1>
+                    <p className="mt-1 text-[13px] text-slate-500">Manage your agents, availability, assignments and access</p>
                 </div>
-
-                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
-                    <div className="flex gap-2 w-full sm:w-auto">
-                        {/* Search Input */}
-                        <div className="relative flex-1 sm:min-w-[240px] sm:w-auto">
-                            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
-                            <input
-                                type="text"
-                                value={searchQuery}
-                                onChange={(e) => setFilterParam('search', e.target.value)}
-                                placeholder="Search name/email..."
-                                className="h-9 sm:h-10 w-full rounded-none border border-zinc-200 bg-white pl-8 pr-7 text-xs sm:text-sm focus:border-zinc-400 focus:outline-none transition-all shadow-sm"
-                            />
-                            {searchQuery && (
-                                <button onClick={() => setFilterParam('search', '')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                                    <X className="h-3.5 w-3.5" />
-                                </button>
-                            )}
-                        </div>
-
-                        {/* Invite Button */}
-                        {isAdmin && (
-                            <button
-                                onClick={() => setIsInviteOpen(true)}
-                                className="inline-flex h-9 sm:h-10 items-center justify-center gap-1.5 rounded-none bg-zinc-950 px-4 text-xs sm:text-sm font-semibold text-white hover:bg-zinc-800 transition-colors shadow-sm shrink-0 border border-zinc-950"
-                            >
-                                <UserPlus className="h-3.5 w-3.5" />
-                                <span>Invite</span>
-                            </button>
-                        )}
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:w-auto sm:gap-3">
-                        {/* Role Filter Selector */}
-                        <div className="relative w-full">
-                            <select
-                                value={roleFilter}
-                                onChange={(e) => setFilterParam('role', e.target.value)}
-                                className="h-9 sm:h-10 w-full rounded-none border border-zinc-200 bg-white pl-2.5 pr-7 text-xs sm:text-sm focus:border-zinc-400 focus:outline-none transition-all appearance-none cursor-pointer shadow-sm"
-                            >
-                                <option value="all">All Roles</option>
-                                <option value="owner">Owner</option>
-                                <option value="admin">Admin</option>
-                                <option value="agent">Agent</option>
-                            </select>
-                            <ChevronDown className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                        </div>
-
-                        {/* Status Filter Selector */}
-                        <div className="relative w-full">
-                            <select
-                                value={statusFilter}
-                                onChange={(e) => setFilterParam('status', e.target.value)}
-                                className="h-9 sm:h-10 w-full rounded-none border border-zinc-200 bg-white pl-2.5 pr-7 text-xs sm:text-sm focus:border-zinc-400 focus:outline-none transition-all appearance-none cursor-pointer shadow-sm"
-                            >
-                                <option value="all">All Statuses</option>
-                                <option value="online">Online Agents</option>
-                                <option value="offline">Offline Agents</option>
-                            </select>
-                            <ChevronDown className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                        </div>
-                    </div>
-                </div>
+                {isAdmin && <button type="button" onClick={() => setIsInviteOpen(true)} className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-[#0b74c9] px-4 text-xs font-semibold text-white transition-colors hover:bg-[#0867b4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"><UserPlus size={16} />Invite member</button>}
             </div>
 
             {/* Stats Cards Section */}
-            <div className="grid grid-cols-2 gap-[1px] sm:grid-cols-4 bg-zinc-200 border border-zinc-200 shadow-sm">
+            <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-gray-200 bg-gray-200 sm:grid-cols-4">
                 <SummaryCard icon={Users} title="Total Members" value={stats.total} helper="Registered workspace users" />
                 <SummaryCard icon={Activity} title="Online Agents" value={stats.onlineAgents} helper="Ready to accept chats" />
                 <SummaryCard icon={Clock} title="Offline Agents" value={stats.offlineAgents} helper="Away or inactive" />
                 <SummaryCard icon={Send} title="Assigned Chats" value={stats.totalAssignedChats} helper="Active customer conversations" />
             </div>
 
+            <div className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-white p-3 sm:flex-row sm:items-center" aria-label="Team member filters">
+                <div className="relative min-w-0 flex-1">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <input type="search" aria-label="Search team members" value={searchQuery} onChange={event => setFilterParam('search', event.target.value)} placeholder="Search name or email" className="h-9 w-full rounded-md border border-gray-300 bg-white pl-9 pr-8 text-xs outline-none focus:border-[#0b74c9] focus:ring-1 focus:ring-[#0b74c9]" />
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:flex">
+                    <select aria-label="Filter by role" value={roleFilter} onChange={event => setFilterParam('role', event.target.value)} className="h-9 rounded-md border border-gray-300 bg-white px-3 text-xs outline-none focus:border-[#0b74c9] focus:ring-1 focus:ring-[#0b74c9]"><option value="all">All roles</option><option value="owner">Owner</option><option value="admin">Admin</option><option value="agent">Agent</option></select>
+                    <select aria-label="Filter by availability" value={statusFilter} onChange={event => setFilterParam('status', event.target.value)} className="h-9 rounded-md border border-gray-300 bg-white px-3 text-xs outline-none focus:border-[#0b74c9] focus:ring-1 focus:ring-[#0b74c9]"><option value="all">All statuses</option><option value="online">Online</option><option value="offline">Offline</option></select>
+                </div>
+                {hasFilters && <button type="button" onClick={clearFilters} className="rounded-md px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 focus-visible:outline-2">Clear filters</button>}
+            </div>
+
             {/* Owner Section (Always Available) */}
-            {!isLoadingMembers && ownerMember && (
+            {!isLoadingMembers && !membersError && showOwner && (
                 <div
+                    role="button" tabIndex={0} aria-label={`View ${ownerMember?.name || 'owner'} details`}
+                    onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedMember(ownerMember) } }}
                     onClick={() => setSelectedMember(ownerMember)}
-                    className="relative overflow-hidden rounded-none border border-zinc-200 bg-gradient-to-b from-white to-zinc-50/20 p-3 sm:p-4 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-4 cursor-pointer hover:bg-zinc-50/40 hover:border-zinc-350 transition-all group"
+                    className="relative overflow-hidden rounded-lg border border-zinc-200 bg-white p-3 sm:p-4 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-4 cursor-pointer hover:bg-zinc-50/40 hover:border-blue-300 transition-all group"
                 >
-                    {/* Soft top-left corner glow */}
-                    <div className="absolute -top-12 -left-12 w-24 h-24 bg-zinc-400/5 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
-                    {/* Left hover accent line indicator */}
-                    <div className="absolute left-0 top-0 bottom-0 w-[3.5px] bg-green-500 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+
+
+
 
                     <div className="flex items-center relative z-10">
                         <div className="relative flex-shrink-0">
@@ -351,29 +298,29 @@ export default function TeamMembers() {
                             </div>
                             <span className="absolute bottom-0 right-0 block h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-full ring-1.5 sm:ring-2 ring-white bg-green-500 shadow-sm" />
                         </div>
-                        <div className="ml-2.5 sm:ml-4">
+                        <div className="ml-2.5 min-w-0 sm:ml-4">
                             <div className="flex items-center gap-1.5">
                                 <span className="font-bold text-gray-900 text-xs sm:text-sm">{ownerMember.name}</span>
-                                <span className="inline-flex items-center rounded-md bg-indigo-50 px-1.5 py-0.2 text-[9px] font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-600/10 uppercase tracking-wide">
+                                <span className="inline-flex items-center rounded-md bg-indigo-50 px-1.5 py-0.2 text-xs font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-600/10 uppercase tracking-wide">
                                     Owner
                                 </span>
                             </div>
-                            <div className="text-[10px] sm:text-xs text-gray-500 mt-0.5">{ownerMember.email}</div>
+                            <div className="break-all text-xs text-gray-500 mt-0.5">{ownerMember.email}</div>
                         </div>
                     </div>
                     <div className="grid grid-cols-3 gap-2 border-t border-gray-100 pt-2.5 sm:border-t-0 sm:pt-0 sm:flex sm:flex-row sm:items-center sm:gap-6 text-xs">
                         <div className="flex flex-col">
-                            <span className="text-[9px] sm:text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Active Chats</span>
+                            <span className="text-xs font-medium text-gray-500">Active Chats</span>
                             <span className="font-bold text-gray-900 mt-0.5 text-[11px] sm:text-xs">{ownerMember.active_chats_count || 0} open</span>
                         </div>
                         <div className="h-8 border-l border-gray-150 hidden sm:block" />
                         <div className="flex flex-col">
-                            <span className="text-[9px] sm:text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Last Active</span>
+                            <span className="text-xs font-medium text-gray-500">Last Active</span>
                             <span className="font-semibold text-gray-700 mt-0.5 text-[11px] sm:text-xs">{formatDate(ownerMember.last_active_at)}</span>
                         </div>
                         <div className="h-8 border-l border-gray-150 hidden sm:block" />
                         <div className="flex flex-col col-span-1 sm:col-span-1">
-                            <span className="text-[9px] sm:text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Availability</span>
+                            <span className="text-xs font-medium text-gray-500">Availability</span>
                             <span className="inline-flex items-center text-emerald-700 font-semibold mt-0.5 text-[11px] sm:text-xs">
                                 <span className="h-1.5 w-1.5 rounded-full mr-1 bg-emerald-500" />
                                 Always Available
@@ -388,33 +335,30 @@ export default function TeamMembers() {
                 <div className="rounded-xl border border-gray-200 bg-white p-8">
                     <TableSkeleton />
                 </div>
+            ) : membersError ? (
+                <div role="alert" className="rounded-lg border border-red-200 bg-white p-5"><p className="text-sm text-red-700">{membersError}</p><button type="button" onClick={fetchMembers} className="mt-3 text-sm font-medium text-blue-700 hover:underline">Try again</button></div>
+            ) : filteredMembers.length === 0 && showOwner && hasFilters ? null : filteredMembers.length === 0 ? (
+                <TeamEmptyState filtered={hasFilters} isAdmin={isAdmin} onInvite={() => setIsInviteOpen(true)} onClear={clearFilters} />
             ) : (
                 <>
                     {/* Desktop Table View */}
-                    <div className="hidden sm:block overflow-hidden border border-zinc-200 rounded-none bg-white shadow-sm relative group">
-                        {/* Premium Metallic Gray Top Gradient Line */}
-                        <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-zinc-200 via-zinc-400 to-zinc-300 opacity-80 group-hover:opacity-100 transition-opacity duration-300 z-10" />
-                        {/* Soft top-left corner glow */}
-                        <div className="absolute -top-12 -left-12 w-24 h-24 bg-zinc-400/5 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500 z-10" />
+                    <div className="hidden sm:block overflow-hidden border border-zinc-200 rounded-lg bg-white shadow-sm relative group">
 
-                        {filteredMembers.length === 0 ? (
-                            <div className="py-16 text-center text-gray-500 flex flex-col items-center justify-center relative z-10">
-                                <Users className="h-10 w-10 text-gray-300 mb-2" />
-                                <p className="text-sm font-medium">No team members match the filter criteria</p>
-                            </div>
-                        ) : (
-                            <div className="overflow-x-auto relative z-10">
+
+
+
+                        <div className="overflow-x-auto relative z-10">
                                 <table className="min-w-full divide-y divide-dashed divide-zinc-200">
                                     <thead className="bg-zinc-50/50">
                                         <tr>
-                                            <th className="px-6 py-3.5 text-left text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-widest">Member</th>
-                                            <th className="px-6 py-3.5 text-left text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-widest">Email</th>
-                                            <th className="px-6 py-3.5 text-left text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-widest">Role</th>
-                                            <th className="px-6 py-3.5 text-left text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-widest">Availability</th>
-                                            <th className="px-6 py-3.5 text-left text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-widest">Active Chats</th>
-                                            <th className="px-6 py-3.5 text-left text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-widest">Last Active</th>
-                                            <th className="px-6 py-3.5 text-right text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-widest">Active Time Today</th>
-                                            {isAdmin && <th className="px-6 py-3.5 text-right text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-widest">Actions</th>}
+                                            <th className="px-6 py-3.5 text-left text-xs font-medium text-gray-500">Member</th>
+                                            <th className="px-6 py-3.5 text-left text-xs font-medium text-gray-500">Email</th>
+                                            <th className="px-6 py-3.5 text-left text-xs font-medium text-gray-500">Role</th>
+                                            <th className="px-6 py-3.5 text-left text-xs font-medium text-gray-500">Availability</th>
+                                            <th className="px-6 py-3.5 text-left text-xs font-medium text-gray-500">Active Chats</th>
+                                            <th className="px-6 py-3.5 text-left text-xs font-medium text-gray-500">Last Active</th>
+                                            <th className="px-6 py-3.5 text-right text-xs font-medium text-gray-500">Active Time Today</th>
+                                            {isAdmin && <th className="px-6 py-3.5 text-right text-xs font-medium text-gray-500">Actions</th>}
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-dashed divide-zinc-200">
@@ -427,7 +371,7 @@ export default function TeamMembers() {
                                                     className="hover:bg-gray-50/60 cursor-pointer transition-colors group"
                                                 >
                                                     <td className="px-6 py-4 whitespace-nowrap relative">
-                                                        {/* Left hover accent line indicator */}
+
                                                         <div className={`absolute left-0 top-0 bottom-0 w-[3.5px] opacity-0 group-hover:opacity-100 transition-opacity duration-150 ${member.is_online ? 'bg-green-500' : 'bg-zinc-400'}`} />
                                                         <div className="flex items-center">
                                                             <div className="relative flex-shrink-0">
@@ -479,13 +423,13 @@ export default function TeamMembers() {
                                                                     type="button"
                                                                     onClick={(ev) => resendInvite(ev, member)}
                                                                     disabled={resendingMemberId === member.id}
-                                                                    className="inline-flex items-center gap-1.5 rounded-none border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-700 hover:border-zinc-350 hover:bg-zinc-50 active:scale-[0.98] transition-all shadow-sm cursor-pointer"
+                                                                    className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-700 hover:border-blue-300 hover:bg-zinc-50 active:scale-[0.98] transition-all shadow-sm cursor-pointer"
                                                                 >
                                                                     {resendingMemberId === member.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5 text-zinc-400" />}
                                                                     Resend
                                                                 </button>
                                                             ) : ['agent', 'admin', 'owner'].includes(member.role) ? (
-                                                                <span className="inline-flex items-center gap-1.5 rounded-none bg-emerald-50/50 px-2.5 py-1 text-xs font-semibold text-emerald-800 border border-emerald-100/50">
+                                                                <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50/50 px-2.5 py-1 text-xs font-semibold text-emerald-800 border border-emerald-100/50">
                                                                     <Clock className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
                                                                     {formatOnlineTime(member.online_time_today)}
                                                                 </span>
@@ -501,7 +445,7 @@ export default function TeamMembers() {
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => removeMember(member.id)}
-                                                                        className="inline-flex items-center justify-center p-1.5 text-zinc-400 hover:text-red-650 rounded-none hover:bg-red-50 border border-zinc-200 hover:border-red-200 transition-all cursor-pointer shadow-sm"
+                                                                        className="inline-flex items-center justify-center p-1.5 text-zinc-400 hover:text-red-600 rounded-lg hover:bg-red-50 border border-zinc-200 hover:border-red-200 transition-all cursor-pointer shadow-sm"
                                                                         title="Remove Member"
                                                                     >
                                                                         <Trash2 className="h-3.5 w-3.5" />
@@ -518,29 +462,22 @@ export default function TeamMembers() {
                                     </tbody>
                                 </table>
                             </div>
-                        )}
                     </div>
 
                     {/* Mobile Card View */}
                     <div className="block sm:hidden space-y-3">
-                        {filteredMembers.length === 0 ? (
-                            <div className="py-12 text-center text-gray-500 bg-white border border-gray-200 rounded-xl flex flex-col items-center justify-center p-4">
-                                <Users className="h-8 w-8 text-gray-300 mb-2" />
-                                <p className="text-sm font-medium">No team members match the filter criteria</p>
-                            </div>
-                        ) : (
-                            filteredMembers.map((member) => {
+                        {filteredMembers.map((member) => {
                                 const inviteStatus = getInviteStatus(member)
                                 return (
                                     <div
                                         key={member.id}
                                         onClick={() => setSelectedMember(member)}
-                                        className="relative overflow-hidden rounded-none border border-zinc-200 bg-gradient-to-b from-white to-zinc-50/20 p-3 shadow-sm flex flex-col gap-2.5 cursor-pointer hover:bg-zinc-50/40 hover:border-zinc-350 transition-all group"
+                                        className="relative overflow-hidden rounded-lg border border-zinc-200 bg-white p-3 shadow-sm flex flex-col gap-2.5 cursor-pointer hover:bg-zinc-50/40 hover:border-blue-300 transition-all group"
                                     >
-                                        {/* Premium Metallic Gray Top Gradient Line */}
+
                                         <div className="absolute top-0 left-0 right-0 h-[2.5px] bg-gradient-to-r from-zinc-200 via-zinc-400 to-zinc-300 opacity-80 group-hover:opacity-100 transition-opacity duration-300 z-10" />
-                                        {/* Soft top-left corner glow */}
-                                        <div className="absolute -top-12 -left-12 w-24 h-24 bg-zinc-400/5 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500 z-10" />
+
+
 
                                         <div className="flex items-center justify-between relative z-10">
                                             <div className="flex items-center min-w-0">
@@ -560,18 +497,18 @@ export default function TeamMembers() {
                                                 <div className="ml-2.5 min-w-0">
                                                     <div className="flex items-center gap-1.5">
                                                         <span className="text-xs font-semibold text-gray-900 truncate">{member.name}</span>
-                                                        <span className="inline-flex items-center rounded-none bg-indigo-50 px-1.5 py-0.2 text-[9px] font-medium text-indigo-700 ring-1 ring-inset ring-indigo-600/10 shrink-0">
+                                                        <span className="inline-flex items-center rounded-lg bg-indigo-50 px-1.5 py-0.2 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-600/10 shrink-0">
                                                             {member.role ? member.role.charAt(0).toUpperCase() + member.role.slice(1) : 'Agent'}
                                                         </span>
                                                     </div>
-                                                    <div className="text-[10px] text-gray-500 truncate">{member.email}</div>
+                                                    <div className="text-xs text-gray-500 truncate">{member.email}</div>
                                                 </div>
                                             </div>
                                         </div>
 
                                         <div className="grid grid-cols-3 gap-2 border-dashed border-zinc-200 pt-2.5 text-xs relative z-10">
                                             <div>
-                                                <span className="text-[9px] text-gray-400 font-semibold uppercase tracking-wider block">Availability</span>
+                                                <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider block">Availability</span>
                                                 {['agent', 'admin', 'owner'].includes(member.role) ? (
                                                     <span className={`inline-flex items-center mt-0.5 font-semibold text-[11px] ${member.is_online ? 'text-green-700' : 'text-gray-500'}`}>
                                                         <span className={`h-1.5 w-1.5 rounded-full mr-1 ${member.is_online ? 'bg-green-500' : 'bg-gray-400'}`} />
@@ -582,24 +519,24 @@ export default function TeamMembers() {
                                                 )}
                                             </div>
                                             <div>
-                                                <span className="text-[9px] text-gray-400 font-semibold uppercase tracking-wider block">Active Chats</span>
+                                                <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider block">Active Chats</span>
                                                 <span className="font-bold text-gray-900 mt-0.5 text-[11px] block">{member.active_chats_count || 0} open</span>
                                             </div>
                                             <div>
-                                                <span className="text-[9px] text-gray-400 font-semibold uppercase tracking-wider block mb-0.5">Active Time</span>
+                                                <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider block mb-0.5">Active Time</span>
                                                 <div className="flex items-center justify-between gap-1.5">
                                                     {inviteStatus !== 'active' && member.role !== 'owner' && isAdmin ? (
                                                         <button
                                                             type="button"
                                                             onClick={(ev) => { ev.stopPropagation(); resendInvite(ev, member); }}
                                                             disabled={resendingMemberId === member.id}
-                                                            className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+                                                            className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
                                                         >
                                                             {resendingMemberId === member.id ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Send className="h-2.5 w-2.5" />}
                                                             Resend
                                                         </button>
                                                     ) : ['agent', 'admin', 'owner'].includes(member.role) ? (
-                                                        <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800 border border-emerald-100/50">
+                                                        <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 text-xs font-semibold text-emerald-800 border border-emerald-100/50">
                                                             <Clock className="h-2.5 w-2.5 text-emerald-600 shrink-0" />
                                                             {formatOnlineTime(member.online_time_today)}
                                                         </span>
@@ -622,8 +559,7 @@ export default function TeamMembers() {
                                         </div>
                                     </div>
                                 )
-                            })
-                        )}
+                            })}
                     </div>
                 </>
             )}
@@ -642,7 +578,7 @@ export default function TeamMembers() {
                         {/* Drawer Header */}
                         <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                             <h3 className="text-lg font-bold text-gray-900">Member Details</h3>
-                            <button onClick={() => setSelectedMember(null)} className="text-gray-400 hover:text-gray-600 rounded-lg p-1.5 hover:bg-gray-100 transition-colors">
+                            <button type="button" aria-label="Close member details" onClick={() => setSelectedMember(null)} className="text-gray-400 hover:text-gray-600 rounded-lg p-1.5 hover:bg-gray-100 transition-colors">
                                 <X className="h-5 w-5" />
                             </button>
                         </div>
@@ -768,53 +704,58 @@ export default function TeamMembers() {
             {/* Invite Modal */}
             {isInviteOpen && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-150">
+                    <div role="dialog" aria-modal="true" aria-labelledby="team-invite-title" className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-2xl">
                         <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                            <h3 className="text-lg font-bold text-gray-900">Invite New Member</h3>
-                            <button onClick={() => setIsInviteOpen(false)} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100">
+                            <h3 id="team-invite-title" className="text-base font-semibold text-gray-900">Invite New Member</h3>
+                            <button type="button" aria-label="Close invitation" onClick={() => setIsInviteOpen(false)} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100">
                                 <X className="h-5 w-5" />
                             </button>
                         </div>
                         <form onSubmit={handleInvite} className="p-6 space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                                <label htmlFor="team-invite-name" className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
                                 <input
                                     type="text"
                                     required
+                                    id="team-invite-name"
                                     value={inviteForm.name}
                                     onChange={(e) => setInviteForm({ ...inviteForm, name: e.target.value })}
                                     placeholder="John Doe"
-                                    className="w-full rounded-xl border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                    className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-[#0b74c9] focus:ring-1 focus:ring-[#0b74c9]"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                                <label htmlFor="team-invite-email" className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
                                 <input
                                     type="email"
                                     required
+                                    id="team-invite-email"
                                     value={inviteForm.email}
                                     onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
                                     placeholder="john@example.com"
-                                    className="w-full rounded-xl border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                    className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-[#0b74c9] focus:ring-1 focus:ring-[#0b74c9]"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Login Password</label>
+                                <label htmlFor="team-invite-password" className="block text-sm font-medium text-gray-700 mb-1">Login Password</label>
                                 <input
-                                    type="text"
+                                    type="password"
+                                    autoComplete="new-password"
                                     required
+                                    id="team-invite-password"
                                     value={inviteForm.password || ''}
                                     onChange={(e) => setInviteForm({ ...inviteForm, password: e.target.value })}
                                     placeholder="Set a password for the agent"
-                                    className="w-full rounded-xl border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                    className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-[#0b74c9] focus:ring-1 focus:ring-[#0b74c9]"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                                <label htmlFor="team-invite-role" className="block text-sm font-medium text-gray-700 mb-1">Role</label>
                                 <select
+                                    id="team-invite-role"
                                     value={inviteForm.role}
                                     onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value })}
-                                    className="w-full rounded-xl border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                    className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-[#0b74c9] focus:ring-1 focus:ring-[#0b74c9]"
                                 >
                                     <option value="admin">Admin (Can manage settings)</option>
                                     <option value="agent">Agent (Can manage chats)</option>
@@ -824,7 +765,7 @@ export default function TeamMembers() {
                                 <button
                                     type="submit"
                                     disabled={isInviting}
-                                    className="w-full bg-[#128C7E] hover:bg-[#0f7a6f] text-white py-2.5 rounded-xl font-bold transition-all shadow-md disabled:opacity-50"
+                                    className="w-full rounded-md bg-[#0b74c9] py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#0867b4] disabled:opacity-50"
                                 >
                                     {isInviting ? 'Sending Invite...' : 'Send Invitation'}
                                 </button>
@@ -837,14 +778,15 @@ export default function TeamMembers() {
     )
 }
 
-function SummaryCard({ icon: IconComponent, title, value, helper }) {
+function SummaryCard({ icon, title, value, helper }) {
+    const IconComponent = icon
     return (
-        <div className="stat-card-item rounded-none bg-white p-5 hover:bg-zinc-50/50 transition-colors">
+        <div className="stat-card-item bg-white p-4 sm:p-5">
             <div className="flex items-center justify-between">
-                <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">{title}</span>
+                <span className="text-xs font-medium text-gray-500">{title}</span>
                 <IconComponent size={18} className="text-zinc-400" />
             </div>
-            <div className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950">{value}</div>
+            <div className="mt-2 text-xl font-semibold tabular-nums text-gray-900 sm:text-2xl">{value}</div>
             {helper ? <div className="mt-1 text-xs text-zinc-500 leading-normal">{helper}</div> : null}
         </div>
     )
@@ -871,4 +813,13 @@ function TableSkeleton() {
             ))}
         </div>
     )
+}
+
+function TeamEmptyState({ filtered, isAdmin, onInvite, onClear }) {
+    return <div className="flex flex-col items-center justify-center rounded-lg border border-gray-200 bg-white px-5 py-10 text-center">
+        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-gray-50 text-gray-500"><Users size={20} /></div>
+        <h2 className="text-sm font-semibold text-gray-900">{filtered ? 'No members match your filters' : 'No teammates yet'}</h2>
+        <p className="mt-1 max-w-sm text-xs leading-5 text-gray-500">{filtered ? 'Try a different name, role or availability.' : 'Invite teammates to help manage chats and customer enquiries.'}</p>
+        {filtered ? <button type="button" onClick={onClear} className="mt-4 rounded-md border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50">Clear filters</button> : isAdmin && <button type="button" onClick={onInvite} className="mt-4 inline-flex items-center gap-2 rounded-md bg-[#0b74c9] px-3 py-2 text-xs font-semibold text-white hover:bg-[#0867b4]"><UserPlus size={14} />Invite teammate</button>}
+    </div>
 }

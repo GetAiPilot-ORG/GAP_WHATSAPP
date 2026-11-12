@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { needsBookingReview, renderBookingReview } from '../bookingReview.js';
+import { bookingAction, needsBookingReview, renderBookingReview } from '../bookingReview.js';
 const events = [{ id: 'workshop-1', title: 'Nova', start: { dateTime: '2099-11-13T12:00:00+05:30' }, end: { dateTime: '2099-11-13T13:00:00+05:30' } }];
 const fields = { kind: 'student', action: 'review', event_id: 'workshop-1', name: 'Tanishk', participants: 1 };
 test('complete details always produce review buttons', () => {
@@ -22,4 +22,17 @@ test('followups retain booking intent', () => {
   assert.equal(needsBookingReview([], 'Slot book kro'), true);
   assert.equal(needsBookingReview([{ role: 'user', content: 'booking karni hai' }], 'Name Tanishk'), true);
   assert.equal(needsBookingReview([], 'What is the address?'), false);
+});
+
+test('confirmation questions route to review rather than payment or consent', () => {
+  assert.equal(bookingAction('Confirmation ??'), 'review');
+  assert.equal(bookingAction('Conformation ??'), 'review');
+  assert.equal(bookingAction('Review Krna hai !'), 'review');
+  assert.equal(bookingAction('Confirm booking request'), 'confirm');
+  assert.equal(bookingAction('Confirm'), 'confirm');
+  assert.equal(bookingAction('Mujhe khuch info update karni h'), 'change');
+  assert.equal(bookingAction('Change Details'), 'change');
+  assert.equal(bookingAction('Payment link do'), null);
+  assert.equal(bookingAction('Contact?'), null);
+  assert.equal(needsBookingReview([], 'Confirmation ??'), true);
 });

@@ -190,11 +190,13 @@ export default function Settings() {
         if (window.Notification.permission === 'granted') {
             setBrowserPermission('granted')
             setDesktopNotificationsEnabled(true)
+            window.dispatchEvent(new Event('gap:notification-permission-changed'))
             return
         }
         const permission = await window.Notification.requestPermission()
         setBrowserPermission(permission)
         setDesktopNotificationsEnabled(permission === 'granted')
+        window.dispatchEvent(new Event('gap:notification-permission-changed'))
     }
 
     const formatKnowledgeDate = (value) => {

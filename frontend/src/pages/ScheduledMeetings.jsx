@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useCallback } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import {
     Calendar,
     Search,
@@ -38,6 +38,8 @@ export default function ScheduledMeetings() {
     const [debouncedSearch, setDebouncedSearch] = useState('')
     const [statusFilter, setStatusFilter] = useState('all')
     const [dateFilter, setDateFilter] = useState('')
+    const [serviceFilter, setServiceFilter] = useState('all')
+    const [services, setServices] = useState([])
     const [page, setPage] = useState(1)
 
     const [activeStatusMenuId, setActiveStatusMenuId] = useState(null)
@@ -142,6 +144,7 @@ export default function ScheduledMeetings() {
                 limit: '10',
                 search: debouncedSearch,
                 status: statusFilter,
+                ...(serviceFilter !== 'all' ? { flow_id: serviceFilter } : {}),
                 ...(dateFilter ? { date: dateFilter } : {}),
             })
 
@@ -159,6 +162,7 @@ export default function ScheduledMeetings() {
 
             const data = await res.json()
             setAppointments(data.data || [])
+            setServices(data.services || [])
             setSummary(data.summary || { totalBookings: 0, todayCount: 0, upcomingWeekCount: 0 })
             setPagination(data.pagination || { page: 1, limit: 10, total: 0, totalPages: 1 })
         } catch (err) {
@@ -167,7 +171,7 @@ export default function ScheduledMeetings() {
         } finally {
             setLoading(false)
         }
-    }, [organizationId, page, debouncedSearch, statusFilter, dateFilter])
+    }, [organizationId, page, debouncedSearch, statusFilter, dateFilter, serviceFilter])
 
     useEffect(() => {
         fetchAppointments()
@@ -192,7 +196,7 @@ export default function ScheduledMeetings() {
                 day: 'numeric',
                 year: 'numeric',
             })
-        } catch (e) {
+        } catch {
             return dateStr
         }
     }
@@ -208,7 +212,7 @@ export default function ScheduledMeetings() {
                         </h1>
                     </div>
                     <p className="mt-1 text-sm text-gray-500">
-                        View and manage all real-time WhatsApp & Google Calendar bookings for your business.
+                        View bookings from your WhatsApp flows and linked Google Calendar.
                     </p>
                 </div>
 
@@ -223,6 +227,19 @@ export default function ScheduledMeetings() {
                     </button>
                 </div>
             </div>
+
+            <section className="rounded-lg border border-gray-200 bg-white p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                        <h2 className="text-sm font-semibold text-gray-900">Bookings kaise aati hain?</h2>
+                        <ol className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-600">
+                            {['WhatsApp message / button', 'Published flow', 'Appointment node', 'Booking saved here'].map((step, index) => <li key={step} className="inline-flex items-center gap-2"><span>{step}</span>{index < 3 && <ChevronRight size={13} className="text-gray-400" aria-hidden="true" />}</li>)}
+                        </ol>
+                        <p className="mt-2 text-xs leading-5 text-gray-500">Flow Builder mein Appointment node add karein aur flow publish karein. Alag services ke flows ko alag naam dein, jaise Studio Rental aur Dance Class.</p>
+                    </div>
+                    <Link to="/flow-builder" className="inline-flex shrink-0 items-center justify-center gap-1 rounded-md border border-gray-300 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50">Open Flow Builder<ChevronRight size={14} /></Link>
+                </div>
+            </section>
 
             {/* Metrics Summary Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -287,7 +304,8 @@ export default function ScheduledMeetings() {
                         type="text"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        placeholder="Search by contact name or phone number..."
+                        aria-label="Search meetings"
+                        placeholder="Search name, phone or service..."
                         className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50/50"
                     />
                     {search && (
@@ -300,7 +318,11 @@ export default function ScheduledMeetings() {
                     )}
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 w-full xl:w-auto">
+                <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 sm:gap-4 w-full xl:w-auto">
+                    <div className="flex w-full items-center gap-2 sm:w-auto">
+                        <label htmlFor="meeting-service" className="w-16 shrink-0 text-xs font-semibold text-gray-600 sm:w-auto">Service:</label>
+                        <select id="meeting-service" value={serviceFilter} onChange={event => { setServiceFilter(event.target.value); setPage(1) }} className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 sm:max-w-48"><option value="all">All services</option>{services.map(service => <option key={service.id} value={service.id}>{service.name}</option>)}</select>
+                    </div>
                     {/* Date Filter */}
                     <div className="flex items-center gap-2 w-full sm:w-auto">
                         <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider w-16 sm:w-auto shrink-0">Date:</label>
@@ -382,19 +404,19 @@ export default function ScheduledMeetings() {
                             <video src="/images/scheduled meetings.webm" autoPlay loop muted playsInline className="h-[140px] object-contain drop-shadow-sm" />
                         </div>
                         <h3 className="text-base font-bold text-gray-900">
-                            {debouncedSearch ? 'No matching meetings found' : 'No scheduled meetings yet'}
+                            {(debouncedSearch || dateFilter || serviceFilter !== 'all' || statusFilter !== 'all') ? 'No matching meetings found' : 'No scheduled meetings yet'}
                         </h3>
                         <p className="text-xs text-gray-500 max-w-md mx-auto">
-                            {debouncedSearch
-                                ? `No booked appointments match "${debouncedSearch}". Try adjusting your search term.`
-                                : 'When customers book appointment slots via your WhatsApp automation flows, they will appear here in real-time.'}
+                            {(debouncedSearch || dateFilter || serviceFilter !== 'all' || statusFilter !== 'all')
+                                ? 'Try another service, date, status or search term.'
+                                : 'Bookings appear here after a customer completes the Appointment step in a published flow.'}
                         </p>
-                        {debouncedSearch && (
+                        {(debouncedSearch || dateFilter || serviceFilter !== 'all' || statusFilter !== 'all') && (
                             <button
-                                onClick={() => setSearch('')}
+                                onClick={() => { setSearch(''); setDateFilter(''); setStatusFilter('all'); setServiceFilter('all'); setPage(1) }}
                                 className="px-3.5 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100"
                             >
-                                Clear Search Filter
+                                Clear filters
                             </button>
                         )}
                     </div>
@@ -403,7 +425,7 @@ export default function ScheduledMeetings() {
                         <table className="w-full text-left border-collapse min-w-[650px]">
                             <thead>
                                 <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-bold uppercase tracking-wider text-gray-500">
-                                    <th className="py-3 px-6">Contact</th>
+                                    <th className="py-3 px-6">Contact / service</th>
                                     <th className="py-3 px-6">Date & Time</th>
                                     <th className="py-3 px-6">Status</th>
                                     <th className="py-3 px-6 text-right">Action</th>
@@ -443,6 +465,7 @@ export default function ScheduledMeetings() {
                                                             {item.contact_phone}
                                                         </p>
                                                     )}
+                                                    <p className="mt-1.5 inline-flex max-w-full items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-xs text-blue-700"><span className="font-medium">Service:</span> {item.flow_name || (item.flow_id ? 'Previous flow' : item.source === 'Google Calendar' ? 'Google Calendar' : 'Other booking')}</p>
                                                 </div>
                                             </div>
                                         </td>
