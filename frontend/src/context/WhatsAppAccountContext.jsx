@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, useMemo } 
 import { useAuth } from './AuthContext'
 import { supabase } from '../supabaseClient'
 import { API_BASE } from '../config/api'
+import { getNumberCapacity } from '../utils/numberCapacity'
 
 const WhatsAppAccountContext = createContext(null)
 
@@ -9,6 +10,20 @@ const SELECTED_WA_ACCOUNT_KEY = 'selected_wa_account_id'
 
 export function WhatsAppAccountProvider({ children }) {
     const { session, apiCall } = useAuth()
+    const [numberPlan, setNumberPlan] = useState(null)
+    const refreshNumberPlan = useCallback(async () => {
+        if (!session?.access_token) { setNumberPlan(null); return }
+        try {
+            const response = await apiCall(`${API_BASE}/billing/overview`)
+            if (response.ok) { const data = await response.json(); setNumberPlan(data.current_plan) }
+        } catch { /* Keep the last known plan during a temporary connection failure. */ }
+    }, [session?.access_token, apiCall])
+    useEffect(() => {
+        setNumberPlan(null)
+        refreshNumberPlan()
+        window.addEventListener('focus', refreshNumberPlan)
+        return () => window.removeEventListener('focus', refreshNumberPlan)
+    }, [refreshNumberPlan])
     const [accounts, setAccounts] = useState([])
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState(null)
@@ -176,13 +191,15 @@ export function WhatsAppAccountProvider({ children }) {
 
     const value = useMemo(() => ({
         accounts,
+        numberCapacity: getNumberCapacity(accounts, numberPlan),
+        refreshNumberPlan,
         selectedAccount,
         selectedAccountId,
         setSelectedAccount: handleSelectAccount,
         isLoading,
         error,
         refetchAccounts: fetchAccounts,
-    }), [accounts, selectedAccount, selectedAccountId, handleSelectAccount, isLoading, error, fetchAccounts])
+    }), [accounts, numberPlan, refreshNumberPlan, selectedAccount, selectedAccountId, handleSelectAccount, isLoading, error, fetchAccounts])
 
     return (
         <WhatsAppAccountContext.Provider value={value}>

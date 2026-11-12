@@ -14,6 +14,7 @@ import ReactFlow, {
     MiniMap,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
+import './flow-editor.css';
 import { Save, ArrowLeft, Play, Zap, Handshake, Square, Plus, MoreHorizontal, X, ChevronDown, Undo2, Redo2, Workflow } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
@@ -165,6 +166,8 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
     const [accountScope, setAccountScope] = useState(flow?.wa_account_scope || 'all');
     const [accountIds, setAccountIds] = useState(Array.isArray(flow?.wa_account_ids) ? flow.wa_account_ids : []);
     const [isTesterOpen, setIsTesterOpen] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [isPublishing, setIsPublishing] = useState(false);
 
     // Mobile-specific state
     const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
@@ -250,10 +253,10 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
         if (!reactFlowInstance) return;
 
         // Place at center of current viewport
-        const { x, y, zoom } = reactFlowInstance.getViewport();
         const canvasEl = reactFlowWrapper.current;
-        const centerX = canvasEl ? canvasEl.offsetWidth / 2 : 200;
-        const centerY = canvasEl ? canvasEl.offsetHeight / 2 : 200;
+        const bounds = canvasEl?.getBoundingClientRect();
+        const centerX = bounds ? bounds.left + bounds.width / 2 : 200;
+        const centerY = bounds ? bounds.top + bounds.height / 2 : 200;
 
         const position = reactFlowInstance.screenToFlowPosition({
             x: centerX,
@@ -261,7 +264,7 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
         });
 
         // Stagger so multiple additions don't stack exactly
-        const offset = nodes.length * 30;
+        const offset = (nodes.length % 5) * 24;
         const newNode = {
             id: getId(),
             type,
@@ -280,7 +283,10 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
 
         setNodes((nds) => nds.concat(newNode));
         setMobileNodesOpen(false);
-    }, [reactFlowInstance, nodes.length]);
+        setSelectedNodeId(newNode.id);
+        if (isMobile) setMobileConfigOpen(true);
+        else setConfigPanelOpen(true);
+    }, [reactFlowInstance, nodes.length, isMobile]);
 
     const handleDeleteNode = (nodeId) => {
         setNodes((nds) => nds.filter((n) => n.id !== nodeId));
@@ -330,7 +336,7 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
         );
     };
 
-    const onDragStart = (event, nodeType, nodeInfo) => {
+    const onDragStart = (event, nodeType) => {
         event.dataTransfer.setData('application/reactflow', nodeType);
         event.dataTransfer.effectAllowed = 'move';
     };
@@ -381,6 +387,8 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
     };
 
     const handleSave = async () => {
+        if (isSaving || isPublishing) return;
+        setIsSaving(true);
         try {
             await axios.put(`${API_URL}/api/flows/${flow.id}`, {
                 nodes,
@@ -395,10 +403,12 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
         } catch (error) {
             console.error('Error saving flow:', error);
             alertDialog('Failed to save flow.', { title: 'Save failed', tone: 'danger' });
-        }
+        } finally { setIsSaving(false); }
     };
 
     const handlePublish = async () => {
+        if (isSaving || isPublishing) return;
+        setIsPublishing(true);
         try {
             await axios.put(`${API_URL}/api/flows/${flow.id}`, {
                 nodes,
@@ -416,7 +426,7 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
         } catch (error) {
             const details = error?.response?.data?.validation?.errors || [error?.response?.data?.error || 'Failed to publish flow'];
             alertDialog(details.join('\n'), { title: 'Publish failed', tone: 'danger' });
-        }
+        } finally { setIsPublishing(false); }
     };
 
     const handleTest = async () => {
@@ -444,7 +454,7 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
     };
 
     return (
-        <div className="h-full flex flex-col bg-[#f5f7fa]">
+        <div className="flow-editor h-full flex flex-col bg-[#f5f7fa]">
 
             {/* ── MOBILE HEADER (< md) ── */}
             <div className="md:hidden bg-white border-b border-gray-200 px-3 py-2 flex items-center justify-between gap-2 shrink-0">
@@ -452,15 +462,15 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
                 <div className="flex items-center gap-2 min-w-0 flex-1">
                     <button
                         onClick={onClose}
-                        className="h-8 w-8 shrink-0 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors inline-flex items-center justify-center"
-                        title="Back"
+                        className="h-8 w-8 shrink-0 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors inline-flex items-center justify-center"
+                        aria-label="Back to flows" title="Back"
                     >
                         <ArrowLeft className="h-4 w-4" />
                     </button>
                     <div className="min-w-0 flex-1">
                         <h1 className="text-sm font-semibold text-black truncate leading-tight">{flow.name}</h1>
-                        <p className="text-[10px] text-gray-400 leading-none mt-0.5">
-                            {nodes.length} nodes · {edges.length} connections
+                        <p className="mt-0.5 truncate text-[10px] leading-none text-gray-500">
+                            {nodes.length} {nodes.length === 1 ? 'node' : 'nodes'} · {edges.length} {edges.length === 1 ? 'connection' : 'connections'}
                         </p>
                     </div>
                 </div>
@@ -469,37 +479,41 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
                 <div className="flex items-center gap-1.5 shrink-0">
                     <div className="flex items-center gap-0.5 border-r border-gray-200 pr-1.5 mr-0.5">
                         <button
+                            aria-label="Undo"
                             onClick={undo}
                             disabled={!canUndo}
-                            className="h-8 w-8 text-gray-600 disabled:text-gray-300 hover:text-gray-900 hover:bg-gray-100 rounded-full inline-flex items-center justify-center transition-colors"
+                            className="h-8 w-8 text-gray-600 disabled:text-gray-300 hover:text-gray-900 hover:bg-gray-100 rounded-md inline-flex items-center justify-center transition-colors"
                         >
                             <Undo2 className="h-4 w-4" />
                         </button>
                         <button
+                            aria-label="Redo"
                             onClick={redo}
                             disabled={!canRedo}
-                            className="h-8 w-8 text-gray-600 disabled:text-gray-300 hover:text-gray-900 hover:bg-gray-100 rounded-full inline-flex items-center justify-center transition-colors"
+                            className="h-8 w-8 text-gray-600 disabled:text-gray-300 hover:text-gray-900 hover:bg-gray-100 rounded-md inline-flex items-center justify-center transition-colors"
                         >
                             <Redo2 className="h-4 w-4" />
                         </button>
                         <button
+                            aria-label="Arrange flow layout"
                             onClick={autoLayout}
-                            className="h-8 w-8 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full inline-flex items-center justify-center transition-colors"
+                            className="h-8 w-8 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md inline-flex items-center justify-center transition-colors"
                         >
                             <Workflow className="h-4 w-4" />
                         </button>
                     </div>
                     <button
                         onClick={handlePublish}
-                        className="inline-flex h-8 items-center justify-center gap-1.5 rounded-full bg-black px-3.5 text-xs font-semibold text-white transition-colors hover:bg-[#181818]"
+                        disabled={isSaving || isPublishing || nodes.length === 0}
+                        className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[#0b74c9] px-3.5 text-xs font-semibold text-white transition-colors hover:bg-[#0867b4] disabled:opacity-50"
                     >
                         <Zap className="h-3.5 w-3.5" />
-                        Publish
+                        {isPublishing ? 'Publishing…' : 'Publish'}
                     </button>
                     <button
                         onClick={() => setMobileMoreOpen(true)}
-                        className="h-8 w-8 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full inline-flex items-center justify-center"
-                        title="More options"
+                        className="h-8 w-8 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md inline-flex items-center justify-center"
+                        aria-label="More editor options" title="More options"
                     >
                         <MoreHorizontal className="h-4.5 w-4.5" />
                     </button>
@@ -507,12 +521,12 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
             </div>
 
             {/* ── DESKTOP HEADER (md+) ── */}
-            <div className="hidden md:flex bg-white border-b border-gray-200 px-5 py-1 items-center justify-between min-w-0">
+            <div className="hidden min-h-16 min-w-0 items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3 md:flex">
                 <div className="flex flex-1 min-w-0 items-center gap-3 mr-4">
                     <button
                         onClick={onClose}
-                        className="shrink-0 h-8 w-8 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors inline-flex items-center justify-center"
-                        title="Back"
+                        className="shrink-0 h-8 w-8 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors inline-flex items-center justify-center"
+                        aria-label="Back to flows" title="Back"
                     >
                         <ArrowLeft className="h-4 w-4" />
                     </button>
@@ -521,7 +535,7 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
                         {flow.description && <p className="text-[11px] text-gray-500 mt-0.5 truncate">{flow.description}</p>}
                     </div>
                 </div>
-                    <div className="flex shrink-0 items-center gap-3">
+                    <div className="flex shrink-0 items-center gap-2">
                         <TourButton compact />
                         {waAccounts.length > 1 && (
                             <AccountTargetControl
@@ -532,7 +546,7 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
                                 onSelectedIdsChange={setAccountIds}
                             />
                         )}
-                    <div className="text-xs text-gray-600 px-3 py-1 bg-[#f5f7fa] rounded-full">
+                    <div className="hidden rounded-md bg-gray-50 px-3 py-1 text-xs text-gray-500 xl:block">
                         <span className="font-semibold">{nodes.length}</span> nodes · <span className="font-semibold">{edges.length}</span> connections
                     </div>
                     
@@ -540,23 +554,23 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
                         <button
                             onClick={undo}
                             disabled={!canUndo}
-                            className="h-8 w-8 text-gray-600 disabled:text-gray-300 hover:text-gray-900 hover:bg-gray-100 rounded-full inline-flex items-center justify-center transition-colors"
-                            title="Undo"
+                            className="h-8 w-8 text-gray-600 disabled:text-gray-300 hover:text-gray-900 hover:bg-gray-100 rounded-md inline-flex items-center justify-center transition-colors"
+                            aria-label="Undo" title="Undo"
                         >
                             <Undo2 className="h-4 w-4" />
                         </button>
                         <button
                             onClick={redo}
                             disabled={!canRedo}
-                            className="h-8 w-8 text-gray-600 disabled:text-gray-300 hover:text-gray-900 hover:bg-gray-100 rounded-full inline-flex items-center justify-center transition-colors"
-                            title="Redo"
+                            className="h-8 w-8 text-gray-600 disabled:text-gray-300 hover:text-gray-900 hover:bg-gray-100 rounded-md inline-flex items-center justify-center transition-colors"
+                            aria-label="Redo" title="Redo"
                         >
                             <Redo2 className="h-4 w-4" />
                         </button>
                         <button
                             onClick={autoLayout}
-                            className="h-8 w-8 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full inline-flex items-center justify-center transition-colors"
-                            title="Format Flow Layout"
+                            className="h-8 w-8 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md inline-flex items-center justify-center transition-colors"
+                            aria-label="Arrange flow layout" title="Format Flow Layout"
                         >
                             <Workflow className="h-4 w-4" />
                         </button>
@@ -564,24 +578,27 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
 
                     <button
                         onClick={handleTest}
-                        className="fp-button-secondary !h-8 !px-4 !text-xs whitespace-nowrap"
+                        disabled={nodes.length === 0 || isSaving || isPublishing}
+                        className="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-gray-300 bg-white px-3 text-xs font-medium text-gray-700 hover:bg-gray-50"
                     >
                         <Play className="h-4 w-4" />
                         Test Flow
                     </button>
                     <button
                         onClick={handleSave}
-                        className="inline-flex h-8 items-center justify-center gap-2 rounded-full bg-[#25D366] px-4 text-xs font-semibold text-white transition-colors hover:bg-[#1fb85a] disabled:opacity-50 whitespace-nowrap"
+                        disabled={isSaving || isPublishing}
+                        className="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-gray-300 bg-white px-4 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
                     >
                         <Save className="h-4 w-4" />
-                        Save Flow
+                        {isSaving ? 'Saving…' : 'Save draft'}
                     </button>
                     <button
                         onClick={handlePublish}
-                        className="fp-button-primary bg-black hover:bg-[#181818] !h-8 !px-4 !text-xs"
+                        disabled={isSaving || isPublishing || nodes.length === 0}
+                        className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-[#0b74c9] px-4 text-xs font-semibold text-white hover:bg-[#0867b4] disabled:opacity-50"
                     >
                         <Zap className="h-4 w-4" />
-                        Publish
+                        {isPublishing ? 'Publishing…' : 'Publish'}
                     </button>
                 </div>
             </div>
@@ -646,10 +663,10 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
                         <Controls className="flow-controls bg-white border border-gray-200 rounded-lg" />
                         <Background variant="dots" gap={18} size={1.2} color="#cbd5e1" />
                         
-                        <MiniMap 
+                        {nodes.length > 0 && !isMobile && <MiniMap
                             className="bg-white border border-gray-200 rounded-lg shadow-sm"
                             nodeColor={(n) => {
-                                if (n.type === 'startBotFlow') return '#25D366';
+                                if (n.type === 'startBotFlow') return '#0b74c9';
                                 if (n.type === 'end') return '#0d9488';
                                 if (n.type === 'userInput' || n.type === 'button' || n.type === 'interactive' || n.type === 'whatsappFlow') return '#3b82f6';
                                 if (n.type === 'condition' || n.type === 'logic') return '#f97316';
@@ -659,27 +676,16 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
                             position="bottom-right"
                             pannable={true}
                             zoomable={true}
-                        />
+                        />}
 
-                        {/* Empty State */}
                         {nodes.length === 0 && (
-                            <Panel position="top-center" className="mt-16 md:mt-20">
-                                <div className="bg-white rounded-xl border border-gray-200 p-5 md:p-8 max-w-xs md:max-w-md text-center mx-3">
-                                    <div className="w-10 h-10 md:w-14 md:h-14 bg-[#25D366] rounded-full flex items-center justify-center mx-auto mb-3 md:mb-4">
-                                        <Zap className="h-5 w-5 md:h-8 md:w-8 text-white" />
-                                    </div>
-                                    <h3 className="text-sm md:text-lg font-bold text-gray-900 mb-1.5 md:mb-2">
-                                        Start Building Your Flow
-                                    </h3>
-                                    <p className="text-xs md:text-sm text-gray-600 mb-3 md:mb-4">
-                                        <span className="md:hidden">Tap <strong>+ Add Node</strong> below to build your WhatsApp automation</span>
-                                        <span className="hidden md:inline">Drag nodes from the sidebar to create your WhatsApp automation workflow</span>
-                                    </p>
-                                    <div className="flex gap-2 justify-center text-xs text-gray-500 flex-wrap">
-                                        <span className="bg-blue-50 px-2.5 py-1 rounded-full">📱 Messages</span>
-                                        <span className="bg-purple-50 px-2.5 py-1 rounded-full">🤖 AI</span>
-                                        <span className="bg-green-50 px-2.5 py-1 rounded-full">🔗 Integrations</span>
-                                    </div>
+                            <Panel position="top-center" className="!top-1/2 !m-0 !-translate-x-1/2 !-translate-y-1/2">
+                                <div className="mx-4 w-[min(340px,calc(100vw-3rem))] rounded-xl border border-gray-200 bg-white p-6 text-center">
+                                    <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-700"><Workflow size={20} /></div>
+                                    <h2 className="text-base font-semibold text-gray-900">Build your first step</h2>
+                                    <p className="mt-2 text-xs leading-5 text-gray-500">Start with a keyword trigger, add your replies, then connect each step.</p>
+                                    <button type="button" onClick={() => handleMobileTapNode('startBotFlow')} className="mt-5 inline-flex h-9 items-center justify-center gap-2 rounded-md bg-[#0b74c9] px-4 text-xs font-semibold text-white hover:bg-[#0867b4]"><Plus size={15} />Add keyword trigger</button>
+                                    <p className="mt-3 hidden text-xs text-gray-500 md:block">Or click or drag a block from the sidebar.</p>
                                 </div>
                             </Panel>
                         )}
@@ -687,8 +693,9 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
 
                     {/* Desktop Configuration Panel */}
                     {!isMobile && configPanelOpen && selectedNode && (
-                        <NodeConfigPanel
+                        <NodeConfigPanel key={selectedNode.id}
                             node={selectedNode}
+                            flowContext={{ id: flow.id, wa_account_scope: accountScope, wa_account_ids: accountIds }}
                             nodes={nodes}
                             onClose={() => setConfigPanelOpen(false)}
                             onSave={handleSaveConfig}
@@ -707,7 +714,7 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
                     <div className="md:hidden absolute bottom-5 left-1/2 -translate-x-1/2 z-30">
                         <button
                             onClick={() => setMobileNodesOpen(true)}
-                            className="inline-flex items-center gap-2 h-11 px-5 rounded-full bg-[#25D366] text-white text-sm font-bold shadow-lg shadow-green-500/30 active:scale-95 transition-transform"
+                            className="inline-flex items-center gap-2 h-11 px-5 rounded-md bg-[#0b74c9] text-white text-sm font-bold shadow-md active:scale-95 transition-transform"
                         >
                             <Plus className="h-4.5 w-4.5" />
                             Add Node
@@ -733,7 +740,7 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
                     >
                         {/* Drag handle */}
                         <div className="flex justify-center pt-3 pb-1">
-                            <div className="h-1 w-10 rounded-full bg-gray-300" />
+                            <div className="h-1 w-10 rounded-md bg-gray-300" />
                         </div>
                         <div className="flex items-center justify-between px-4 pt-2 pb-3 border-b border-gray-100">
                             <div>
@@ -741,8 +748,9 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
                                 <p className="text-[11px] text-gray-400 mt-0.5">{nodes.length} nodes · {edges.length} connections</p>
                             </div>
                             <button
+                                aria-label="Close editor options"
                                 onClick={() => setMobileMoreOpen(false)}
-                                className="h-8 w-8 rounded-full bg-gray-100 inline-flex items-center justify-center text-gray-500"
+                                className="h-8 w-8 rounded-md bg-gray-100 inline-flex items-center justify-center text-gray-500"
                             >
                                 <X className="h-4 w-4" />
                             </button>
@@ -754,8 +762,8 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
                                 onClick={async () => { setMobileMoreOpen(false); await handleSave(); }}
                                 className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-800 hover:bg-gray-50 active:bg-gray-100 transition-colors"
                             >
-                                <Save className="h-4.5 w-4.5 text-[#25D366]" />
-                                Save Flow
+                                <Save className="h-4.5 w-4.5 text-blue-700" />
+                                {isSaving ? 'Saving…' : 'Save draft'}
                             </button>
                             <button
                                 onClick={async () => { setMobileMoreOpen(false); await handleTest(); }}
@@ -799,15 +807,16 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
                     >
                         {/* Drag handle */}
                         <div className="flex justify-center pt-3 pb-1">
-                            <div className="h-1 w-10 rounded-full bg-gray-300" />
+                            <div className="h-1 w-10 rounded-md bg-gray-300" />
                         </div>
 
                         {/* Sheet header */}
                         <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100">
                             <h3 className="text-sm font-bold text-gray-900">Add Node</h3>
                             <button
+                                aria-label="Close block picker"
                                 onClick={() => setMobileNodesOpen(false)}
-                                className="h-8 w-8 rounded-full bg-gray-100 inline-flex items-center justify-center text-gray-500"
+                                className="h-8 w-8 rounded-md bg-gray-100 inline-flex items-center justify-center text-gray-500"
                             >
                                 <X className="h-4 w-4" />
                             </button>
@@ -828,24 +837,11 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
             {/* ── Node Config Bottom Sheet (mobile) ── */}
             {mobileConfigOpen && selectedNode && (
                 <div className="md:hidden fixed inset-0 z-50 flex flex-col bg-white animate-slide-up">
-                    {/* Sheet top bar */}
-                    <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 bg-white shrink-0">
-                        <button
-                            onClick={() => { setMobileConfigOpen(false); setSelectedNodeId(null); }}
-                            className="h-8 w-8 rounded-full bg-gray-100 inline-flex items-center justify-center text-gray-600"
-                        >
-                            <ArrowLeft className="h-4 w-4" />
-                        </button>
-                        <div className="flex-1 min-w-0">
-                            <h2 className="text-sm font-bold text-gray-900 truncate">Configure Node</h2>
-                            <p className="text-[10px] text-gray-400 truncate">{selectedNode.type}</p>
-                        </div>
-                    </div>
-
                     {/* Config panel content – rendered relative so backdrop/panel fills correctly */}
                     <div className="flex-1 overflow-hidden relative">
-                        <NodeConfigPanel
+                        <NodeConfigPanel key={selectedNode.id}
                             node={selectedNode}
+                            flowContext={{ id: flow.id, wa_account_scope: accountScope, wa_account_ids: accountIds }}
                             nodes={nodes}
                             onClose={() => { setMobileConfigOpen(false); setSelectedNodeId(null); }}
                             onSave={(nodeId, config) => { handleSaveConfig(nodeId, config); setMobileConfigOpen(false); setSelectedNodeId(null); }}
@@ -890,11 +886,11 @@ function AccountTargetControl({ accounts, scope, selectedIds, onScopeChange, onS
     };
 
     return (
-        <div className="flex items-center gap-1 rounded-full border border-gray-200 bg-white px-1 py-0.5">
+        <div className="flex items-center gap-1 rounded-md border border-gray-200 bg-white px-1 py-0.5">
             <div className="relative" ref={dropdownRef}>
                 <button
                     onClick={() => setIsOpen(!isOpen)}
-                    className="flex h-7 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-100 focus:outline-none whitespace-nowrap"
+                    className="flex h-7 items-center gap-1.5 rounded-md px-3 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-100 focus:outline-none whitespace-nowrap"
                     title="Choose where this flow can run"
                 >
                     {scope === 'all' ? 'Runs on all numbers' : 'Runs on selected numbers'}
@@ -934,11 +930,11 @@ function AccountTargetControl({ accounts, scope, selectedIds, onScopeChange, onS
             {scope === 'selected' && (
                 <div className="flex max-w-[320px] items-center gap-1 overflow-x-auto border-l border-gray-200 pl-1.5 ml-0.5">
                     {accounts.length === 0 ? (
-                        <span className="whitespace-nowrap rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">No accounts</span>
+                        <span className="whitespace-nowrap rounded-md bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">No accounts</span>
                     ) : accounts.map((account) => (
                         <label
                             key={account.id}
-                            className={`flex shrink-0 cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold transition-colors ${selectedSet.has(account.id) ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-200' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
+                            className={`flex shrink-0 cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold transition-colors ${selectedSet.has(account.id) ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-200' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
                                 }`}
                         >
                             <input
@@ -989,7 +985,7 @@ function MobileAccountTargetControl({ accounts, scope, selectedIds, onScopeChang
                     {accounts.map((account) => (
                         <label
                             key={account.id}
-                            className={`flex cursor-pointer items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold border transition-colors ${selectedSet.has(account.id) ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white text-gray-500 border-gray-200'}`}
+                            className={`flex cursor-pointer items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold border transition-colors ${selectedSet.has(account.id) ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white text-gray-500 border-gray-200'}`}
                         >
                             <input
                                 type="checkbox"

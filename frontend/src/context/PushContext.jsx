@@ -27,17 +27,35 @@ const getNotificationPermission = () => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
         return window.Notification.permission;
     }
-    return 'default';
+    return 'unsupported';
 };
 
 export const PushProvider = ({ children }) => {
-    const [permissionStatus, setPermissionStatus] = useState(() => {
-        if (typeof window !== 'undefined' && 'Notification' in window) {
-            return Notification.permission;
-        }
-        return 'default';
-    });
+    const [permissionStatus, setPermissionStatus] = useState(getNotificationPermission);
     const [isSubscribed, setIsSubscribed] = useState(false);
+
+    // Permission may also change in Settings or browser site controls.
+    useEffect(() => {
+        let active = true;
+        let permission;
+        const syncPermission = () => setPermissionStatus(getNotificationPermission());
+        window.addEventListener('focus', syncPermission);
+        document.addEventListener('visibilitychange', syncPermission);
+        window.addEventListener('gap:notification-permission-changed', syncPermission);
+        window.navigator.permissions?.query({ name: 'notifications' }).then(status => {
+            if (!active) return;
+            permission = status;
+            status.addEventListener('change', syncPermission);
+            syncPermission();
+        }).catch(() => { /* Focus and app events cover browsers without this permission query. */ });
+        return () => {
+            active = false;
+            window.removeEventListener('focus', syncPermission);
+            document.removeEventListener('visibilitychange', syncPermission);
+            window.removeEventListener('gap:notification-permission-changed', syncPermission);
+            permission?.removeEventListener('change', syncPermission);
+        };
+    }, []);
 
     // Ensure we only run this once we have an active session
     useEffect(() => {

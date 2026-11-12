@@ -101,12 +101,22 @@ export async function getAppointments(req: Request, res: Response) {
     // 2. Query w_flow_sessions as active sessions source
     const { data: flowSessions } = await supabase
       .from("w_flow_sessions")
-      .select("id, organization_id, contact_id, state_data, created_at, updated_at")
+      .select("id, organization_id, contact_id, flow_id, state_data, created_at, updated_at")
       .eq("organization_id", organizationId);
+
+    const flowIds = [...new Set((flowSessions || []).map((session: any) => session.flow_id || session.state_data?.appointment_flow_id).filter(Boolean))];
+    const flowNames = new Map<string, string>();
+    for (let offset = 0; offset < flowIds.length; offset += 100) {
+      const { data: flows, error: flowError } = await supabase.from("w_flows").select("id, name").eq("organization_id", organizationId).in("id", flowIds.slice(offset, offset + 100));
+      if (flowError) throw flowError;
+      for (const flow of flows || []) flowNames.set(flow.id, flow.name);
+    }
 
     if (flowSessions && flowSessions.length > 0) {
       for (const session of flowSessions) {
         const state = session.state_data || {};
+        const flowId = session.flow_id || state.appointment_flow_id || null;
+        const flowName = flowNames.get(flowId) || state.appointment_flow_name || null;
 
         // Skip explicitly cancelled or cleared appointment sessions
         if (state.appointment_status === "cancelled" || !state.appointment_date) {
@@ -130,6 +140,8 @@ export async function getAppointments(req: Request, res: Response) {
             const existing = appointmentsMap.get(existingKey);
             existing.contact_id = session.contact_id || existing.contact_id;
             existing.flow_session_id = session.id;
+            existing.flow_id = flowId;
+            existing.flow_name = flowName;
             existing.status = state.appointment_status || existing.status || "confirmed";
             // Always keep google_event_id from gcal entry (already set), also add session_id for deletion routing
             existing.session_id = session.id;
@@ -142,6 +154,8 @@ export async function getAppointments(req: Request, res: Response) {
               google_event_id: gId || null,
               session_id: session.id,
               source: "w_flow_sessions",
+              flow_id: flowId,
+              flow_name: flowName,
               contact_id: session.contact_id,
               conversation_id: null,
               flow_session_id: session.id,
@@ -262,6 +276,15 @@ export async function getAppointments(req: Request, res: Response) {
       return true;
     });
 
+    const services = [...new Map(allAppointments.map((appointment: any) => [appointment.flow_id || "__other__", {
+      id: appointment.flow_id || "__other__",
+      name: appointment.flow_name || (appointment.flow_id ? "Previous flow" : "Other sources"),
+    }])).values()].sort((a: any, b: any) => a.name.localeCompare(b.name));
+    const serviceFilter = String(req.query.flow_id || "").trim();
+    if (serviceFilter && serviceFilter !== "all") {
+      allAppointments = allAppointments.filter((appointment: any) => (appointment.flow_id || "__other__") === serviceFilter);
+    }
+
     // 4. Calculate Live Summary Metrics dynamically from valid active appointments
     const getLocalDateStr = () => {
       const d = new Date();
@@ -323,7 +346,8 @@ export async function getAppointments(req: Request, res: Response) {
         const name = String(a.contact_name || "").toLowerCase();
         const phone = String(a.contact_phone || "").toLowerCase();
         const date = String(a.appointment_date || "").toLowerCase();
-        return name.includes(search) || phone.includes(search) || date.includes(search);
+        const service = String(a.flow_name || "").toLowerCase();
+        return name.includes(search) || phone.includes(search) || date.includes(search) || service.includes(search);
       });
     }
 
@@ -336,6 +360,7 @@ export async function getAppointments(req: Request, res: Response) {
     return res.json({
       success: true,
       data: paginatedAppointments,
+      services,
       summary: {
         totalBookings,
         todayCount,
