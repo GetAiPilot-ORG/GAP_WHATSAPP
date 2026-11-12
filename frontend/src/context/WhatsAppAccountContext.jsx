@@ -64,8 +64,35 @@ export function WhatsAppAccountProvider({ children }) {
                             setAccounts(prev => prev.filter(acc => String(acc.id) !== String(updatedRow.id)))
                             return
                         }
+                        const isMetaRow = Boolean(
+                            updatedRow.whatsapp_business_account_id ||
+                            updatedRow.access_token_encrypted ||
+                            updatedRow.has_access_token
+                        )
+                        const connUpper = String(updatedRow.connection_status || updatedRow.status || 'CONNECTED').toUpperCase()
+                        const reconnectingRow = !isMetaRow && (connUpper === 'CHECKING' || connUpper === 'CONNECTING' || updatedRow.status === 'connecting')
+                        const sendReadyRow = isMetaRow
+                            ? Boolean(
+                                updatedRow.phone_number_id &&
+                                updatedRow.whatsapp_business_account_id &&
+                                (updatedRow.access_token_encrypted || updatedRow.has_access_token) &&
+                                updatedRow.status !== 'disconnected'
+                              )
+                            : (updatedRow.status === 'connected' || updatedRow.status === 'active') &&
+                              !['DISCONNECTED', 'WARNING', 'FAILED', 'TOKEN_INVALID'].includes(connUpper)
+
                         setAccounts(prev => {
                             const index = prev.findIndex(acc => String(acc.id) === String(updatedRow.id))
+                            const normalizedHealth = {
+                                connection: isMetaRow ? connUpper : (sendReadyRow ? 'CONNECTED' : (reconnectingRow ? 'CHECKING' : 'DISCONNECTED')),
+                                messaging: sendReadyRow ? 'SEND_READY' : 'PAUSED',
+                                token: isMetaRow ? (updatedRow.token_status || 'VALID') : 'MISSING',
+                                verification: updatedRow.business_verification_status || 'VERIFIED',
+                                quality: updatedRow.quality_rating || 'GREEN',
+                                has_access_token: Boolean(updatedRow.access_token_encrypted || updatedRow.has_access_token),
+                                health_version: Number(updatedRow.health_version || 1),
+                                last_updated: updatedRow.last_health_check_at || updatedRow.updated_at || new Date().toISOString(),
+                            }
                             if (index >= 0) {
                                 const current = prev[index]
                                 const currentVer = Number(current.health_version || current.health?.health_version || 1)
@@ -79,20 +106,21 @@ export function WhatsAppAccountProvider({ children }) {
                                     ...current,
                                     ...updatedRow,
                                     has_access_token: Boolean(updatedRow.access_token_encrypted || updatedRow.has_access_token),
-                                    health: {
-                                        connection: String(updatedRow.connection_status || updatedRow.status || 'CONNECTED').toUpperCase(),
-                                        messaging: updatedRow.status === 'connected' ? 'SEND_READY' : 'PAUSED',
-                                        token: updatedRow.token_status || 'VALID',
-                                        verification: updatedRow.business_verification_status || 'VERIFIED',
-                                        quality: updatedRow.quality_rating || 'GREEN',
-                                        has_access_token: Boolean(updatedRow.access_token_encrypted || updatedRow.has_access_token),
-                                        health_version: newVer,
-                                        last_updated: updatedRow.last_health_check_at || updatedRow.updated_at || new Date().toISOString(),
-                                    }
+                                    connection_type: isMetaRow ? 'meta_cloud_api' : 'qr_session',
+                                    send_ready: sendReadyRow,
+                                    reconnecting: reconnectingRow,
+                                    health: normalizedHealth,
                                 }
                                 return next
                             } else {
-                                return [updatedRow, ...prev]
+                                return [{
+                                    ...updatedRow,
+                                    has_access_token: Boolean(updatedRow.access_token_encrypted || updatedRow.has_access_token),
+                                    connection_type: isMetaRow ? 'meta_cloud_api' : 'qr_session',
+                                    send_ready: sendReadyRow,
+                                    reconnecting: reconnectingRow,
+                                    health: normalizedHealth,
+                                }, ...prev]
                             }
                         })
                     } else if (payload.eventType === 'DELETE') {

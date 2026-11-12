@@ -1,6 +1,6 @@
 import fs from 'fs';
 import { supabase } from '../config/supabase.js';
-import { isUuid } from '../utils/format.js';
+import { isNonIndividualThreadContact, isUuid } from '../utils/format.js';
 import { getBotAgentReply } from './ai.service.js';
 import { encryptFormToken } from '../utils/crypto.js';
 import { fetchGoogleBusySlots, createGoogleCalendarEvent, deleteGoogleCalendarEvent, getValidAccessToken } from './googleCalendar.service.js';
@@ -627,14 +627,34 @@ export async function processFlowEngine(
   triggerMessageId?: string | null,
   incomingWaAccountId?: string | null,
 ): Promise<FlowEngineResult> {
+  // Agent link choices are navigation actions, not Flow Builder answers.
+  if (text.startsWith('agent_open:')) return { consumed: false };
   const normalized = text.toLowerCase().trim();
 
-  // Load conversation to get assigned_bot_id
+  // Load conversation to get assigned_bot_id and guard against groups/channels
   const { data: convData } = await supabase
     .from("w_conversations")
-    .select("assigned_bot_id")
+    .select("assigned_bot_id, contact_id, contact:w_contacts(contact_type, wa_id)")
     .eq("id", conversation_id)
     .maybeSingle();
+
+  let contactRow = Array.isArray((convData as any)?.contact)
+    ? (convData as any).contact[0]
+    : (convData as any)?.contact;
+
+  if (!contactRow && contact_id) {
+    const { data: fetchedContact } = await supabase
+      .from("w_contacts")
+      .select("contact_type, wa_id")
+      .eq("id", contact_id)
+      .maybeSingle();
+    contactRow = fetchedContact || null;
+  }
+
+  if (isNonIndividualThreadContact(contactRow)) {
+    return { consumed: false, output: null };
+  }
+
   const assigned_bot_id = convData?.assigned_bot_id || null;
 
 

@@ -1,8 +1,22 @@
 import * as fs from 'fs';
+import * as path from 'path';
 import { supabase } from '../config/supabase.js';
 import { io } from '../socket.js';
 import { storeMessage, upsertConversation } from './messages.service.js';
-import { sessions, latestQrBySession, groupNameCache, profilePhotoCache, reconnectAttempts, MAX_RECONNECT_ATTEMPTS, initializingSessions, logger, GROUP_NAME_TTL_MS } from './whatsapp.service.js';
+import {
+    sessions,
+    latestQrBySession,
+    groupNameCache,
+    profilePhotoCache,
+    reconnectAttempts,
+    sessionPhoneMap,
+    MAX_RECONNECT_ATTEMPTS,
+    initializingSessions,
+    logger,
+    GROUP_NAME_TTL_MS,
+    classifyBaileysDisconnect,
+    markBaileysRuntimeStarted,
+} from './whatsapp.service.js';
 import { processFlowEngine } from './flows.service.js';
 import { applyReactionUpdate } from './messages.sender.js';
 import { uploadMediaToStorage } from './broadcast.service.js';
@@ -15,8 +29,15 @@ import makeWASocket, {
     Browsers,
     proto,
 } from "@whiskeysockets/baileys";
-import { upsertContact, sanitizeContactDisplayName, normalizeContactWaIdForStorage, pickBestBaileysContactName } from './contacts.service.js';
+import { upsertContact, findContactByLidInDb, isLidWaId, sanitizeContactDisplayName } from './contacts.service.js';
+import {
+    BaileysContactDirectory,
+    extractBaileysContactSignals,
+    resolveLidsForPhoneWaIds,
+    syncMissingLidsForOrg,
+} from './baileysContactSync.service.js';
 import { getBotAgentReply } from './ai.service.js';
+import { shouldRunBaileysBotAutomation } from '../utils/format.js';
 import { performAutoAssignment } from './assignment.service.js';
 import { sendPushNotificationToOrg } from './push.service.js';
 import { transcribeAudioBuffer } from './voice.service.js';
@@ -40,13 +61,28 @@ async function upsertBaileysWaAccount(orgId: string | null | undefined, phone: s
     const cleanPhone = String(phone || '').replace(/\D+/g, '');
     if (!supabase || !orgId || !cleanPhone) return null;
 
-    const { data, error } = await supabase.from('w_wa_accounts').upsert({
+    const now = new Date().toISOString();
+    let { data, error } = await supabase.from('w_wa_accounts').upsert({
         organization_id: orgId,
         phone_number_id: cleanPhone,
         display_phone_number: cleanPhone,
         name: 'WhatsApp Account',
         status: 'connected',
+        connection_status: 'CONNECTED',
+        has_access_token: false,
+        last_sync_status: 'SUCCESS',
+        last_health_check_at: now,
     }, { onConflict: 'phone_number_id' }).select('id').single();
+
+    if (error && (error.message?.includes('column') || error.message?.includes('does not exist'))) {
+        ({ data, error } = await supabase.from('w_wa_accounts').upsert({
+            organization_id: orgId,
+            phone_number_id: cleanPhone,
+            display_phone_number: cleanPhone,
+            name: 'WhatsApp Account',
+            status: 'connected',
+        }, { onConflict: 'phone_number_id' }).select('id').single());
+    }
 
     if (error) {
         console.error("Failed to upsert Baileys wa_account:", error);
@@ -54,6 +90,38 @@ async function upsertBaileysWaAccount(orgId: string | null | undefined, phone: s
     }
 
     return data?.id || null;
+}
+
+async function markBaileysAccountStatus(
+    orgId: string | null | undefined,
+    phone: string | null | undefined,
+    status: 'pending' | 'disconnected',
+    connectionStatus: 'DISCONNECTED' | 'WARNING' = 'DISCONNECTED',
+) {
+    const cleanPhone = String(phone || '').replace(/\D+/g, '');
+    if (!supabase || !cleanPhone) return;
+
+    const now = new Date().toISOString();
+    const baseQuery = () => {
+        let q = supabase
+            .from('w_wa_accounts')
+            .update({
+                status,
+                connection_status: connectionStatus,
+                last_sync_status: 'FAILED',
+                last_health_check_at: now,
+            })
+            .eq('phone_number_id', cleanPhone);
+        if (orgId) q = q.eq('organization_id', orgId);
+        return q;
+    };
+
+    const { error } = await baseQuery();
+    if (error && (error.message?.includes('column') || error.message?.includes('does not exist'))) {
+        let fallback = supabase.from('w_wa_accounts').update({ status }).eq('phone_number_id', cleanPhone);
+        if (orgId) fallback = fallback.eq('organization_id', orgId);
+        await fallback;
+    }
 }
 
 async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: string | null = null) {
@@ -121,6 +189,10 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
         }
 
         const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
+        const initialCredPhone = String(state?.creds?.me?.id || '').split(':')[0].split('@')[0].replace(/\D+/g, '');
+        if (initialCredPhone) {
+            sessionPhoneMap.set(sessionId, initialCredPhone);
+        }
         const { version, isLatest } = await fetchLatestBaileysVersion();
         console.log(`using WA v${version.join(".")}, isLatest: ${isLatest}`);
 
@@ -139,6 +211,8 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
             },
             // CRITICAL: Proper browser identification for multi-device
             browser: Browsers.ubuntu('Chrome'),
+            // Keep WebSocket alive across idle NAT/proxy intervals
+            keepAliveIntervalMs: 30000,
             // Enable history sync
             syncFullHistory: true,
             // Needed to receive events for messages sent by this logged-in account
@@ -186,43 +260,98 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
             const orgId = organization_id!;
 
             const myJid = sock.user?.id || "";
-            const myPhone = myJid.split(':')[0];
+            const myPhone = myJid.split(':')[0].split('@')[0];
             if (!myPhone) return { orgId, waAccountId: null as any };
 
             const { data: acc } = await supabase
                 .from('w_wa_accounts')
-                .select('id')
+                .select('id, status, connection_status')
                 .eq('organization_id', orgId)
                 .eq('phone_number_id', myPhone)
                 .maybeSingle();
 
             let waAccountId = acc?.id || null;
-            if (!waAccountId) {
-                waAccountId = await upsertBaileysWaAccount(orgId, myPhone);
+            if (!waAccountId || acc?.status !== 'connected' || acc?.connection_status !== 'CONNECTED') {
+                waAccountId = (await upsertBaileysWaAccount(orgId, myPhone)) || waAccountId;
             }
 
             cachedWaAccountId = waAccountId;
             return { orgId, waAccountId };
         };
 
-        // Persist contact names when Baileys provides them (notify/name/verifiedName).
-        // This is the only reliable way to show names in the UI for Baileys sessions.
-        const upsertBaileysContacts = async (contacts: any[]) => {
+        // Persist contact names & LID mappings when Baileys provides them.
+        // Keeping a per-session directory ensures @lid outbound/inbound messages resolve immediately.
+        const contactDirectory = new BaileysContactDirectory();
+        const pendingPhoneLidLookups = new Set<string>();
+        let phoneLidLookupTimer: NodeJS.Timeout | null = null;
+
+        const schedulePhoneLidLookups = () => {
+            if (phoneLidLookupTimer) clearTimeout(phoneLidLookupTimer);
+            phoneLidLookupTimer = setTimeout(async () => {
+                phoneLidLookupTimer = null;
+                if (!sock?.user?.id || pendingPhoneLidLookups.size === 0) return;
+                const batch = Array.from(pendingPhoneLidLookups);
+                pendingPhoneLidLookups.clear();
+                try {
+                    const { orgId, waAccountId } = await resolveOrgAndAccount();
+                    if (!orgId) return;
+                    await resolveLidsForPhoneWaIds({
+                        sock,
+                        orgId,
+                        waAccountId,
+                        phoneWaIds: batch,
+                        directory: contactDirectory,
+                    });
+                } catch (err: any) {
+                    console.warn('[Baileys LID lookup] failed:', err?.message || err);
+                }
+            }, 500);
+        };
+
+        const upsertBaileysContacts = async (
+            items: any[],
+            opts: { source: 'contact' | 'chat'; skipProfilePhoto?: boolean } = { source: 'contact' },
+        ) => {
             try {
-                if (!Array.isArray(contacts) || contacts.length === 0) return;
+                if (!Array.isArray(items) || items.length === 0) return;
 
                 const { orgId, waAccountId } = await resolveOrgAndAccount();
                 if (!orgId || !waAccountId) return;
 
-                for (const c of contacts) {
-                    const jid = c?.id || c?.jid || c?.key || null;
-                    const waId = normalizeContactWaIdForStorage(jid);
-                    if (!waId) continue;
+                const skipPhoto = opts.skipProfilePhoto ?? items.length > 5;
 
-                    const name = pickBestBaileysContactName(c, waId);
-                    if (!name) continue;
+                for (const raw of items) {
+                    const sig = extractBaileysContactSignals(raw, { source: opts.source });
+                    if (!sig) continue;
 
-                    await upsertContact(orgId, waAccountId, waId, name);
+                    contactDirectory.record({
+                        waId: sig.phoneWaId || sig.targetWaId,
+                        lid: sig.lid,
+                        name: sig.name,
+                        preferIncomingName: sig.preferIncomingName,
+                    });
+
+                    if (
+                        opts.source === 'contact' &&
+                        sig.phoneWaId &&
+                        !sig.lid &&
+                        !contactDirectory.lookupLid(sig.phoneWaId)
+                    ) {
+                        pendingPhoneLidLookups.add(sig.phoneWaId);
+                    }
+
+                    // Skip writing placeholder rows unless we have a display name or a phone<->lid link.
+                    if (!sig.name && !(sig.phoneWaId && sig.lid)) continue;
+
+                    await upsertContact(orgId, waAccountId, sig.targetWaId, sig.name, {
+                        lid: sig.lid,
+                        preferIncomingName: sig.preferIncomingName,
+                        skipProfilePhoto: skipPhoto,
+                    });
+                }
+
+                if (pendingPhoneLidLookups.size > 0) {
+                    schedulePhoneLidLookups();
                 }
             } catch (err: any) {
                 console.warn('âš ï¸ contacts sync failed:', err?.message || err);
@@ -230,13 +359,57 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
         };
 
         sock.ev.on('contacts.upsert', async (contacts: any[]) => {
-            // Runs on initial sync and when new contacts are discovered.
-            upsertBaileysContacts(contacts);
+            await upsertBaileysContacts(contacts, { source: 'contact', skipProfilePhoto: true });
         });
 
         sock.ev.on('contacts.update', async (updates: any[]) => {
-            // Runs when notify/name changes.
-            upsertBaileysContacts(updates);
+            await upsertBaileysContacts(updates, { source: 'contact', skipProfilePhoto: true });
+        });
+
+        sock.ev.on('messaging-history.set', async ({ chats, contacts }: any) => {
+            if (Array.isArray(contacts) && contacts.length > 0) {
+                await upsertBaileysContacts(contacts, { source: 'contact', skipProfilePhoto: true });
+            }
+            if (Array.isArray(chats) && chats.length > 0) {
+                await upsertBaileysContacts(chats, { source: 'chat', skipProfilePhoto: true });
+            }
+        });
+
+        sock.ev.on('chats.upsert', async (chats: any[]) => {
+            await upsertBaileysContacts(chats, { source: 'chat', skipProfilePhoto: true });
+        });
+
+        sock.ev.on('chats.update', async (updates: any[]) => {
+            await upsertBaileysContacts(updates, { source: 'chat', skipProfilePhoto: true });
+        });
+
+        sock.ev.on('chats.phoneNumberShare', async ({ lid, jid }: any) => {
+            try {
+                const sig = extractBaileysContactSignals({ lid, jid }, { source: 'contact' });
+                if (!sig?.phoneWaId || !sig?.lid) return;
+
+                contactDirectory.record({ waId: sig.phoneWaId, lid: sig.lid });
+                const { orgId, waAccountId } = await resolveOrgAndAccount();
+                if (!orgId || !waAccountId) return;
+
+                const knownName =
+                    contactDirectory.lookupName(sig.phoneWaId) ||
+                    contactDirectory.lookupName(sig.lid);
+
+                await upsertContact(
+                    orgId,
+                    waAccountId,
+                    sig.phoneWaId,
+                    knownName?.name || null,
+                    {
+                        lid: sig.lid,
+                        preferIncomingName: knownName?.preferIncomingName || false,
+                        skipProfilePhoto: true,
+                    },
+                );
+            } catch (err: any) {
+                console.warn('[Baileys] chats.phoneNumberShare handling failed:', err?.message || err);
+            }
         });
 
         // âœ… NEW: Listen for incoming w_messages (new + history)
@@ -251,19 +424,20 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
             if (!orgId) return;
 
             const myJid = sock.user?.id || "";
-            const myPhone = myJid.split(':')[0];
+            const myPhone = myJid.split(':')[0].split('@')[0];
+            const myLid = (sock.user as any)?.lid || state?.creds?.me?.lid || "";
 
-            // Resolve wa_account_id once per batch
+            // Resolve wa_account_id once per batch (and self-heal status if live socket is active)
             const { data: acc } = await supabase
                 .from('w_wa_accounts')
-                .select('id')
+                .select('id, status, connection_status')
                 .eq('organization_id', orgId)
                 .eq('phone_number_id', myPhone)
                 .maybeSingle();
 
             let waAccountId = acc?.id;
-            if (!waAccountId) {
-                waAccountId = await upsertBaileysWaAccount(orgId, myPhone);
+            if (!waAccountId || acc?.status !== 'connected' || acc?.connection_status !== 'CONNECTED') {
+                waAccountId = (await upsertBaileysWaAccount(orgId, myPhone)) || waAccountId;
             }
             if (!waAccountId) return;
 
@@ -280,13 +454,22 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                     // Ignore status broadcast; keep groups and newsletters.
                     if (remoteJid === 'status@broadcast') continue;
 
-                    const isGroup = remoteJid.endsWith('@g.us');
-                    const isNewsletter = remoteJid.endsWith('@newsletter');
+                    const msgKeyAny = msg.key as any;
+                    let identity = contactDirectory.resolveMessageIdentity({
+                        remoteJid,
+                        remoteJidAlt: msgKeyAny?.remoteJidAlt || null,
+                        senderPn: msgKeyAny?.senderPn || null,
+                        senderLid: msgKeyAny?.senderLid || null,
+                        fromMe: Boolean(isOutbound),
+                        myPhone,
+                        myLid,
+                        pushName: msg.pushName || null,
+                        verifiedBizName: (msg as any)?.verifiedBizName || null,
+                    });
 
-                    // For 1:1 store phone number only; for groups/newsletters store full JID.
-                    const contactWaId = remoteJid.endsWith('@s.whatsapp.net')
-                        ? remoteJid.split('@')[0]
-                        : remoteJid;
+                    const isGroup = identity.isGroup;
+                    const isNewsletter = identity.isNewsletter;
+                    let contactWaId = identity.contactWaId;
 
                     const msgType = Object.keys(msg.message || {})[0] || '';
                     if (!msgType) continue;
@@ -403,21 +586,63 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                         threadName = `Channel ${remoteJid.split('@')[0]}`;
                     }
 
-                    const senderName = isOutbound ? "You" : sanitizeContactDisplayName(msg.pushName || null, contactWaId);
+                    // On-demand LID -> Phone lookup when a 1:1 message arrives on an unmapped @lid.
+                    if (!isGroup && !isNewsletter && identity.needsLidLookup && identity.lid) {
+                        const dbMatch = await findContactByLidInDb(orgId, identity.lid);
+                        if (dbMatch && !isLidWaId(dbMatch.wa_id)) {
+                            contactDirectory.seedFromDbContacts([dbMatch]);
+                        } else if (!isHistorySync && sock?.user?.id) {
+                            await syncMissingLidsForOrg({
+                                sock,
+                                orgId,
+                                waAccountId,
+                                directory: contactDirectory,
+                                forceFullSync: false,
+                            }).catch(() => undefined);
+                        }
+
+                        identity = contactDirectory.resolveMessageIdentity({
+                            remoteJid,
+                            remoteJidAlt: msgKeyAny?.remoteJidAlt || null,
+                            senderPn: msgKeyAny?.senderPn || null,
+                            senderLid: msgKeyAny?.senderLid || null,
+                            fromMe: Boolean(isOutbound),
+                            myPhone,
+                            myLid,
+                            pushName: msg.pushName || null,
+                            verifiedBizName: (msg as any)?.verifiedBizName || null,
+                        });
+                        contactWaId = identity.contactWaId;
+                    }
 
                     // 1) Upsert Contact (this represents the thread for groups/newsletters too)
                     const contact = await upsertContact(
                         orgId,
                         waAccountId,
                         contactWaId,
-                        threadName || (isOutbound ? null : senderName)
+                        threadName || identity.contactNameForUpsert,
+                        {
+                            lid: identity.lid,
+                            preferIncomingName: Boolean(threadName) ? false : identity.preferIncomingName,
+                            skipProfilePhoto: isHistorySync,
+                        },
                     );
+
+                    const resolvedDisplayName =
+                        sanitizeContactDisplayName(contact?.custom_name, contactWaId) ||
+                        sanitizeContactDisplayName(contact?.name, contactWaId) ||
+                        threadName ||
+                        identity.fallbackSenderName ||
+                        contact?.phone ||
+                        contactWaId;
 
                     // 2) Upsert Conversation
                     const direction = isOutbound ? 'outbound' : 'inbound';
+                    const isNonIndividual = isGroup || isNewsletter;
                     const conv = await upsertConversation(orgId, waAccountId, contact.id, {
                         direction,
-                        preview: previewText
+                        preview: previewText,
+                        isNonIndividual,
                     });
 
                     // 3) Store Message (download media when possible)
@@ -526,7 +751,8 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                             wa_account_id: waAccountId,
                             phone_number_id: myPhone,
                             from: contactWaId,
-                            name: threadName || senderName,
+                            phone: contact?.phone || identity.phoneWaId || null,
+                            name: resolvedDisplayName,
                             text: captionText,
                             forwarded: isForwarded,
                             type: normalizedType,
@@ -547,15 +773,25 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                         // Trigger Push Notification for inbound messages
                         if (!isOutbound) {
                             sendPushNotificationToOrg(orgId, {
-                                title: `New message from ${threadName || senderName}`,
+                                title: `New message from ${resolvedDisplayName}`,
                                 body: captionText || 'New media message received',
                                 url: `/live-chat`,
                                 icon: '/pwa-192x192.png'
                             });
                         }
 
-                        // Bot Auto-Reply for Baileys (inbound text or transcribed audio messages)
-                        if (!isOutbound && (normalizedType === 'text' || normalizedType === 'audio') && captionText) {
+                        // Bot Auto-Reply for Baileys (inbound 1:1 text or transcribed audio messages only; skip groups/channels)
+                        if (
+                            shouldRunBaileysBotAutomation({
+                                isOutbound: Boolean(isOutbound),
+                                isGroup,
+                                isNewsletter,
+                                remoteJid,
+                                contact,
+                                normalizedType,
+                                captionText,
+                            })
+                        ) {
                             try {
                                 console.log(`📥 [Baileys] Inbound ${normalizedType} from ${contactWaId}: "${captionText}"`);
                                 let flowConsumedMessage = false;
@@ -592,7 +828,7 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                             wa_account_id: waAccountId,
                                             phone_number_id: myPhone,
                                             from: myPhone,
-                                            phone: contactWaId,
+                                            phone: contact?.phone || contactWaId,
                                             text: flowResult.output,
                                             sender: 'agent',
                                             conversation_id: conv.id,
@@ -660,7 +896,7 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                                     wa_account_id: waAccountId,
                                                     phone_number_id: myPhone,
                                                     from: myPhone,
-                                                    phone: contactWaId,
+                                                    phone: contact?.phone || contactWaId,
                                                     text: preview,
                                                     sender: 'agent',
                                                     conversation_id: conv.id,
@@ -731,6 +967,10 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                                             const parsed = JSON.parse(jsonCandidate);
                                                             if (parsed && typeof parsed === "object" && typeof parsed.text === "string") {
                                                                 replyText = parsed.text;
+                                                                // QR transport has no native URL CTA support. Preserve actions in its text fallback.
+                                                                if (Array.isArray(parsed.buttons)) {
+                                                                    replyText += parsed.buttons.map((button: any) => `\n${button.text || 'Open'}${button.url ? `: ${button.url}` : ''}`).join('');
+                                                                }
                                                             }
                                                         }
                                                     } catch (e) {
@@ -763,7 +1003,7 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                                         wa_account_id: waAccountId,
                                                         phone_number_id: myPhone,
                                                         from: myPhone,
-                                                        phone: contactWaId,
+                                                        phone: contact?.phone || contactWaId,
                                                         text: replyText,
                                                         sender: 'agent',
                                                         conversation_id: conv.id,
@@ -872,92 +1112,84 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
 
             if (connection === "close") {
                 initializingSessions.delete(sessionId); // Unlock
+                if (phoneLidLookupTimer) {
+                    clearTimeout(phoneLidLookupTimer);
+                    phoneLidLookupTimer = null;
+                }
 
                 const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
                 const error = (lastDisconnect?.error as any);
                 const errorMsg = error?.message || "";
 
-                // Check for critical session corruption errors
-                const isBadSession =
-                    statusCode === DisconnectReason.badSession ||
-                    statusCode === DisconnectReason.connectionClosed || // Often means bad session state
-                    statusCode === 428 || // Precondition Required (often Boom error)
-                    errorMsg.includes("Bad MAC") ||
-                    errorMsg.includes("pre-key") ||
-                    errorMsg.includes("Connection Closed");
+                const attempts = reconnectAttempts.get(sessionId) || 0;
+                const decision = classifyBaileysDisconnect({
+                    statusCode,
+                    errorMessage: errorMsg,
+                    attempt: attempts,
+                    maxAttempts: MAX_RECONNECT_ATTEMPTS,
+                });
 
-                if (isBadSession) {
-                    console.error(`âŒ Critical Session Error (${statusCode || errorMsg}). Clearing session...`);
-                    // Clear only THIS session directory to force fresh scan (not all sessions!)
+                const disconnectedPhone =
+                    String(sock.user?.id || state?.creds?.me?.id || sessionPhoneMap.get(sessionId) || '')
+                        .split(':')[0]
+                        .split('@')[0]
+                        .replace(/\D+/g, '') || null;
+
+                sessions.delete(sessionId);
+
+                if (decision.action === 'clear_and_stop') {
+                    console.error(`❌ Unrecoverable Baileys disconnect (${decision.reason}, code=${statusCode || 'none'}: ${errorMsg}). Clearing session ${sessionId}.`);
+                    reconnectAttempts.delete(sessionId);
+                    latestQrBySession.delete(sessionId);
+                    sessionPhoneMap.delete(sessionId);
+
                     try {
                         const sessionDir = `baileys_auth_info/${sessionId}`;
-                        fs.rmSync(sessionDir, { recursive: true, force: true });
-                        sessions.delete(sessionId);
-                        socket.emit('status', 'ready'); // Ensure UI resets to QR generate state
-                        socket.emit('session_cleared', { reason: errorMsg || 'Session corrupted' });
-                        console.log(`âœ… Session ${sessionId} cleared. User must re-scan.`);
+                        if (fs.existsSync(sessionDir)) {
+                            fs.rmSync(sessionDir, { recursive: true, force: true });
+                        }
                     } catch (e) {
                         console.error("Failed to clear session:", e);
                     }
-                    return; // Stop here
+
+                    await markBaileysAccountStatus(
+                        organization_id,
+                        disconnectedPhone,
+                        decision.reason === 'logged_out' ? 'disconnected' : 'pending',
+                        'DISCONNECTED',
+                    );
+
+                    socket?.emit?.('status', 'ready');
+                    if (decision.reason === 'bad_session') {
+                        socket?.emit?.('session_cleared', { reason: errorMsg || 'Session corrupted' });
+                    }
+                    return;
                 }
 
-                // CRITICAL FIX: Don't reconnect on conflict (440) or if logged out
-                const shouldReconnect =
-                    statusCode !== DisconnectReason.loggedOut &&
-                    statusCode !== 440; // 440 = Stream Errored (conflict)
+                if (decision.action === 'stop_conflict') {
+                    console.log("⚠️ Conflict detected (440). Another WhatsApp Web session might be active.");
+                    reconnectAttempts.delete(sessionId);
+                    await markBaileysAccountStatus(organization_id, disconnectedPhone, 'pending', 'DISCONNECTED');
+                    socket?.emit?.('status', 'disconnected');
+                    socket?.emit?.('conflict_detected', { message: 'Another WhatsApp Web session is active. Close it and reconnect.' });
+                    return;
+                }
 
                 console.log(
-                    "connection closed due to ",
-                    lastDisconnect?.error,
-                    ", status code:",
-                    statusCode,
-                    ", reconnecting:",
-                    shouldReconnect
+                    `🔄 Connection closed for ${sessionId} (code=${statusCode || 'none'}, reason=${decision.reason}). Reconnecting in ${decision.delayMs / 1000}s...`,
+                    errorMsg || ''
                 );
 
-                // Remove from sessions map
-                sessions.delete(sessionId);
-                socket.emit('status', 'disconnected');
-
-                if (shouldReconnect) {
-                    // Get current attempt count
-                    const attempts = reconnectAttempts.get(sessionId) || 0;
-
-                    if (attempts >= MAX_RECONNECT_ATTEMPTS) {
-                        console.log(`âŒ Max reconnect attempts (${MAX_RECONNECT_ATTEMPTS}) reached for ${sessionId}. Stopping.`);
-                        reconnectAttempts.delete(sessionId);
-                        socket.emit('status', 'idle');
-                        socket.emit('reconnect_failed', { reason: 'Max attempts reached. Please reconnect manually.' });
-                        return;
-                    }
-
-                    // Exponential backoff: 3s, 6s, 12s, 24s, 48s
-                    const delay = 3000 * Math.pow(2, attempts);
-                    reconnectAttempts.set(sessionId, attempts + 1);
-
-                    console.log(`â³ Reconnect attempt ${attempts + 1}/${MAX_RECONNECT_ATTEMPTS} in ${delay / 1000}s...`);
-                    setTimeout(() => {
-                        setupBaileys(sessionId, socket);
-                    }, delay);
+                if (decision.resetRetries) {
+                    reconnectAttempts.delete(sessionId);
                 } else {
-                    console.log("âŒ Not reconnecting. User needs to scan QR again or logout detected.");
-                    reconnectAttempts.delete(sessionId); // Reset on deliberate disconnect
-                    if (statusCode === 440) {
-                        console.log("âš ï¸ Conflict detected. Another WhatsApp Web session might be active.");
-                        socket.emit('conflict_detected', { message: 'Another WhatsApp Web session is active. Close it and reconnect.' });
-                    }
-                    if (statusCode === DisconnectReason.loggedOut) {
-                        // Clear session files on logout
-                        try {
-                            const sessionDir = `baileys_auth_info/${sessionId}`;
-                            fs.rmSync(sessionDir, { recursive: true, force: true });
-                            console.log(`âœ… Session ${sessionId} cleared after logout.`);
-                        } catch (e) {
-                            console.error("Failed to clear session on logout:", e);
-                        }
-                    }
+                    reconnectAttempts.set(sessionId, attempts + 1);
                 }
+
+                socket?.emit?.('status', 'disconnected');
+                setTimeout(() => {
+                    setupBaileys(sessionId, socket, organization_id);
+                }, decision.delayMs);
             } else if (connection === "open") {
                 console.log("✅ WhatsApp connection established successfully");
                 initializingSessions.delete(sessionId); // Unlock
@@ -972,16 +1204,15 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
 
                 // Emit connected account info immediately
                 const connectedJid = sock.user?.id || "";
-                const connectedAccount = connectedJid ? connectedJid.split(':')[0] : null;
+                const connectedAccount = connectedJid ? connectedJid.split(':')[0].split('@')[0].replace(/\D+/g, '') : null;
+
+                if (connectedAccount) {
+                    sessionPhoneMap.set(sessionId, connectedAccount);
+                }
 
                 if (connectedAccount && orgId) {
                     try {
-                        await supabase.from('w_wa_accounts').upsert({
-                            organization_id: orgId,
-                            phone_number_id: connectedAccount,
-                            display_phone_number: connectedAccount, // Use phone as display name defaults
-                            status: 'connected',
-                        }, { onConflict: 'phone_number_id' });
+                        await upsertBaileysWaAccount(orgId, connectedAccount);
                         console.log(`✅ Upserted wa_account for ${connectedAccount}`);
                     } catch (err) {
                         console.error("Failed to upsert wa_account:", err);
@@ -995,6 +1226,30 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                     } else {
                         io.emit("connected_account", connectedAccount);
                     }
+                }
+
+                if (orgId && connectedAccount) {
+                    resolveOrgAndAccount()
+                        .then(({ orgId: resolvedOrg, waAccountId }) => {
+                            if (!resolvedOrg) return;
+                            return syncMissingLidsForOrg({
+                                sock,
+                                orgId: resolvedOrg,
+                                waAccountId,
+                                directory: contactDirectory,
+                                forceFullSync: true,
+                            });
+                        })
+                        .then((syncRes) => {
+                            if (syncRes && !syncRes.skipped) {
+                                console.log(
+                                    `[Baileys LID Sync] org=${orgId} checked=${syncRes.checkedCount} matched=${syncRes.matchedCount} updated=${syncRes.updatedCount} merged=${syncRes.mergedCount}`,
+                                );
+                            }
+                        })
+                        .catch((err) => {
+                            console.warn('[Baileys LID Sync] Initial backfill failed:', err?.message || err);
+                        });
                 }
             }
         });
@@ -1033,32 +1288,13 @@ async function getSessionIdForOrg(orgId: string): Promise<string | null> {
     return null;
 }
 
-// Global Error Handlers to prevent crash
+// Global crash handlers (never wipe saved QR auth directories on transient 428/socket errors)
 process.on('uncaughtException', (err: any) => {
-    console.error('âŒ Uncaught Exception:', err);
-    // If it's the known connection crash, try to handle it
-    if (err.message && (err.message.includes('Connection Closed') || err.message.includes('Bad MAC'))) {
-        console.log("âš ï¸ Caught fatal session error. Cleaning up...");
-        try {
-            if (fs.existsSync('baileys_auth_info')) {
-                fs.rmSync('baileys_auth_info', { recursive: true, force: true });
-                console.log("âœ… Corrupted session cleared.");
-            }
-        } catch (e) { console.error("Cleanup failed:", e); }
-    }
+    console.error('❌ Uncaught Exception (Baileys):', err?.message || err);
 });
 
-process.on('unhandledRejection', (reason: any, promise) => {
-    console.error('âŒ Unhandled Rejection:', reason);
-    if (reason && (reason.output?.statusCode === 428 || reason.message?.includes('Connection Closed'))) {
-        console.log("âš ï¸ Caught Fatal Boom Error (428). Cleaning up session...");
-        try {
-            if (fs.existsSync('baileys_auth_info')) {
-                fs.rmSync('baileys_auth_info', { recursive: true, force: true });
-                console.log("âœ… Corrupted session cleared.");
-            }
-        } catch (e) { console.error("Cleanup failed:", e); }
-    }
+process.on('unhandledRejection', (reason: any) => {
+    console.error('❌ Unhandled Rejection (Baileys):', (reason as any)?.message || reason);
 });
 
 io.on("connection", (socket) => {
@@ -1094,8 +1330,9 @@ io.on("connection", (socket) => {
 
             // âœ… Emit connected account info immediately
             const connectedJid = existing.user?.id || "";
-            const connectedAccount = connectedJid ? connectedJid.split(':')[0] : null;
+            const connectedAccount = connectedJid ? connectedJid.split(':')[0].split('@')[0].replace(/\D+/g, '') : null;
             if (connectedAccount) {
+                sessionPhoneMap.set(sessionId, connectedAccount);
                 let existingOrgId = socket?.data?.organization_id || null;
                 const sessionOrgFile = `baileys_auth_info/${sessionId}/org_id.txt`;
                 if (!existingOrgId && fs.existsSync(sessionOrgFile)) {
@@ -1121,8 +1358,8 @@ io.on("connection", (socket) => {
             // QR may be generated by Baileys if creds are invalid, but QR emission is gated.
             try {
                 const sessionDir = `baileys_auth_info/${sessionId}`;
-                if (!sessions.get(sessionId) && fs.existsSync(sessionDir)) {
-                    console.log(`ðŸ”„ Restoring Baileys session from disk: ${sessionId}`);
+                const credsFile = path.join(sessionDir, 'creds.json');
+                if (!sessions.get(sessionId) && fs.existsSync(credsFile)) {
                     await setupBaileys(sessionId, socket);
                     return;
                 }
@@ -1151,6 +1388,7 @@ io.on("connection", (socket) => {
             initializingSessions.delete(sessionId);
             reconnectAttempts.delete(sessionId);
             latestQrBySession.delete(sessionId);
+            sessionPhoneMap.delete(sessionId);
         }
 
         socket.data.qrRequestedSessions.add(sessionId);
@@ -1173,6 +1411,7 @@ io.on("connection", (socket) => {
         initializingSessions.delete(sessionId);
         reconnectAttempts.delete(sessionId);
         latestQrBySession.delete(sessionId);
+        sessionPhoneMap.delete(sessionId);
 
         const sock = sessions.get(sessionId);
         let phoneToDisconnect = null;
@@ -1195,9 +1434,7 @@ io.on("connection", (socket) => {
         if (phoneToDisconnect && supabase) {
             console.log(`Updating DB: Setting account ${phoneToDisconnect} to disconnected.`);
             try {
-                await supabase.from('w_wa_accounts')
-                    .update({ status: 'disconnected' })
-                    .eq('phone_number_id', phoneToDisconnect);
+                await markBaileysAccountStatus(socket.data?.organization_id, phoneToDisconnect, 'disconnected', 'DISCONNECTED');
             } catch (err) {
                 console.error("Failed to update wa_account status on logout:", err);
             }
@@ -1297,6 +1534,7 @@ io.on("connection", (socket) => {
 
 // --- Auto-Initialize existing sessions ---
 function autoInitializeSessions() {
+    markBaileysRuntimeStarted();
     const authDir = 'baileys_auth_info';
     if (!fs.existsSync(authDir)) return;
     
@@ -1305,6 +1543,10 @@ function autoInitializeSessions() {
         for (const entry of entries) {
             if (entry.isDirectory() && entry.name.startsWith('session_')) {
                 const sessionId = entry.name;
+                const credsFile = path.join(authDir, sessionId, 'creds.json');
+                if (!fs.existsSync(credsFile)) {
+                    continue;
+                }
                 console.log(`[Auto-Init] Found existing session directory: ${sessionId}. Initializing...`);
                 let orgId = undefined;
                 const orgFile = `${authDir}/${sessionId}/org_id.txt`;

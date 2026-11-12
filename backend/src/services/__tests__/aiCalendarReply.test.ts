@@ -7,7 +7,7 @@ const { getBotAgentReply, invalidateFlowsCache } = await import('../ai.service.j
 async function scenario(mode = 'success') {
   const previous = { fetch: globalThis.fetch, from: supabase.from, key: process.env.OPENAI_API_KEY };
   process.env.OPENAI_API_KEY = mode === 'no-key' ? '' : 'synthetic-key';
-  const agent = { id: 'synthetic-agent', name: 'Test Assistant', model: 'gpt-4o-mini', knowledge_base_content: [{ type: '__agent_settings', calendar: { enabled: mode !== 'disabled', calendar_id: 'public-sessions', timezone: 'Asia/Kolkata' } }] };
+  const agent = { id: 'synthetic-agent', name: 'Test Assistant', model: 'gpt-4o-mini', knowledge_base_content: [{ type: '__agent_settings', settings: { use_buttons: mode !== 'buttons-off' }, calendar: { enabled: mode !== 'disabled', calendar_id: 'public-sessions', timezone: 'Asia/Kolkata' } }] };
   supabase.from = (table: string) => {
     const fixtures: any = {
       w_conversations: { bot_enabled: true, assigned_bot_id: agent.id }, bot_agents: agent,
@@ -33,6 +33,7 @@ async function scenario(mode = 'success') {
     }
     assert.equal(url, 'https://api.openai.com/v1/chat/completions');
     const request = JSON.parse(init.body); calls++;
+    if (mode === 'buttons-off') assert.ok(request.messages.some((m: any) => m.role === 'system' && m.content.includes('AGENT PREFERENCE OVERRIDE: Buttons are OFF')));
     if (calls === 1 && mode !== 'disabled') {
       assert.equal(request.tools[0].function.name, 'get_upcoming_sessions');
       return new Response(JSON.stringify({ choices: [{ message: { role: 'assistant', content: null, tool_calls: [{ id: 'lookup', type: 'function', function: { name: 'get_upcoming_sessions', arguments: JSON.stringify({ from: '2026-11-11T00:00:00+05:30', to: '2026-11-12T00:00:00+05:30' }) } }] } }] }));
@@ -45,7 +46,7 @@ async function scenario(mode = 'success') {
       else assert.equal(data.events.length, mode === 'empty' ? 0 : 1);
       assert.ok(request.messages.some((m: any) => m.role === 'assistant' && m.tool_calls?.[0]?.id === 'lookup'));
     } else assert.equal(request.tools, undefined);
-    return new Response(JSON.stringify({ choices: [{ message: { content: mode === 'failure' ? 'Schedule unverified.' : mode === 'empty' ? 'No sessions found.' : 'Synthetic Workshop: 5–6 PM.' } }] }));
+    return new Response(JSON.stringify({ choices: [{ message: { content: mode === 'buttons-off' ? JSON.stringify({ text: 'Workshop registration', buttons: [{ id: 'register', text: 'Register', type: 'url', url: 'https://example.com/workshop' }] }) : mode === 'failure' ? 'Schedule unverified.' : mode === 'empty' ? 'No sessions found.' : 'Synthetic Workshop: 5–6 PM.' } }] }));
   }) as any;
   try {
     invalidateFlowsCache('synthetic-org');
@@ -68,6 +69,11 @@ test('successful empty calendar differs from API failure', async () => {
 });
 test('disabled agent does not read calendar or receive tools', async () => {
   const r = await scenario('disabled'); assert.equal(r.calendarReads, 0); assert.equal(r.calls, 1);
+});
+test('live agent reply enforces buttons OFF even when the model emits URL button JSON', async () => {
+  const r = await scenario('buttons-off');
+  assert.match(r.result!.reply, /https:\/\/example.com\/workshop/);
+  assert.ok(!r.result!.reply.includes('"buttons"'));
 });
 test('missing platform key does not masquerade as an introduction', async () => {
   const r = await scenario('no-key'); assert.equal(r.calls, 0); assert.match(r.result!.reply, /temporarily unavailable/);

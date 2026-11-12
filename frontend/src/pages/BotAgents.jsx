@@ -57,6 +57,7 @@ const defaultAgent = {
         auto_reply_unknown: true,
         default_for_new_chats: false,
         handoff_on_human_reply: true,
+        use_buttons: true,
     },
 }
 
@@ -107,6 +108,7 @@ export default function BotAgents() {
                 auto_reply_unknown: settings.auto_reply_unknown === true,
                 default_for_new_chats: settings.default_for_new_chats === true,
                 handoff_on_human_reply: settings.handoff_on_human_reply !== false,
+                use_buttons: settings.use_buttons !== false,
             },
             selectedKnowledgeIds: item.selected_knowledge_document_ids || trainedItems.map(entry => entry.id).filter(Boolean),
             calendar: item.calendar || defaultAgent.calendar,
@@ -831,6 +833,7 @@ function AgentDrawer({ draft, setDraft, docs, models, selectedDocs, selectedChar
                                 <PolicyToggle title="Auto reply unknown numbers" description="Reply when a new number messages first." checked={draft.automation.auto_reply_unknown} onChange={value => updateAutomation('auto_reply_unknown', value)} />
                                 <PolicyToggle title="Default for new chats" description="Use this bot if no keyword matches." checked={draft.automation.default_for_new_chats} onChange={value => updateAutomation('default_for_new_chats', value)} />
                                 <PolicyToggle title="Pause after human reply" description="Keep human handoff clean." checked={draft.automation.handoff_on_human_reply} onChange={value => updateAutomation('handoff_on_human_reply', value)} />
+                                <PolicyToggle title="Use buttons in replies" description="Allow buttons for links, contacts and booking choices. Turn off for plain text and direct links." checked={draft.automation.use_buttons} onChange={value => updateAutomation('use_buttons', value)} />
                             </div>
                             <Field label="Trigger keywords" className="mt-4"><input value={draft.triggerKeywords} onChange={event => setDraft({ ...draft, triggerKeywords: event.target.value })} className="field-input rounded-lg border-gray-200 focus:border-zinc-400 focus:ring-1 focus:ring-zinc-200" placeholder="help, support, price, booking, demo" /></Field>
                         </section>
@@ -959,9 +962,9 @@ function SectionTitle({ title, subtitle }) {
     )
 }
 
-function Toggle({ checked, onChange, label }) {
+function Toggle({ checked, onChange, label, accessibleName }) {
     return (
-        <button type="button" onClick={() => onChange(!checked)} className={`inline-flex h-7 items-center gap-2 rounded-lg border border-gray-200 px-1.5 pr-2.5 text-xs font-bold transition ${checked ? 'border-green-200 bg-green-50 text-green-700' : 'border-gray-200 bg-[#f8f9fa] text-gray-500'}`}>
+        <button type="button" role="switch" aria-checked={Boolean(checked)} aria-label={accessibleName || label} onClick={() => onChange(!checked)} className={`inline-flex h-7 items-center gap-2 rounded-lg border border-gray-200 px-1.5 pr-2.5 text-xs font-bold transition ${checked ? 'border-green-200 bg-green-50 text-green-700' : 'border-gray-200 bg-[#f8f9fa] text-gray-500'}`}>
             <span className={`relative inline-flex h-[18px] w-8 items-center rounded-lg transition ${checked ? 'bg-green-500' : 'bg-gray-300'}`}>
                 <span className={`h-3.5 w-3.5 rounded-lg bg-white shadow-2xs transition ${checked ? 'translate-x-4' : 'translate-x-0.5'}`} />
             </span>
@@ -977,7 +980,7 @@ function PolicyToggle({ title, description, checked, onChange }) {
                 <div className="font-bold text-gray-900">{title}</div>
                 <p className="mt-1 text-sm text-gray-500">{description}</p>
             </div>
-            <Toggle checked={checked} onChange={onChange} label={checked ? 'On' : 'Off'} />
+            <Toggle checked={checked} onChange={onChange} label={checked ? 'On' : 'Off'} accessibleName={title} />
         </div>
     )
 }

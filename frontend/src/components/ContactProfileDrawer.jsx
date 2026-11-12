@@ -39,6 +39,7 @@ const INTERNAL_CUSTOM_FIELD_KEYS = new Set([
     'lead_temperature',
     'lead_interest',
     'sales_note_auto',
+    'lid',
 ])
 
 const FOLLOW_UP_RE = /\b(today|tomorrow|morning|afternoon|evening|night|tonight|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}(?::\d{2})?\s?(?:am|pm))\b/i
@@ -284,6 +285,13 @@ export default function ContactProfileDrawer({
 
     const aliasInputRef = useRef(null)
     const autoSavedKeyRef = useRef('')
+
+    const isGroupOrChannel = useMemo(() => {
+        const contactType = String(contact?.contact_type || '').trim().toLowerCase()
+        if (contactType === 'group' || contactType === 'channel') return true
+        const rawWaId = String(contact?.wa_id || '').trim().toLowerCase()
+        return rawWaId.includes('@g.us') || rawWaId.includes('@newsletter') || rawWaId.includes('@broadcast')
+    }, [contact?.contact_type, contact?.wa_id])
 
     const displayName = useMemo(() => {
         const custom = String(contact?.custom_name || '').trim()
@@ -786,14 +794,23 @@ export default function ContactProfileDrawer({
                                     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                                         <div className="px-4 py-3 flex justify-between items-center text-sm border-b border-gray-100">
                                             <span className="text-gray-500 flex items-center gap-2"><MessageSquare className="h-4 w-4" /> Bot auto reply</span>
-                                            <button
-                                                onClick={() => onToggleBot && onToggleBot(!botEnabled)}
-                                                className={`font-semibold px-3 py-1 rounded-full text-xs transition-colors shadow-sm active:scale-95 ${
-                                                    botEnabled ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                                                }`}
-                                            >
-                                                {botEnabled ? 'ENABLED' : 'DISABLED'}
-                                            </button>
+                                            {isGroupOrChannel ? (
+                                                <span
+                                                    className="font-semibold px-3 py-1 rounded-full text-xs bg-gray-100 text-gray-500"
+                                                    title="AI Agent automation is disabled for WhatsApp groups and channels"
+                                                >
+                                                    DISABLED (GROUP / CHANNEL)
+                                                </span>
+                                            ) : (
+                                                <button
+                                                    onClick={() => onToggleBot && onToggleBot(!botEnabled)}
+                                                    className={`font-semibold px-3 py-1 rounded-full text-xs transition-colors shadow-sm active:scale-95 ${
+                                                        botEnabled ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                                    }`}
+                                                >
+                                                    {botEnabled ? 'ENABLED' : 'DISABLED'}
+                                                </button>
+                                            )}
                                         </div>
                                         <div className="px-4 py-3 flex justify-between items-center text-sm">
                                             <span className="text-gray-500 flex items-center gap-2"><Send className="h-4 w-4" /> Active flow</span>

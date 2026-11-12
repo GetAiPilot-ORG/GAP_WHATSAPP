@@ -1,6 +1,11 @@
 import { supabase } from '../config/supabase.js';
 import { decryptToken } from '../utils/crypto.js';
 import { AccountHealthService } from './accountHealth.service.js';
+import {
+    findLiveBaileysSessionForAccount,
+    hasBaileysRuntimeStarted,
+    LiveBaileysSessionStatus,
+} from './whatsapp.service.js';
 import dotenv from "dotenv";
 dotenv.config({ path: "./.env" });
 
@@ -168,13 +173,60 @@ export async function subscribeMetaAppToWaba(wabaId: string, token: string) {
     }
 }
 
-export function buildAccountReadinessSummary(account: any) {
-    const isMeta = Boolean(account?.whatsapp_business_account_id || account?.access_token_encrypted);
-    if (!isMeta) {
+export function isMetaCloudAccount(account: any): boolean {
+    return Boolean(
+        account?.whatsapp_business_account_id ||
+        account?.access_token_encrypted ||
+        account?.connection_type === 'meta_cloud_api'
+    );
+}
+
+export function buildAccountReadinessSummary(
+    account: any,
+    liveSessionOverride?: LiveBaileysSessionStatus,
+    runtimeStartedOverride?: boolean,
+) {
+    if (!isMetaCloudAccount(account)) {
+        const liveSession = liveSessionOverride ?? findLiveBaileysSessionForAccount(account);
+        const runtimeStarted = runtimeStartedOverride ?? hasBaileysRuntimeStarted();
+
+        if (liveSession.connected) {
+            return {
+                connection_type: 'qr_session',
+                send_ready: true,
+                live_session_connected: true,
+                reconnecting: false,
+                diagnostics_summary: 'QR testing session connected and active.'
+            };
+        }
+
+        if (liveSession.reconnecting) {
+            return {
+                connection_type: 'qr_session',
+                send_ready: false,
+                live_session_connected: false,
+                reconnecting: true,
+                diagnostics_summary: 'QR testing session is reconnecting...'
+            };
+        }
+
+        if (runtimeStarted) {
+            return {
+                connection_type: 'qr_session',
+                send_ready: false,
+                live_session_connected: false,
+                reconnecting: false,
+                diagnostics_summary: 'QR testing session is disconnected. Scan the QR code below to reconnect.'
+            };
+        }
+
+        const dbReady = account?.status === 'connected' || account?.status === 'active';
         return {
             connection_type: 'qr_session',
-            send_ready: account?.status === 'connected' || account?.status === 'active',
-            diagnostics_summary: account?.status === 'connected' || account?.status === 'active'
+            send_ready: dbReady,
+            live_session_connected: dbReady,
+            reconnecting: false,
+            diagnostics_summary: dbReady
                 ? 'QR testing session connected.'
                 : 'QR testing session is not connected.'
         };
@@ -195,14 +247,75 @@ export function buildAccountReadinessSummary(account: any) {
     };
 }
 
+export function getQrAccountDiagnostics(
+    account: any,
+    liveSessionOverride?: LiveBaileysSessionStatus,
+    runtimeStartedOverride?: boolean,
+) {
+    const liveSession = liveSessionOverride ?? findLiveBaileysSessionForAccount(account);
+    const runtimeStarted = runtimeStartedOverride ?? hasBaileysRuntimeStarted();
+    const dbReady = account?.status === 'connected' || account?.status === 'active';
+
+    const connected = liveSession.connected || (!runtimeStarted && dbReady && !liveSession.reconnecting);
+    const reconnecting = !connected && liveSession.reconnecting;
+
+    const issue_codes: string[] = [];
+    const issues: string[] = [];
+    if (!connected) {
+        if (reconnecting) {
+            issue_codes.push('qr_reconnecting');
+            issues.push('QR session is reconnecting automatically.');
+        } else {
+            issue_codes.push('qr_session_disconnected');
+            issues.push('QR testing session is disconnected. Scan the QR code below to reconnect.');
+        }
+    }
+
+    return {
+        account_id: account?.id || null,
+        phone_number_id: account?.phone_number_id || null,
+        whatsapp_business_account_id: null,
+        connection_type: 'qr_session',
+        has_access_token: false,
+        live_session_connected: connected,
+        reconnecting,
+        session_id: liveSession.sessionId || null,
+        token_permissions: null,
+        phone_number_access: null,
+        waba_access: null,
+        business_verification: null,
+        webhook_subscription: null,
+        issue_codes,
+        reconnect_required: false,
+        meta_errors: [],
+        send_ready: connected,
+        issues,
+    };
+}
+
 export function toSafeWhatsappAccount(account: any) {
     if (!account) return account;
     const { access_token_encrypted, ...safe } = account;
     const hasAccessToken = Boolean(access_token_encrypted || account.has_access_token);
-    
+    const readiness = buildAccountReadinessSummary(account);
+
     const lastCheckMs = account.last_health_check_at ? new Date(account.last_health_check_at).getTime() : null;
     const cacheAgeSeconds = lastCheckMs ? Math.max(0, Math.floor((Date.now() - lastCheckMs) / 1000)) : null;
     const isStale = lastCheckMs ? (Date.now() - lastCheckMs) > 86400000 : true;
+
+    const normalizedForHealth = readiness.connection_type === 'qr_session'
+        ? {
+            ...account,
+            connection_type: 'qr_session',
+            status: readiness.send_ready ? 'connected' : (account?.status === 'disconnected' ? 'disconnected' : 'pending'),
+            connection_status: readiness.send_ready
+                ? 'CONNECTED'
+                : (readiness.reconnecting ? 'CHECKING' : 'DISCONNECTED'),
+        }
+        : {
+            ...account,
+            connection_type: 'meta_cloud_api',
+        };
 
     return {
         ...safe,
@@ -211,12 +324,16 @@ export function toSafeWhatsappAccount(account: any) {
         cache_age_seconds: cacheAgeSeconds,
         is_stale: isStale,
         last_sync_status: account.last_sync_status || 'UNKNOWN',
-        health: AccountHealthService.buildHealthSummary(account),
-        ...buildAccountReadinessSummary(account)
+        health: AccountHealthService.buildHealthSummary(normalizedForHealth),
+        ...readiness,
     };
 }
 
 export async function getMetaAccountDiagnostics(account: any) {
+    if (!isMetaCloudAccount(account)) {
+        return getQrAccountDiagnostics(account);
+    }
+
     const token = account?.access_token_encrypted ? decryptToken(account.access_token_encrypted) : '';
     const diagnostics: any = {
         account_id: account?.id || null,

@@ -18,7 +18,178 @@ export const profilePhotoCache = new Map<string, { url: string | null; fetchedAt
 export const PROFILE_PHOTO_TTL_MS = 30 * 60 * 1000;
 export const initializingSessions = new Set<string>();
 export const reconnectAttempts = new Map<string, number>();
-export const MAX_RECONNECT_ATTEMPTS = 5;
+export const sessionPhoneMap = new Map<string, string>();
+export const MAX_RECONNECT_ATTEMPTS = 20;
+
+let baileysRuntimeStarted = false;
+
+export function markBaileysRuntimeStarted() {
+    baileysRuntimeStarted = true;
+}
+
+export function hasBaileysRuntimeStarted(): boolean {
+    return baileysRuntimeStarted;
+}
+
+function normalizePhoneDigits(value: unknown): string {
+    return String(value || '').split(':')[0].split('@')[0].replace(/\D+/g, '');
+}
+
+export interface LiveBaileysSessionStatus {
+    connected: boolean;
+    reconnecting: boolean;
+    sessionId: string | null;
+    phone: string | null;
+}
+
+export function findLiveBaileysSessionForAccount(
+    account: {
+        id?: string | null;
+        phone_number_id?: string | null;
+        display_phone_number?: string | null;
+    } | null | undefined,
+    overrides?: {
+        sessionsMap?: Map<string, any>;
+        initializingSet?: Set<string>;
+        reconnectMap?: Map<string, number>;
+        phoneMap?: Map<string, string>;
+    }
+): LiveBaileysSessionStatus {
+    const activeSessions = overrides?.sessionsMap ?? sessions;
+    const initSet = overrides?.initializingSet ?? initializingSessions;
+    const retriesMap = overrides?.reconnectMap ?? reconnectAttempts;
+    const phoneMap = overrides?.phoneMap ?? sessionPhoneMap;
+
+    const targetId = account?.id ? String(account.id) : '';
+    const targetPhoneId = normalizePhoneDigits(account?.phone_number_id);
+    const targetDisplayPhone = normalizePhoneDigits(account?.display_phone_number);
+
+    for (const [sid, sock] of activeSessions.entries()) {
+        if (!sock) continue;
+        const connectedPhone = normalizePhoneDigits(sock?.user?.id || sock?.authState?.creds?.me?.id || phoneMap.get(sid));
+        const matchesId = Boolean(targetId && sid === targetId) || Boolean(targetPhoneId && sid === targetPhoneId);
+        const matchesPhone = Boolean(
+            connectedPhone &&
+            ((targetPhoneId && connectedPhone === targetPhoneId) ||
+             (targetDisplayPhone && connectedPhone === targetDisplayPhone))
+        );
+
+        if (matchesId || matchesPhone) {
+            const hasUser = Boolean(sock?.user?.id);
+            const wsHealthy = sock?.ws ? (sock.ws.isOpen !== false && sock.ws.isClosed !== true) : true;
+            const connected = hasUser && wsHealthy;
+            const reconnecting = !connected && (initSet.has(sid) || (retriesMap.get(sid) || 0) > 0);
+            return {
+                connected,
+                reconnecting,
+                sessionId: sid,
+                phone: connectedPhone || null,
+            };
+        }
+    }
+
+    for (const [sid, mappedPhone] of phoneMap.entries()) {
+        const cleanMapped = normalizePhoneDigits(mappedPhone);
+        if (!cleanMapped) continue;
+        if ((targetPhoneId && cleanMapped === targetPhoneId) || (targetDisplayPhone && cleanMapped === targetDisplayPhone)) {
+            const reconnecting = initSet.has(sid) || (retriesMap.get(sid) || 0) > 0;
+            if (reconnecting) {
+                return { connected: false, reconnecting: true, sessionId: sid, phone: cleanMapped };
+            }
+        }
+    }
+
+    if (targetId && (initSet.has(targetId) || (retriesMap.get(targetId) || 0) > 0)) {
+        return { connected: false, reconnecting: true, sessionId: targetId, phone: null };
+    }
+    if (account?.phone_number_id && (initSet.has(String(account.phone_number_id)) || (retriesMap.get(String(account.phone_number_id)) || 0) > 0)) {
+        return { connected: false, reconnecting: true, sessionId: String(account.phone_number_id), phone: null };
+    }
+
+    return {
+        connected: false,
+        reconnecting: false,
+        sessionId: null,
+        phone: null,
+    };
+}
+
+export interface BaileysDisconnectDecision {
+    action: 'reconnect' | 'clear_and_stop' | 'stop_conflict';
+    clearCredentials: boolean;
+    resetRetries: boolean;
+    delayMs: number;
+    reason: string;
+}
+
+export function classifyBaileysDisconnect(params: {
+    statusCode?: number;
+    errorMessage?: string;
+    attempt?: number;
+    maxAttempts?: number;
+}): BaileysDisconnectDecision {
+    const { statusCode, errorMessage = '', attempt = 0, maxAttempts = MAX_RECONNECT_ATTEMPTS } = params;
+    const msg = String(errorMessage || '');
+
+    // Genuine unrecoverable auth / crypto failures where credentials must be cleared
+    const isLoggedOut = statusCode === DisconnectReason.loggedOut || statusCode === DisconnectReason.forbidden;
+    const isCorruptedSession =
+        statusCode === DisconnectReason.badSession ||
+        statusCode === DisconnectReason.multideviceMismatch ||
+        msg.includes('Bad MAC') ||
+        msg.includes('pre-key');
+
+    if (isLoggedOut || isCorruptedSession) {
+        return {
+            action: 'clear_and_stop',
+            clearCredentials: true,
+            resetRetries: true,
+            delayMs: 0,
+            reason: isLoggedOut ? 'logged_out' : 'bad_session',
+        };
+    }
+
+    if (statusCode === DisconnectReason.connectionReplaced || statusCode === 440) {
+        return {
+            action: 'stop_conflict',
+            clearCredentials: false,
+            resetRetries: true,
+            delayMs: 0,
+            reason: 'connection_conflict',
+        };
+    }
+
+    // 515 restartRequired should reconnect cleanly right away without burning retry budget
+    if (statusCode === DisconnectReason.restartRequired) {
+        return {
+            action: 'reconnect',
+            clearCredentials: false,
+            resetRetries: true,
+            delayMs: 1000,
+            reason: 'restart_required',
+        };
+    }
+
+    // 428 connectionClosed, 408 timedOut/connectionLost, 503 unavailableService, and transient socket errors MUST reconnect
+    if (attempt >= maxAttempts) {
+        return {
+            action: 'reconnect',
+            clearCredentials: false,
+            resetRetries: false,
+            delayMs: 60000,
+            reason: 'transient_backoff_capped',
+        };
+    }
+
+    const delayMs = Math.min(3000 * Math.pow(2, Math.max(0, attempt)), 60000);
+    return {
+        action: 'reconnect',
+        clearCredentials: false,
+        resetRetries: false,
+        delayMs,
+        reason: 'transient_disconnect',
+    };
+}
 
 // Basic Pino logger for Baileys
 export const logger = pino({ level: 'silent' });
