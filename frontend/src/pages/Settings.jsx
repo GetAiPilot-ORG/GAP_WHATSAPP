@@ -190,11 +190,13 @@ export default function Settings() {
         if (window.Notification.permission === 'granted') {
             setBrowserPermission('granted')
             setDesktopNotificationsEnabled(true)
+            window.dispatchEvent(new Event('gap:notification-permission-changed'))
             return
         }
         const permission = await window.Notification.requestPermission()
         setBrowserPermission(permission)
         setDesktopNotificationsEnabled(permission === 'granted')
+        window.dispatchEvent(new Event('gap:notification-permission-changed'))
     }
 
     const formatKnowledgeDate = (value) => {
@@ -376,7 +378,7 @@ export default function Settings() {
             return {
                 name: 'Pro',
                 price: '₹3,499/mo',
-                features: ['50,000 contacts', '10 agents', 'API & Webhooks']
+                features: ['25,000 contacts', '10 agents', 'API & Webhooks']
             }
         }
         // If starter or no active plan

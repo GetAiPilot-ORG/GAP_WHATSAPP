@@ -1,3 +1,4 @@
+import { QuickReplyTriggerPicker } from "./QuickReplyTriggers";
 import { X, Save } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
@@ -5,12 +6,14 @@ import { FLOW_TEMPLATES } from './flowTemplates';
 import { notify } from '../../services/notificationService';
 import { BACKEND_URL as API_URL } from '../../config/api';
 
-export default function NodeConfigPanel({ node, nodes, onClose, onSave }) {
+export default function NodeConfigPanel({ node, nodes, onClose, onSave, flowContext }) {
     const [config, setConfig] = useState(node?.data?.config || {});
 
     useEffect(() => {
-        setConfig(node?.data?.config || {});
-    }, [node]);
+        const closeOnEscape = event => { if (event.key === 'Escape') onClose(); };
+        window.addEventListener('keydown', closeOnEscape);
+        return () => window.removeEventListener('keydown', closeOnEscape);
+    }, [onClose]);
 
     if (!node) return null;
 
@@ -27,42 +30,43 @@ export default function NodeConfigPanel({ node, nodes, onClose, onSave }) {
         <>
             {/* Backdrop */}
             <div
-                className="absolute inset-0 bg-black bg-opacity-30 z-40 transition-opacity"
+                className="absolute inset-0 bg-black/20 z-40 transition-opacity"
                 onClick={onClose}
             />
 
             {/* Panel */}
-            <div className="absolute right-6 top-6 bottom-6 w-[400px] bg-white shadow-2xl z-50 flex flex-col rounded-2xl overflow-hidden animate-slide-in-right">
+            <div className="absolute inset-y-0 right-0 z-50 flex w-full flex-col overflow-hidden border-l border-gray-200 bg-white shadow-xl sm:max-w-[400px]">
                 {/* Header */}
-                <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4 flex items-center justify-between">
+                <div className="flex items-start justify-between gap-3 border-b border-gray-200 bg-white px-5 py-4">
                     <div>
-                        <h2 className="text-lg font-bold">Configure {node.type}</h2>
-                        <p className="text-xs text-blue-100 mt-0.5">Node ID: {node.id}</p>
+                        <h2 className="text-base font-semibold text-gray-900">{({ startBotFlow: 'Keyword trigger', textMessage: 'Text message', button: 'Reply buttons', userInput: 'User input', interactive: 'List menu', template: 'Template message', handoff: 'Handoff to team', googleSheets: 'Google Sheets', httpApi: 'HTTP request' })[node.type] || node.type.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, value => value.toUpperCase())}</h2>
+                        <p className="mt-1 text-xs leading-5 text-gray-500">Configure this step, then save your changes.</p>
                     </div>
                     <button
+                        type="button" aria-label="Close step settings"
                         onClick={onClose}
-                        className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
+                        className="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
                     >
                         <X className="h-5 w-5" />
                     </button>
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 overflow-y-auto p-6">
-                    {renderConfigForm(node.type, config, updateConfig, nodes, node.id)}
+                <div className="min-h-0 flex-1 overflow-y-auto p-5">
+                    {renderConfigForm(node.type, config, updateConfig, nodes, node.id, flowContext)}
                 </div>
 
                 {/* Footer */}
-                <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex gap-3">
+                <div className="flex shrink-0 gap-3 border-t border-gray-200 bg-white px-5 py-4">
                     <button
                         onClick={onClose}
-                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 font-medium transition-colors"
+                        className="h-10 flex-1 rounded-md border border-gray-300 px-4 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={handleSave}
-                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center justify-center gap-2 transition-colors"
+                        className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md bg-[#0b74c9] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#0867b4]"
                     >
                         <Save className="h-4 w-4" />
                         Save
@@ -73,10 +77,10 @@ export default function NodeConfigPanel({ node, nodes, onClose, onSave }) {
     );
 }
 
-function renderConfigForm(nodeType, config, updateConfig, nodes, currentNodeId) {
+function renderConfigForm(nodeType, config, updateConfig, nodes, currentNodeId, flowContext) {
     switch (nodeType) {
         case 'startBotFlow':
-            return <StartBotFlowConfig config={config} updateConfig={updateConfig} />;
+            return <StartBotFlowConfig config={config} updateConfig={updateConfig} flowContext={flowContext} />;
         case 'textMessage':
             return <TextMessageConfig config={config} updateConfig={updateConfig} />;
         case 'image':
@@ -122,9 +126,10 @@ function renderConfigForm(nodeType, config, updateConfig, nodes, currentNodeId) 
 }
 
 // Configuration components for each node type
-function StartBotFlowConfig({ config, updateConfig }) {
+function StartBotFlowConfig({ config, updateConfig, flowContext }) {
     return (
         <div className="space-y-4">
+            <QuickReplyTriggerPicker config={config} updateConfig={updateConfig} flowContext={flowContext} />
             <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                     Trigger Keywords
@@ -136,7 +141,7 @@ function StartBotFlowConfig({ config, updateConfig }) {
                     placeholder="Hello, Hi, Start"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
-                <p className="mt-1 text-xs text-gray-500">Comma-separated keywords</p>
+                <p className="mt-1 text-xs text-gray-500">Add your own comma-separated keywords. Selected quick replies above are included automatically.</p>
             </div>
 
             <div>
@@ -1477,7 +1482,7 @@ function GoToConfig({ config, updateConfig, nodes, currentNodeId }) {
         let text = '';
         
         switch (node.type) {
-            case 'startBotFlow': text = c.keywords ? `Keywords: ${c.keywords}` : 'No keywords'; break;
+            case 'startBotFlow': { const keywords = [c.keywords, ...(c.quickReplyKeywords || [])].filter(Boolean).join(', '); text = keywords ? `Keywords: ${keywords}` : 'No keywords'; break; }
             case 'textMessage': text = c.message || c.text || 'Empty text'; break;
             case 'userInput': text = c.question || c.text || 'Empty question'; break;
             case 'button': text = c.text || c.headerText || 'Empty message'; break;

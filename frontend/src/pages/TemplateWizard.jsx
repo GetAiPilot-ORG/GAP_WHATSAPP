@@ -1,3 +1,4 @@
+import { TemplateQuickReplyCoverage } from "../components/flow-builder/QuickReplyTriggers";
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -6,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { useWhatsAppAccounts } from '../context/WhatsAppAccountContext';
 import { useDialog } from '../context/DialogContext';
 import { META_LANGUAGES, getMetaLanguage } from '../data/metaLanguages';
+import { formatMetaAccountLabel, resolveTemplateAccount } from '../utils/metaAccount';
 import { BACKEND_URL as API_URL } from '../config/api';
 const fieldClass = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-100 disabled:text-slate-500';
 const initialForm = {
@@ -157,7 +159,11 @@ export default function TemplateWizard() {
   const queryClient = useQueryClient();
   const { apiCall, memberProfile } = useAuth();
   const { accounts: waAccounts, selectedAccount, isLoading: accountsLoading } = useWhatsAppAccounts();
-  const templateAccountId = selectedAccount?.id || waAccounts[0]?.id || '';
+  const {
+    account: templateAccount,
+    accountId: templateAccountId,
+    fallbackReason: templateAccountFallbackReason,
+  } = useMemo(() => resolveTemplateAccount(waAccounts, selectedAccount), [waAccounts, selectedAccount]);
   const { confirmDialog } = useDialog();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(initialForm);
@@ -305,6 +311,12 @@ export default function TemplateWizard() {
           <span className="text-xs text-slate-500">{context.account.display_phone_number || 'Meta account'}</span>
         </div>
       </header>
+
+      {templateAccountFallbackReason === 'non_meta_selected' && templateAccount && (
+        <div className="mx-auto mt-4 max-w-[1280px] rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-xs text-sky-900">
+          Selected account ({formatMetaAccountLabel(selectedAccount)}) is not linked to Meta Cloud API. New templates will be created on <strong>{formatMetaAccountLabel(templateAccount)}</strong>.
+        </div>
+      )}
 
       {restored && <div className="mx-auto mt-4 flex max-w-[1280px] items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800"><span>Your saved draft was restored. Media files need to be selected again.</span><button onClick={() => setRestored(false)} aria-label="Dismiss"><X className="h-4 w-4" /></button></div>}
 
@@ -498,6 +510,7 @@ export default function TemplateWizard() {
                         {button.type === 'COPY_CODE' && <input className={`${fieldClass} mt-3`} value={button.codeExample || ''} onChange={event => update({ buttons: form.buttons.map((item, itemIndex) => itemIndex === index ? { ...item, codeExample: event.target.value } : item) })} placeholder="Example offer code" />}
                       </div>
                     ))}
+                    {form.buttons.some(button => button.type === 'QUICK_REPLY' && button.text?.trim()) && <TemplateQuickReplyCoverage buttons={form.buttons} accountId={templateAccountId} />}
                     {form.buttons.length < 10 && <button onClick={addButton} className="flex items-center gap-2 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"><Plus className="h-4 w-4" /> Add button</button>}
                   </div>
                 </section>
@@ -505,7 +518,7 @@ export default function TemplateWizard() {
             </div>
           )}
 
-          {step === 3 && <div className="space-y-4"><section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h1 className="text-xl font-bold">Review and submit</h1><p className="mt-1 text-sm text-slate-500">Meta will review this language version before it can be sent.</p><dl className="mt-6 grid gap-4 sm:grid-cols-2">{[['Template', form.name], ['Category', form.category], ['Type', form.templateType.replace(/_/g, ' ')], ['Language', `${getMetaLanguage(form.language).label} · ${form.language}`]].map(([label, value]) => <div key={label} className="rounded-lg bg-slate-50 p-3"><dt className="text-xs font-semibold uppercase text-slate-500">{label}</dt><dd className="mt-1 text-sm font-semibold text-slate-900">{value}</dd></div>)}</dl>{submitError && <p className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{submitError}</p>}</section><section className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">Submission ke baad status Pending hoga. Approval, rejection, aur Meta category changes Templates list mein sync honge.</section></div>}
+          {step === 3 && <div className="space-y-4">{form.buttons.some(button => button.type === 'QUICK_REPLY' && button.text?.trim()) && <TemplateQuickReplyCoverage buttons={form.buttons} accountId={templateAccountId} />}<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h1 className="text-xl font-bold">Review and submit</h1><p className="mt-1 text-sm text-slate-500">Meta will review this language version before it can be sent.</p><dl className="mt-6 grid gap-4 sm:grid-cols-2">{[['Template', form.name], ['Category', form.category], ['Type', form.templateType.replace(/_/g, ' ')], ['Language', `${getMetaLanguage(form.language).label} · ${form.language}`]].map(([label, value]) => <div key={label} className="rounded-lg bg-slate-50 p-3"><dt className="text-xs font-semibold uppercase text-slate-500">{label}</dt><dd className="mt-1 text-sm font-semibold text-slate-900">{value}</dd></div>)}</dl>{submitError && <p className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{submitError}</p>}</section><section className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">Submission ke baad status Pending hoga. Approval, rejection, aur Meta category changes Templates list mein sync honge.</section></div>}
         </div>
         <aside className="hidden lg:block"><div className="sticky top-32 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><WhatsAppPreview form={form} mediaUrl={mediaUrl} /></div></aside>
       </main>

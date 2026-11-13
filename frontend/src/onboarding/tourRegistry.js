@@ -19,7 +19,7 @@ export const tours = {
         steps: [
             step('[data-tour="sidebar-nav"]', 'Main navigation', 'Open the dashboard, chats, contacts, agents, flows, broadcasts, and billing from here.', 'right'),
             step('[data-tour="account-switcher"]', 'WhatsApp account switcher', 'If you have multiple connected accounts, choose the active account here.', 'right'),
-            step('[data-tour="setup-checklist"], [data-tour="dashboard-overview"]', 'Setup and business overview', 'Follow your live setup progress, then monitor messages, delivery health, wallet usage, and account status.', 'bottom'),
+            step('[data-tour="dashboard-overview"]', 'Business overview', 'Monitor messages, delivery health, wallet usage, and account status.', 'bottom'),
             step('[data-tour="nav-whatsapp-connect"], [data-tour="mobile-menu-button"]', 'Connect WhatsApp', 'Connect an official WhatsApp Cloud API account as your first practical step.', 'right'),
             step('[data-tour="tour-menu"]', 'Guides anytime', 'Use this menu to tour the current page, continue setup, or review WhatsApp messaging rules.', 'bottom', 'end'),
         ],

@@ -140,6 +140,11 @@ export default defineConfig(({ mode }) => {
   const backendTarget = env.VITE_BACKEND_URL || 'https://whatsapp.getaipilot.in'
 
   return {
+    // Keep dev prebundles separate from build-time optimizer cache.
+    cacheDir: mode === 'development' ? 'node_modules/.vite-dev' : 'node_modules/.vite',
+    optimizeDeps: {
+      include: ['socket.io-client'],
+    },
     plugins: [
       react(),
       basicSsl(),
@@ -234,6 +239,6 @@ export default defineConfig(({ mode }) => {
         }
       }
     }
-}
+  }
 })
 

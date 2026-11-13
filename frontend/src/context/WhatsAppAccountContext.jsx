@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, useMemo } 
 import { useAuth } from './AuthContext'
 import { supabase } from '../supabaseClient'
 import { API_BASE } from '../config/api'
+import { getNumberCapacity } from '../utils/numberCapacity'
 
 const WhatsAppAccountContext = createContext(null)
 
@@ -9,6 +10,20 @@ const SELECTED_WA_ACCOUNT_KEY = 'selected_wa_account_id'
 
 export function WhatsAppAccountProvider({ children }) {
     const { session, apiCall } = useAuth()
+    const [numberPlan, setNumberPlan] = useState(null)
+    const refreshNumberPlan = useCallback(async () => {
+        if (!session?.access_token) { setNumberPlan(null); return }
+        try {
+            const response = await apiCall(`${API_BASE}/billing/overview`)
+            if (response.ok) { const data = await response.json(); setNumberPlan(data.current_plan) }
+        } catch { /* Keep the last known plan during a temporary connection failure. */ }
+    }, [session?.access_token, apiCall])
+    useEffect(() => {
+        setNumberPlan(null)
+        refreshNumberPlan()
+        window.addEventListener('focus', refreshNumberPlan)
+        return () => window.removeEventListener('focus', refreshNumberPlan)
+    }, [refreshNumberPlan])
     const [accounts, setAccounts] = useState([])
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState(null)
@@ -64,8 +79,35 @@ export function WhatsAppAccountProvider({ children }) {
                             setAccounts(prev => prev.filter(acc => String(acc.id) !== String(updatedRow.id)))
                             return
                         }
+                        const isMetaRow = Boolean(
+                            updatedRow.whatsapp_business_account_id ||
+                            updatedRow.access_token_encrypted ||
+                            updatedRow.has_access_token
+                        )
+                        const connUpper = String(updatedRow.connection_status || updatedRow.status || 'CONNECTED').toUpperCase()
+                        const reconnectingRow = !isMetaRow && (connUpper === 'CHECKING' || connUpper === 'CONNECTING' || updatedRow.status === 'connecting')
+                        const sendReadyRow = isMetaRow
+                            ? Boolean(
+                                updatedRow.phone_number_id &&
+                                updatedRow.whatsapp_business_account_id &&
+                                (updatedRow.access_token_encrypted || updatedRow.has_access_token) &&
+                                updatedRow.status !== 'disconnected'
+                              )
+                            : (updatedRow.status === 'connected' || updatedRow.status === 'active') &&
+                              !['DISCONNECTED', 'WARNING', 'FAILED', 'TOKEN_INVALID'].includes(connUpper)
+
                         setAccounts(prev => {
                             const index = prev.findIndex(acc => String(acc.id) === String(updatedRow.id))
+                            const normalizedHealth = {
+                                connection: isMetaRow ? connUpper : (sendReadyRow ? 'CONNECTED' : (reconnectingRow ? 'CHECKING' : 'DISCONNECTED')),
+                                messaging: sendReadyRow ? 'SEND_READY' : 'PAUSED',
+                                token: isMetaRow ? (updatedRow.token_status || 'VALID') : 'MISSING',
+                                verification: updatedRow.business_verification_status || 'VERIFIED',
+                                quality: updatedRow.quality_rating || 'GREEN',
+                                has_access_token: Boolean(updatedRow.access_token_encrypted || updatedRow.has_access_token),
+                                health_version: Number(updatedRow.health_version || 1),
+                                last_updated: updatedRow.last_health_check_at || updatedRow.updated_at || new Date().toISOString(),
+                            }
                             if (index >= 0) {
                                 const current = prev[index]
                                 const currentVer = Number(current.health_version || current.health?.health_version || 1)
@@ -79,20 +121,21 @@ export function WhatsAppAccountProvider({ children }) {
                                     ...current,
                                     ...updatedRow,
                                     has_access_token: Boolean(updatedRow.access_token_encrypted || updatedRow.has_access_token),
-                                    health: {
-                                        connection: String(updatedRow.connection_status || updatedRow.status || 'CONNECTED').toUpperCase(),
-                                        messaging: updatedRow.status === 'connected' ? 'SEND_READY' : 'PAUSED',
-                                        token: updatedRow.token_status || 'VALID',
-                                        verification: updatedRow.business_verification_status || 'VERIFIED',
-                                        quality: updatedRow.quality_rating || 'GREEN',
-                                        has_access_token: Boolean(updatedRow.access_token_encrypted || updatedRow.has_access_token),
-                                        health_version: newVer,
-                                        last_updated: updatedRow.last_health_check_at || updatedRow.updated_at || new Date().toISOString(),
-                                    }
+                                    connection_type: isMetaRow ? 'meta_cloud_api' : 'qr_session',
+                                    send_ready: sendReadyRow,
+                                    reconnecting: reconnectingRow,
+                                    health: normalizedHealth,
                                 }
                                 return next
                             } else {
-                                return [updatedRow, ...prev]
+                                return [{
+                                    ...updatedRow,
+                                    has_access_token: Boolean(updatedRow.access_token_encrypted || updatedRow.has_access_token),
+                                    connection_type: isMetaRow ? 'meta_cloud_api' : 'qr_session',
+                                    send_ready: sendReadyRow,
+                                    reconnecting: reconnectingRow,
+                                    health: normalizedHealth,
+                                }, ...prev]
                             }
                         })
                     } else if (payload.eventType === 'DELETE') {
@@ -148,13 +191,15 @@ export function WhatsAppAccountProvider({ children }) {
 
     const value = useMemo(() => ({
         accounts,
+        numberCapacity: getNumberCapacity(accounts, numberPlan),
+        refreshNumberPlan,
         selectedAccount,
         selectedAccountId,
         setSelectedAccount: handleSelectAccount,
         isLoading,
         error,
         refetchAccounts: fetchAccounts,
-    }), [accounts, selectedAccount, selectedAccountId, handleSelectAccount, isLoading, error, fetchAccounts])
+    }), [accounts, numberPlan, refreshNumberPlan, selectedAccount, selectedAccountId, handleSelectAccount, isLoading, error, fetchAccounts])
 
     return (
         <WhatsAppAccountContext.Provider value={value}>

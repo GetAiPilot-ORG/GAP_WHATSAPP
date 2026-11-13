@@ -138,6 +138,7 @@ export default function MetaTemplateLibrary({
     onUse,
     loading,
     error,
+    notice,
 }) {
     const industries = ['All Industries', ...new Set(templates.flatMap((item) => Array.isArray(item.industry) ? item.industry : [item.industry || 'General']))]
     const useCases = ['All Use Cases', ...new Set(templates.map((item) => item.useCase).filter(Boolean))]
@@ -192,6 +193,10 @@ export default function MetaTemplateLibrary({
                     </div>
                     {hasFilters ? <button onClick={resetFilters} className="text-xs font-semibold text-[#0064b7] hover:underline">Clear all filters</button> : null}
                 </div>
+
+                {notice ? (
+                    <section className="mb-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs text-sky-900">{notice}</section>
+                ) : null}
 
                 {loading ? (
                     <section className="flex min-h-56 items-center justify-center rounded-2xl border border-slate-200 bg-white text-sm text-slate-500">Loading official Meta library...</section>

@@ -15,6 +15,8 @@ import {
   inspectMetaTokenPermissions,
   toSafeWhatsappAccount,
   getMetaAccountDiagnostics,
+  getQrAccountDiagnostics,
+  isMetaCloudAccount,
   getOrgWhatsappAccount,
   fetchMetaBusinessProfile,
   uploadMetaProfilePicture,
@@ -68,6 +70,23 @@ async function resolveTemplateMetaAccount(orgId: string, requestedAccountId?: un
   const { data: accounts, error } = await query.order('created_at', { ascending: false });
   if (error) throw error;
   if (!accounts?.length) {
+    if (cleanAccountId && cleanAccountId !== 'All') {
+      const { data: requestedRow } = await supabase
+        .from('w_wa_accounts')
+        .select('id, display_phone_number, whatsapp_business_account_id, status')
+        .eq('organization_id', orgId)
+        .eq('id', cleanAccountId)
+        .maybeSingle();
+
+      if (requestedRow && requestedRow.status !== 'disconnected' && !requestedRow.whatsapp_business_account_id) {
+        const label = requestedRow.display_phone_number ? ` (${requestedRow.display_phone_number})` : '';
+        const err: any = new Error(
+          `WhatsApp account${label} is not linked to Meta Cloud API (missing WABA ID). Select a Meta Cloud API account or "All WhatsApp accounts" to manage templates.`
+        );
+        err.statusCode = 400;
+        throw err;
+      }
+    }
     const err: any = new Error(cleanAccountId && cleanAccountId !== 'All'
       ? 'Selected Meta account was not found for this organization.'
       : 'No connected Meta account found');
@@ -361,21 +380,88 @@ export async function deleteAccount(req: any, res: Response) {
   const { id } = req.params;
   const orgId = req.organization_id;
   try {
+    // 1. Fetch current account record
+    const { data: account } = await supabase
+      .from("w_wa_accounts")
+      .select("id, organization_id, whatsapp_business_account_id, access_token_encrypted, phone_number_id")
+      .eq("id", id)
+      .eq("organization_id", orgId)
+      .maybeSingle();
+
+    if (!account) {
+      return res.status(404).json({ error: "WhatsApp account not found" });
+    }
+
+    // 2. If Meta Cloud API, attempt to unsubscribe webhooks so Meta stops pinging this server
+    if (account.whatsapp_business_account_id && account.access_token_encrypted) {
+      try {
+        const token = decryptToken(account.access_token_encrypted);
+        await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${encodeURIComponent(account.whatsapp_business_account_id)}/subscribed_apps`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } catch (e: any) {
+        console.warn(`[deleteAccount] Unsubscribe from Meta failed:`, e?.message);
+      }
+    }
+
+    // 3. If active Baileys socket session exists, cleanly end and remove it
+    try {
+      const {
+        sessions,
+        findLiveBaileysSessionForAccount,
+        initializingSessions,
+        reconnectAttempts,
+        latestQrBySession,
+        sessionPhoneMap,
+      } = await import("../services/whatsapp.service.js");
+      const liveSession = findLiveBaileysSessionForAccount(account);
+      const keysToClear = Array.from(new Set([
+        id,
+        account.phone_number_id,
+        liveSession?.sessionId,
+      ].filter(Boolean))) as string[];
+
+      for (const key of keysToClear) {
+        initializingSessions.delete(key);
+        reconnectAttempts.delete(key);
+        latestQrBySession.delete(key);
+        sessionPhoneMap.delete(key);
+        const active = sessions instanceof Map ? sessions.get(key) : null;
+        if (active) {
+          try { await active.logout?.(); } catch {}
+          try { active.end?.(); } catch {}
+          sessions.delete(key);
+        }
+        if (key.startsWith('session_') || key === 'dashboard_session') {
+          const dir = `baileys_auth_info/${key}`;
+          if (fs.existsSync(dir)) {
+            fs.rmSync(dir, { recursive: true, force: true });
+          }
+        }
+      }
+    } catch (sessionErr: any) {
+      console.warn(`[deleteAccount] Could not clear socket session:`, sessionErr?.message);
+    }
+
+    // 4. Update health state safely
     await AccountHealthService.updateHealth(id, {
       connection_status: 'DISCONNECTED',
       token_status: 'MISSING',
-    });
+    }).catch(err => console.warn('[deleteAccount] Health update warning:', err?.message));
 
+    // 5. Delete the account record permanently
     const { error } = await supabase
       .from("w_wa_accounts")
-      .update({ status: "disconnected", connection_status: "DISCONNECTED", access_token_encrypted: null })
+      .delete()
       .eq("id", id)
       .eq("organization_id", orgId);
 
     if (error) throw error;
-    res.json({ success: true });
+    res.json({ success: true, message: "Account disconnected successfully" });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error("[deleteAccount] Error disconnecting account:", err);
+    res.status(500).json({ error: err.message || "Failed to disconnect account" });
   }
 }
 
@@ -396,6 +482,18 @@ export async function getAccountDiagnostics(req: any, res: Response) {
     if (error) throw error;
     if (!account?.id)
       return res.status(404).json({ error: "WhatsApp account not found" });
+
+    if (!isMetaCloudAccount(account)) {
+      const diag = getQrAccountDiagnostics(account);
+      await AccountHealthService.updateHealth(account.id, {
+        connection_status: diag.send_ready ? 'CONNECTED' : (diag.reconnecting ? 'CHECKING' : 'WARNING'),
+        status_override: diag.send_ready ? 'connected' : 'pending',
+        token_status: 'UNKNOWN',
+        diagnostics_json: diag,
+      }).catch(err => console.error('[Diagnostics] Failed to persist QR health update:', err.message));
+
+      return res.json(diag);
+    }
 
     const diag = await getMetaAccountDiagnostics(account);
 
@@ -1013,12 +1111,16 @@ export async function createTemplate(req: any, res: Response) {
       // Fetch official library buttons from Meta to guarantee exact button count and structure.
       // Inputs are matched positionally after removing non-parameterized buttons.
       try {
+        const cleanLibraryName = String(libraryTemplateName).trim();
         const libRes = await fetch(
-          `https://graph.facebook.com/${GRAPH_API_VERSION}/message_template_library?name=${encodeURIComponent(String(libraryTemplateName).trim())}&language=${encodeURIComponent(cleanLang)}&fields=category,buttons`,
+          `https://graph.facebook.com/${GRAPH_API_VERSION}/message_template_library?name=${encodeURIComponent(cleanLibraryName)}&language=${encodeURIComponent(cleanLang)}&fields=id,name,category,buttons&limit=50`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         const libJson = await libRes.json();
-        const libTemplate = (libJson.data || []).find((t: any) => t.name === String(libraryTemplateName).trim());
+        const libItems: any[] = Array.isArray(libJson.data) ? libJson.data : [];
+        const libTemplate =
+          libItems.find((t: any) => String(t?.name || '').trim() === cleanLibraryName) ||
+          (libItems.length === 1 && !libItems[0]?.name ? libItems[0] : null);
         if (!libRes.ok || !libTemplate) {
           return res.status(502).json({
             error: libJson.error?.message || 'Could not verify this template definition with Meta.',

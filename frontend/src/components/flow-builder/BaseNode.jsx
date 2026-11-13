@@ -4,33 +4,33 @@ import { Trash2, Check, AlertCircle, Eye, Copy } from 'lucide-react';
 export default function BaseNode({
     id,
     data,
-    icon: Icon,
+    icon,
     title,
     color = 'blue',
     children,
     handles = { input: true, output: true },
     selected = false
 }) {
+    const Icon = icon;
     const colorClasses = {
-        blue: 'bg-[#128C7E] border-[#0b6f63] text-teal-700',
-        green: 'bg-[#25D366] border-[#1fb85a] text-green-700',
-        purple: 'bg-purple-600 border-purple-500 text-purple-700',
-        orange: 'bg-orange-600 border-orange-500 text-orange-700',
-        pink: 'bg-pink-600 border-pink-500 text-pink-700',
-        red: 'bg-red-600 border-red-500 text-red-700',
-        teal: 'bg-teal-600 border-teal-500 text-teal-700',
-        indigo: 'bg-indigo-600 border-indigo-500 text-indigo-700',
-        yellow: 'bg-yellow-500 border-yellow-400 text-yellow-700',
+        blue: 'bg-blue-50 border-blue-200 text-blue-700',
+        green: 'bg-green-50 border-green-200 text-green-700',
+        purple: 'bg-purple-50 border-purple-200 text-purple-700',
+        orange: 'bg-orange-50 border-orange-200 text-orange-700',
+        pink: 'bg-pink-50 border-pink-200 text-pink-700',
+        red: 'bg-red-50 border-red-200 text-red-700',
+        teal: 'bg-teal-50 border-teal-200 text-teal-700',
+        indigo: 'bg-indigo-50 border-indigo-200 text-indigo-700',
+        yellow: 'bg-amber-50 border-amber-200 text-amber-800',
     };
 
-    const bgColor = colorClasses[color]?.split(' ')[0] || 'bg-blue-500';
-    const borderColor = colorClasses[color]?.split(' ')[1] || 'border-blue-400';
+    const headerTone = colorClasses[color] || colorClasses.blue;
 
     const status = data?.status || { sent: 0, delivered: 0, subscribers: 0, errors: 0 };
 
     return (
         <div
-            className={`flow-node group relative bg-white rounded-lg border border-gray-200 transition-all ${selected ? 'ring-2 ring-[#25D366] ring-offset-2 ring-offset-[#f5f7fa]' : 'hover:border-gray-300'
+            className={`flow-node group relative bg-white rounded-lg border border-gray-200 transition-all ${selected ? 'ring-2 ring-[#0b74c9] ring-offset-2 ring-offset-[#f5f7fa]' : 'hover:border-gray-300'
                 }`}
             style={{ minWidth: '240px', maxWidth: '280px' }}
         >
@@ -44,7 +44,7 @@ export default function BaseNode({
                             e.stopPropagation();
                             data.onPreview(id);
                         }}
-                        className="bg-white border border-gray-200 shadow-sm rounded-full p-2 text-gray-500 hover:text-blue-600 hover:bg-gray-50 flex items-center justify-center nodrag nopan"
+                        className="bg-white border border-gray-200 shadow-sm rounded-md p-2 text-gray-500 hover:text-blue-600 hover:bg-gray-50 flex items-center justify-center nodrag nopan"
                         title="Preview node on WhatsApp"
                     >
                         <Eye className="h-4 w-4" />
@@ -58,7 +58,7 @@ export default function BaseNode({
                             e.stopPropagation();
                             data.onDuplicate(id);
                         }}
-                        className="bg-white border border-gray-200 shadow-sm rounded-full p-2 text-gray-500 hover:text-green-600 hover:bg-gray-50 flex items-center justify-center nodrag nopan"
+                        className="bg-white border border-gray-200 shadow-sm rounded-md p-2 text-gray-500 hover:text-green-600 hover:bg-gray-50 flex items-center justify-center nodrag nopan"
                         title="Duplicate node"
                     >
                         <Copy className="h-4 w-4" />
@@ -75,14 +75,14 @@ export default function BaseNode({
             )}
 
             {/* Header */}
-            <div className={`${bgColor} text-white px-3 py-2 rounded-t-lg flex items-center justify-between`}>
+            <div className={`${headerTone} border-b px-3 py-2.5 rounded-t-lg flex items-center justify-between`}>
                 <div className="flex items-center gap-2">
                     {Icon && <Icon className="h-4 w-4" />}
                     <span className="text-xs font-semibold">{title}</span>
                 </div>
                 <div className="flex items-center gap-1">
                     {data?.configured && (
-                        <Check className="h-3 w-3 text-white opacity-70" />
+                        <Check className="h-3 w-3 text-green-700" />
                     )}
                     <button
                         type="button"
@@ -92,7 +92,7 @@ export default function BaseNode({
                             event.stopPropagation();
                             data?.onDelete?.(id);
                         }}
-                        className="text-white/80 hover:text-white transition-colors nodrag nopan"
+                        className="text-gray-500 hover:text-red-600 transition-colors nodrag nopan"
                         title="Delete node"
                     >
                         <Trash2 className="h-3.5 w-3.5" />

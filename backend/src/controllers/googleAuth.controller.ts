@@ -1,3 +1,4 @@
+import { completeAgentCalendarAuth } from './agentCalendarAuth.controller.js';
 import { Request, Response } from "express";
 import { supabase } from "../config/supabase.js";
 import { getGoogleOAuthUrl, handleGoogleOAuthCallback } from "../services/googleCalendar.service.js";
@@ -101,9 +102,10 @@ export async function handleGoogleCallbackController(req: Request, res: Response
   try {
     const code = String(req.query.code || "");
     const rawOrgId = String(req.query.state || "");
-    const orgId = await resolveOrganizationId(rawOrgId);
+    const agentConnection = rawOrgId.startsWith('agent.');
+    const orgId = agentConnection ? null : await resolveOrganizationId(rawOrgId);
 
-    if (!code || !orgId) {
+    if (!code || (!agentConnection && !orgId)) {
       return res.status(400).send("Invalid callback parameters or missing organization");
     }
 
@@ -111,8 +113,10 @@ export async function handleGoogleCallbackController(req: Request, res: Response
     const host = req.headers["x-forwarded-host"] || req.headers.host;
     const dynamicRedirectUri = process.env.GOOGLE_REDIRECT_URI || (host ? `${protocol}://${host}/api/integrations/google/callback` : undefined);
 
-    const { connectedEmail } = await handleGoogleOAuthCallback(code, orgId, dynamicRedirectUri);
+    const { connectedEmail } = await (agentConnection ? completeAgentCalendarAuth(code, rawOrgId) : handleGoogleOAuthCallback(code, orgId!, dynamicRedirectUri));
 
+    const safeEmail = String(connectedEmail).replace(/[&<>"']/g, "");
+    const emailJson = JSON.stringify(String(connectedEmail)).replace(/</g, "\\u003c");
     res.setHeader("Content-Type", "text/html");
     return res.send(`
       <!DOCTYPE html>
@@ -131,14 +135,14 @@ export async function handleGoogleCallbackController(req: Request, res: Response
           <div class="card">
             <div class="icon">✅</div>
             <h2>Google Calendar Connected!</h2>
-            <p>Account: <strong>${connectedEmail}</strong></p>
+            <p>Account: <strong>${safeEmail}</strong></p>
             <p>This window will close automatically...</p>
           </div>
           <script>
             if (window.opener) {
               window.opener.postMessage({
                 type: 'GOOGLE_AUTH_SUCCESS',
-                connectedEmail: '${connectedEmail}'
+                connectedEmail: ${emailJson}
               }, '*');
             }
             setTimeout(function() {

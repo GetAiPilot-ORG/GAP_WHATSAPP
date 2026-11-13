@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import Modal from './Modal'
 import { Plus, Trash2 } from 'lucide-react'
 
+const INTERNAL_CUSTOM_FIELD_KEYS = new Set(['profile_photo_url', 'profile_photo_checked_at', 'lid'])
+
 export default function ContactModal({ isOpen, onClose, contact = null, onSave }) {
     const [formData, setFormData] = useState({
         name: '',
@@ -16,7 +18,9 @@ export default function ContactModal({ isOpen, onClose, contact = null, onSave }
             setFormData({
                 ...contact,
                 tags: contact.tags.join(', '),
-                custom_fields: Object.entries(contact.custom_fields || {}).map(([key, value]) => ({ key, value }))
+                custom_fields: Object.entries(contact.custom_fields || {})
+                    .filter(([key]) => !INTERNAL_CUSTOM_FIELD_KEYS.has(key))
+                    .map(([key, value]) => ({ key, value }))
             })
         } else {
             setFormData({
@@ -31,13 +35,19 @@ export default function ContactModal({ isOpen, onClose, contact = null, onSave }
 
     const handleSubmit = (e) => {
         e.preventDefault()
+        const preservedInternalFields = Object.fromEntries(
+            Object.entries(contact?.custom_fields || {}).filter(([key]) => INTERNAL_CUSTOM_FIELD_KEYS.has(key))
+        )
         const submission = {
             ...formData,
             tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean),
-            custom_fields: formData.custom_fields.reduce((acc, field) => {
-                if (field.key) acc[field.key] = field.value
-                return acc
-            }, {})
+            custom_fields: {
+                ...preservedInternalFields,
+                ...formData.custom_fields.reduce((acc, field) => {
+                    if (field.key) acc[field.key] = field.value
+                    return acc
+                }, {})
+            }
         }
         onSave(submission)
         onClose()

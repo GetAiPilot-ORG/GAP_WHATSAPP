@@ -1,8 +1,16 @@
+import {
+  calendarSettings,
+  syncAgentCalendarById,
+  syncCalendarEventsIntoAgent,
+  validateCalendarSettings,
+} from '../services/agentCalendar.service.js';
+import { testBotAgentReply } from '../services/ai.service.js';
 import { Response } from 'express';
 import { supabase } from '../config/supabase.js';
 import { enforcePlanResourceLimit } from '../services/billing.service.js';
 import { getKnowledgeDocuments } from '../services/settings.service.js';
 import { getIO } from '../config/socket.js';
+import { isNonIndividualThreadContact } from '../utils/format.js';
 
 const AGENT_SETTINGS_ITEM_TYPE = "__agent_settings";
 
@@ -41,6 +49,7 @@ async function buildAgentKnowledgePayload(organizationId: string, params: any) {
   }));
 
   const automationSettings = {
+    use_buttons: params.automation_settings?.use_buttons !== false,
     reply_on_keywords: params.automation_settings?.reply_on_keywords !== false,
     auto_reply_unknown: params.automation_settings?.auto_reply_unknown === true,
     default_for_new_chats:
@@ -55,6 +64,10 @@ async function buildAgentKnowledgePayload(organizationId: string, params: any) {
     {
       type: AGENT_SETTINGS_ITEM_TYPE,
       settings: automationSettings,
+      calendar: validateCalendarSettings(
+        params.calendar_settings || { enabled: false },
+        params.existing_calendar,
+      ),
       selected_knowledge_document_ids: selectedDocs.map((doc: any) => doc.id),
       trained_at: new Date().toISOString(),
       training: {
@@ -159,6 +172,13 @@ export const createAgent = async (req: any, res: Response) => {
       .single();
 
     if (error) throw error;
+
+    const cal = calendarSettings(data);
+    if (cal.enabled && cal.calendar_id) {
+      const syncResult = await syncCalendarEventsIntoAgent(data);
+      return res.status(201).json(syncResult.agent || data);
+    }
+
     res.status(201).json(data);
   } catch (err: any) {
     console.error("Error creating agent:", err);
@@ -195,12 +215,21 @@ export const updateAgent = async (req: any, res: Response) => {
       req.body.selected_knowledge_document_ids !== undefined ||
       req.body.knowledge_base !== undefined ||
       req.body.knowledge_base_content !== undefined ||
+      req.body.calendar_settings !== undefined ||
       req.body.automation_settings !== undefined
     ) {
-      const knowledgePayload = await buildAgentKnowledgePayload(
-        organization_id,
-        req.body || {},
-      );
+      const { data: existing, error: readError } = await supabase.from("bot_agents").select("*").eq("id", id).eq("organization_id", organization_id).single();
+      if (readError || !existing) return res.status(404).json({ error: "Agent not found" });
+      const meta = (existing.knowledge_base_content || []).find((i: any) => i?.type === AGENT_SETTINGS_ITEM_TYPE) || {};
+      const knowledgePayload = await buildAgentKnowledgePayload(organization_id, {
+        knowledge_base: existing.knowledge_base,
+        knowledge_base_content: (existing.knowledge_base_content || []).filter((i: any) => i?.source !== "workspace_knowledge_base"),
+        selected_knowledge_document_ids: meta.selected_knowledge_document_ids,
+        calendar_settings: meta.calendar,
+        existing_calendar: meta.calendar,
+        ...req.body,
+        automation_settings: { ...meta.settings, ...req.body.automation_settings },
+      });
       updateData.knowledge_base = knowledgePayload.knowledge_base;
       updateData.knowledge_base_content = knowledgePayload.knowledge_base_content;
     }
@@ -215,6 +244,17 @@ export const updateAgent = async (req: any, res: Response) => {
 
     if (error) throw error;
     if (!data) return res.status(404).json({ error: "Agent not found" });
+
+    const cal = calendarSettings(data);
+    const shouldSyncCalendar =
+      cal.enabled &&
+      cal.calendar_id &&
+      (req.body.calendar_settings !== undefined || !cal.last_synced_at);
+
+    if (shouldSyncCalendar) {
+      const syncResult = await syncCalendarEventsIntoAgent(data);
+      return res.json(syncResult.agent || data);
+    }
 
     res.json(data);
   } catch (err: any) {
@@ -260,6 +300,26 @@ export const updateConversationBot = async (req: any, res: Response) => {
       return res.status(400).json({ error: "No valid fields to update" });
     }
 
+    const { data: existingConv, error: convLookupErr } = await supabase
+      .from("w_conversations")
+      .select("id, contact:w_contacts(contact_type, wa_id)")
+      .eq("id", id)
+      .eq("organization_id", organization_id)
+      .maybeSingle();
+
+    if (convLookupErr) throw convLookupErr;
+    if (!existingConv) return res.status(404).json({ error: "Conversation not found" });
+
+    const contactRow = Array.isArray((existingConv as any).contact)
+      ? (existingConv as any).contact[0]
+      : (existingConv as any).contact;
+
+    if (isNonIndividualThreadContact(contactRow) && (bot_enabled === true || Boolean(assigned_bot_id))) {
+      return res.status(400).json({
+        error: "AI Agent automation is disabled for WhatsApp groups and channels.",
+      });
+    }
+
     const { data, error } = await supabase
       .from("w_conversations")
       .update(updates)
@@ -283,5 +343,78 @@ export const updateConversationBot = async (req: any, res: Response) => {
     res.json(data);
   } catch (err: any) {
     res.status(500).json({ error: err.message || "Failed to update bot settings" });
+  }
+};
+
+export const syncAgentCalendar = async (req: any, res: Response) => {
+  const { id } = req.params;
+  const organization_id = req.organization_id;
+
+  try {
+    if (!organization_id) {
+      return res.status(400).json({ error: "organization_id is required" });
+    }
+
+    const hasOverride = req.body && req.body.calendar_id !== undefined;
+    const result = await syncAgentCalendarById(
+      organization_id,
+      id,
+      hasOverride
+        ? {
+            calendar_id: req.body.calendar_id,
+            timezone: req.body.timezone,
+            enabled: req.body.enabled,
+          }
+        : undefined,
+    );
+
+    if (!result.synced && result.error) {
+      return res.status(502).json({
+        error: result.error,
+        agent: result.agent,
+        synced: false,
+        event_count: result.event_count,
+        last_synced_at: result.last_synced_at,
+      });
+    }
+
+    res.json(result);
+  } catch (err: any) {
+    res.status(err.statusCode || 500).json({
+      error: err.message || "Failed to sync agent calendar",
+    });
+  }
+};
+
+export const testAgentChat = async (req: any, res: Response) => {
+  const { id } = req.params;
+  const organization_id = req.organization_id;
+
+  try {
+    if (!organization_id) {
+      return res.status(400).json({ error: "organization_id is required" });
+    }
+
+    const message = String(req.body?.message || "").trim();
+    if (!message) {
+      return res.status(400).json({ error: "Test message is required" });
+    }
+    if (message.length > 2000) {
+      return res.status(400).json({ error: "Test message is too long (max 2000 characters)" });
+    }
+
+    const result = await testBotAgentReply({
+      organization_id,
+      agent_id: id,
+      text: message,
+      history: req.body?.history,
+    });
+
+    res.json(result);
+  } catch (err: any) {
+    console.error("testAgentChat error:", err);
+    res.status(err.statusCode || 500).json({
+      error: err.message || "Failed to generate test reply",
+    });
   }
 };

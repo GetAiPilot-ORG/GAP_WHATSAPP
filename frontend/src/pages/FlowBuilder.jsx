@@ -1,9 +1,10 @@
+import { QuickReplyInventory } from "../components/flow-builder/QuickReplyTriggers";
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus, Edit2, Trash2, Play, Copy, Pause, TrendingUp, Zap, Activity, X, LayoutTemplate, Star, Search, Sparkles, Clock, Layers, CheckCircle2, Smartphone, ShieldCheck, QrCode, Info, ChevronRight, MessageSquare, LifeBuoy, Send, MoreHorizontal, ArrowLeft } from 'lucide-react';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
-import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 
 gsap.registerPlugin(useGSAP);
@@ -49,6 +50,7 @@ export default function FlowBuilder() {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [editingFlow, setEditingFlow] = useState(null);
     const [newFlowName, setNewFlowName] = useState('');
+    const [newFlowQuickReply, setNewFlowQuickReply] = useState(null);
     const [newFlowDescription, setNewFlowDescription] = useState('');
     const [newFlowAccountScope, setNewFlowAccountScope] = useState('all');
     const [newFlowAccountIds, setNewFlowAccountIds] = useState([]);
@@ -166,10 +168,10 @@ export default function FlowBuilder() {
             name: newFlowName,
             description: newFlowDescription,
             status: 'draft',
-            triggers: [],
+            triggers: newFlowQuickReply ? [newFlowQuickReply.keyword] : [],
             wa_account_scope: newFlowAccountScope,
             wa_account_ids: newFlowAccountScope === 'selected' ? newFlowAccountIds : [],
-            nodes: [],
+            nodes: newFlowQuickReply ? [{ id: 'start', type: 'startBotFlow', position: { x: 250, y: 100 }, data: { label: 'Start Bot Flow', config: { title: 'Start', keywords: '', quickReplyKeywords: [newFlowQuickReply.keyword], matchType: 'exact' } } }] : [],
             edges: [],
         };
 
@@ -180,6 +182,7 @@ export default function FlowBuilder() {
             setFlows([res.data, ...flows]);
             setShowCreateModal(false);
             setNewFlowName('');
+            setNewFlowQuickReply(null);
             setNewFlowDescription('');
             setNewFlowAccountScope('all');
             setNewFlowAccountIds([]);
@@ -372,239 +375,102 @@ export default function FlowBuilder() {
     }
 
     return (
-        <div ref={dashboardRef} className="space-y-6 sm:space-y-8 p-4 sm:p-6 lg:p-8 max-w-[1400px] mx-auto font-sans tracking-tight">
+        <div ref={dashboardRef} className="space-y-5 px-4 pb-8 sm:px-6 lg:px-8">
             {/* Header */}
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-zinc-100 pb-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900 tracking-tight leading-tight fb-font-cabinet">Flow Builder</h1>
-                    <p className="text-xs sm:text-sm text-zinc-500 mt-1 tracking-tight">
+                    <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-slate-950">Flow Builder</h1>
+                    <p className="mt-1 text-[13px] text-slate-500">
                         Create automated message flows for your WhatsApp automation
                     </p>
                 </div>
                 <div className="grid grid-cols-2 gap-3 w-full sm:flex sm:w-auto sm:items-center sm:gap-3">
-                    <motion.button
+                    <Motion.button
                         whileTap={{ scale: 0.96 }}
                         transition={{ type: 'spring', stiffness: 500, damping: 25 }}
                         onClick={() => setShowTemplatesModal(true)}
                         data-tour="flows-templates"
-                        className="fb-btn-outline px-4 py-2 sm:py-2.5 text-xs sm:text-sm inline-flex items-center justify-center gap-2 cursor-pointer w-full sm:w-auto"
+                        className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-3.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-blue-600 sm:w-auto"
                     >
                         <LayoutTemplate className="h-4 w-4 text-zinc-500" />
                         Flow Templates
-                    </motion.button>
-                    <motion.button
+                    </Motion.button>
+                    <Motion.button
                         whileTap={{ scale: 0.96 }}
                         transition={{ type: 'spring', stiffness: 500, damping: 25 }}
-                        onClick={() => setShowCreateModal(true)}
+                        onClick={() => { setNewFlowQuickReply(null); setShowCreateModal(true); }}
                         data-tour="flows-create"
-                        className="fb-btn-dark px-4 py-2 sm:py-2.5 text-xs sm:text-sm inline-flex items-center justify-center gap-2 cursor-pointer w-full sm:w-auto"
+                        className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-[#0b74c9] px-4 text-xs font-semibold text-white transition-colors hover:bg-[#0867b4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:w-auto"
                     >
                         <Plus className="h-4 w-4" />
                         Create Flow
-                    </motion.button>
+                    </Motion.button>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.7fr)]">
-                {/* Which number will this flow run on Card */}
-                <GlowCard
-                    className="rounded-none border border-zinc-200 bg-[#f8f9fa] p-5 flex flex-col md:flex-row md:items-stretch gap-6 transition-all duration-300 hover:shadow-[0_8px_30px_rgba(0,0,0,0.02)] relative overflow-hidden group"
-                    glowColor="rgba(0, 0, 0, 0.03)"
-                >
-                    <div className="flex-1 flex flex-col justify-between gap-5 relative z-10">
-                        <div className="flex items-start gap-3.5">
-                            <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-none bg-white text-zinc-700 border border-zinc-200 shadow-sm">
-                                <Info className="h-4.5 w-4.5" />
+            <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-5" aria-label="Flow account configuration">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex min-w-0 items-start gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-700"><Smartphone size={18} /></div>
+                        <div>
+                            <h2 className="text-sm font-semibold text-gray-900">Connected WhatsApp numbers</h2>
+                            <p className="mt-1 max-w-2xl text-xs leading-5 text-gray-500">Flows can run on all connected numbers or selected numbers. Replies are sent from the number your customer messages.</p>
+                            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-gray-600">
+                                <span>Viewing: <strong className="font-medium text-gray-900">{selectedAccount ? (selectedAccount.display_phone_number || selectedAccount.phone_number_id || selectedAccount.name) : 'All connected accounts'}</strong></span>
+                                <span className="inline-flex items-center gap-1 text-green-700"><ShieldCheck size={13} />Duplicate trigger protection</span>
                             </div>
-                            <div>
-                                <div className="inline-flex items-center gap-1.5 rounded-none border border-zinc-200 bg-white px-2.5 py-0.5 text-[10px] sm:text-xs font-semibold text-zinc-700 tracking-wider uppercase font-mono mb-2 w-fit">
-                                    <Sparkles className="h-3.5 w-3.5 text-blue-600 animate-pulse" />
-                                    Flow Configuration
-                                </div>
-                                <h2 className="text-base font-bold text-zinc-950 fb-font-outfit tracking-tight">Which number will this flow run on?</h2>
-                                <p className="mt-1.5 text-xs leading-relaxed text-zinc-500 max-w-[65ch]">
-                                    Har flow ko all connected numbers ya selected WhatsApp numbers par run kar sakte hain. Customer jis number par message bhejta hai, reply usi receiving number se jayega.
-                                </p>
-                            </div>
-                        </div>
-                        <div className="mt-auto pt-3.5 border-t border-zinc-200/60 flex flex-wrap gap-2 text-[10px] sm:text-xs">
-                            <span className="fb-tag fb-tag-zinc shadow-sm rounded-none border border-zinc-200/80 bg-white">
-                                Current switch: {selectedAccount ? (selectedAccount.display_phone_number || selectedAccount.phone_number_id || selectedAccount.name) : 'All connected accounts'}
-                            </span>
-                            <span className="fb-tag fb-tag-zinc shadow-sm rounded-none border border-zinc-200/80 bg-white">
-                                {waAccounts.length} connected number(s)
-                            </span>
-                            <span className="fb-tag fb-tag-zinc shadow-sm rounded-none border border-zinc-200/80 bg-white">
-                                Duplicate trigger protection active
-                            </span>
                         </div>
                     </div>
-                    {/* Premium Infinite Loop Video Frame */}
-                    <motion.div
-                        whileHover={{ scale: 1.01 }}
-                        whileTap={{ scale: 0.99 }}
-                        transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                        onClick={() => setExpandedVideoUrl("/videos/FlowVideo.mp4")}
-                        className="group relative w-full md:w-[390px] shrink-0 border border-zinc-200 rounded-none overflow-hidden bg-zinc-950 flex items-center justify-center cursor-pointer shadow-[0_8px_30px_rgba(0,0,0,0.02)] transition-all duration-300 hover:border-zinc-400 z-10"
-                    >
-                        <video
-                            src="/videos/FlowVideo.mp4"
-                            autoPlay
-                            loop
-                            muted
-                            playsInline
-                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-                        />
-                        {/* Hover Play Button Overlay */}
-                        <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                            <div className="flex h-12 w-12 items-center justify-center rounded-none border border-white/40 bg-black/60 text-white shadow-xl backdrop-blur-sm transition-transform duration-300 group-hover:scale-110">
-                                <svg className="h-5 w-5 fill-current" viewBox="0 0 24 24">
-                                    <path d="M8 5v14l11-7z" />
-                                </svg>
-                            </div>
-                        </div>
-                    </motion.div>
-                </GlowCard>
-
-                {/* Connected access types Card */}
-                <GlowCard
-                    className="fb-premium-card p-6 flex flex-col justify-between relative overflow-hidden group"
-                    glowColor="rgba(0, 112, 209, 0.04)"
-                >
-                    <div className="relative z-10 w-full">
-                        <div className="mb-4 flex items-center justify-between">
-                            <h2 className="text-sm font-semibold text-zinc-900 tracking-tight fb-font-outfit">Connected access types</h2>
-                            <Smartphone className="h-4.5 w-4.5 text-zinc-400" />
-                        </div>
-                        <div className="flex flex-col gap-3">
-                            {/* Meta API Row */}
-                            <motion.div
-                                whileTap={{ scale: 0.985 }}
-                                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                                className="flex items-center justify-between border border-zinc-200 rounded-none p-3 bg-zinc-50/30 hover:bg-zinc-50/80 transition-all duration-200 group/row cursor-pointer relative overflow-hidden"
-                            >
-                                {/* Accent highlight line on hover */}
-                                <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-emerald-500 scale-y-0 group-hover/row:scale-y-100 transition-transform duration-200 origin-center" />
-                                <div className="flex items-center gap-3">
-                                    <div className="h-9 w-9 rounded-none flex items-center justify-center bg-emerald-50 border border-emerald-100 text-emerald-600 shrink-0 shadow-sm">
-                                        <ShieldCheck className="h-5 w-5" />
-                                    </div>
-                                    <div className="min-w-0">
-                                        <h3 className="text-xs sm:text-sm font-semibold text-zinc-900 fb-font-outfit">Meta API</h3>
-                                        <p className="text-[10px] sm:text-[11px] leading-tight text-zinc-400 truncate max-w-[200px] xl:max-w-[170px]">
-                                            Templates, broadcasts, profile sync...
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-1.5 pl-2">
-                                    <span className="text-sm sm:text-base font-semibold text-zinc-900 fb-font-cabinet">{metaAccounts.length}</span>
-                                    <ChevronRight className="h-3.5 w-3.5 text-zinc-400 animate-in slide-in-from-left-1 duration-150" />
-                                </div>
-                            </motion.div>
-
-                            {/* QR Session Row */}
-                            <motion.div
-                                whileTap={{ scale: 0.985 }}
-                                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                                className="flex items-center justify-between border border-zinc-200 rounded-none p-3 bg-zinc-50/30 hover:bg-zinc-50/80 transition-all duration-200 group/row cursor-pointer relative overflow-hidden"
-                            >
-                                {/* Accent highlight line on hover */}
-                                <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-blue-500 scale-y-0 group-hover/row:scale-y-100 transition-transform duration-200 origin-center" />
-                                <div className="flex items-center gap-3">
-                                    <div className="h-9 w-9 rounded-none flex items-center justify-center bg-blue-50 border border-blue-100 text-blue-600 shrink-0 shadow-sm">
-                                        <QrCode className="h-5 w-5" />
-                                    </div>
-                                    <div className="min-w-0">
-                                        <h3 className="text-xs sm:text-sm font-semibold text-zinc-900 fb-font-outfit">QR Session</h3>
-                                        <p className="text-[10px] sm:text-[11px] leading-tight text-zinc-400 truncate max-w-[200px] xl:max-w-[170px]">
-                                            Chats and flow replies only...
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-1.5 pl-2">
-                                    <span className="text-sm sm:text-base font-semibold text-zinc-900 fb-font-cabinet">{qrAccounts.length}</span>
-                                    <ChevronRight className="h-3.5 w-3.5 text-zinc-400" />
-                                </div>
-                            </motion.div>
-                        </div>
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-xs text-gray-600"><ShieldCheck size={14} className="text-green-700" />Meta API <strong className="font-semibold text-gray-900">{metaAccounts.length}</strong></span>
+                        <span className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-xs text-gray-600"><QrCode size={14} className="text-blue-700" />QR sessions <strong className="font-semibold text-gray-900">{qrAccounts.length}</strong></span>
+                        <button type="button" onClick={() => setExpandedVideoUrl('/videos/FlowVideo.mp4')} className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-blue-600"><Play size={14} />Watch guide</button>
                     </div>
-                </GlowCard>
+                </div>
+            </section>
+
+            <div className="grid grid-cols-3 divide-x divide-gray-200 overflow-hidden rounded-lg border border-gray-200 bg-white">
+                {[{ label: 'Total flows', value: flows.length, icon: LayoutTemplate }, { label: 'Active flows', value: flows.filter(flow => flow.status === 'active').length, icon: CheckCircle2 }, { label: 'Messages sent', value: flows.reduce((sum, flow) => sum + (flow.messagesSent || 0), 0), icon: Send }].map(stat => (
+                    <div key={stat.label} className="stat-card-anim px-3 py-4 sm:px-5">
+                        <div className="flex items-center justify-between gap-2 text-xs text-gray-500"><span>{stat.label}</span><stat.icon size={15} className="hidden text-gray-400 sm:block" /></div>
+                        <p className="mt-2 text-xl font-semibold tabular-nums text-gray-900 sm:text-2xl">{stat.value.toLocaleString()}</p>
+                    </div>
+                ))}
             </div>
 
-            {/* Stats Cards */}
-            <div className="grid grid-cols-3 gap-[1px] bg-zinc-200 border border-zinc-200 shadow-sm">
-                {/* Total Flows */}
-                <GlowCard
-                    className="stat-card-anim rounded-none bg-white p-5 hover:bg-zinc-50/50 transition-colors flex flex-col justify-between"
-                    glowColor="rgba(59, 130, 246, 0.08)"
-                >
-                    <div className="flex items-center justify-between relative z-10">
-                        <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">Total Flows</span>
-                        <LayoutTemplate size={18} className="text-zinc-400" />
-                    </div>
-                    <div className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950 fb-font-cabinet relative z-10">
-                        <AnimatedNumber value={flows.length} />
-                    </div>
-                    <div className="mt-1 text-xs text-zinc-500 leading-normal relative z-10">Created message flows</div>
-                </GlowCard>
+            <QuickReplyInventory accounts={waAccounts} selectedAccount={selectedAccount?.id || 'All'} revision={flows} onOpen={id => { const flow = flows.find(item => item.id === id); if (flow) setEditingFlow(flow); }} onCreate={entry => {
+                setNewFlowQuickReply(entry);
+                setNewFlowName(`${entry.keyword} flow`);
+                setNewFlowDescription(`Handle the ${entry.keyword} template quick reply.`);
+                setNewFlowAccountScope(entry.wa_account_id ? 'selected' : 'all');
+                setNewFlowAccountIds(entry.wa_account_id ? [entry.wa_account_id] : []);
+                setShowCreateModal(true);
+            }} />
 
-                {/* Active Flows */}
-                <GlowCard
-                    className="stat-card-anim rounded-none bg-white p-5 hover:bg-zinc-50/50 transition-colors flex flex-col justify-between"
-                    glowColor="rgba(16, 185, 129, 0.08)"
-                >
-                    <div className="flex items-center justify-between relative z-10">
-                        <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">Active Flows</span>
-                        <CheckCircle2 size={18} className="text-zinc-400" />
-                    </div>
-                    <div className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950 fb-font-cabinet relative z-10">
-                        <AnimatedNumber value={flows.filter(f => f.status === 'active').length} />
-                    </div>
-                    <div className="mt-1 text-xs text-zinc-500 leading-normal relative z-10">Currently running</div>
-                </GlowCard>
-
-                {/* Messages Sent */}
-                <GlowCard
-                    className="stat-card-anim rounded-none bg-white p-5 hover:bg-zinc-50/50 transition-colors flex flex-col justify-between"
-                    glowColor="rgba(139, 92, 246, 0.08)"
-                >
-                    <div className="flex items-center justify-between relative z-10">
-                        <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">Messages Sent</span>
-                        <Send size={18} className="text-zinc-400" />
-                    </div>
-                    <div className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950 fb-font-cabinet relative z-10">
-                        <AnimatedNumber value={flows.reduce((sum, f) => sum + (f.messagesSent || 0), 0)} />
-                    </div>
-                    <div className="mt-1 text-xs text-zinc-500 leading-normal relative z-10">Total sent count</div>
-                </GlowCard>
-            </div>
-
-            {/* Flows List */}
-            <div data-tour="flows-list" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 mt-2">
+            <h2 className="text-sm font-semibold text-gray-900">Your flows</h2>
+            <div data-tour="flows-list" className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {flows.map(flow => {
                     const theme = getFlowCardTheme(flow.name);
                     const IconComp = theme.icon;
 
                     return (
-                        <GlowCard
+                        <FlowSurface
                             key={flow.id}
-                            className="flow-card-anim flex flex-col rounded-none border border-zinc-200 bg-gradient-to-b from-white to-zinc-50/20 p-6 hover:-translate-y-0.5 hover:border-zinc-350 hover:shadow-[0_12px_36px_rgba(0,0,0,0.03)] transition-all duration-300 group relative overflow-hidden"
-                            glowColor="rgba(0, 0, 0, 0.03)"
+                            className="flow-card-anim group relative flex flex-col overflow-hidden rounded-lg border border-gray-200 bg-white p-5 transition-colors hover:border-blue-300"
                         >
-                            {/* Premium Metallic Gray Top Gradient Line (Permanently Visible) */}
-                            <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-zinc-200 via-zinc-400 to-zinc-300 opacity-80 group-hover:opacity-100 transition-opacity duration-300" />
 
                             <div className="flex-1 flex flex-col justify-between gap-5 relative z-10">
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="flex items-start flex-1 min-w-0">
-                                        <div className={`h-9 w-9 flex items-center justify-center shrink-0 border border-zinc-200 bg-zinc-50/50 text-zinc-700 rounded-none shadow-sm`}>
+                                        <div className={`h-9 w-9 flex items-center justify-center shrink-0 border border-zinc-200 bg-zinc-50/50 text-zinc-700 rounded-lg shadow-sm`}>
                                             <IconComp className="h-4.5 w-4.5" />
                                         </div>
                                         <div className="ml-3.5 min-w-0 flex-1">
                                             <div className="flex flex-wrap items-center gap-1.5">
-                                                <h3 className="font-semibold text-zinc-950 truncate text-sm sm:text-base leading-tight fb-font-outfit" title={flow.name}>
+                                                <h3 className="font-semibold text-zinc-950 truncate text-sm sm:text-base leading-tight " title={flow.name}>
                                                     {flow.name}
                                                 </h3>
+                                                <span className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${flow.status === 'active' ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{flow.status === 'active' ? 'Live' : flow.status === 'paused' ? 'Paused' : 'Draft'}</span>
                                             </div>
                                             {flow.description && (
                                                 <p className="text-xs text-zinc-500 mt-1 line-clamp-2 leading-relaxed font-normal">
@@ -617,11 +483,11 @@ export default function FlowBuilder() {
                                         {/* Always-visible Premium Toggle Switch */}
                                         <button
                                             onClick={() => toggleFlowStatus(flow)}
-                                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${flow.status === 'active' ? 'bg-[#10b981]' : 'bg-zinc-200'
+                                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${flow.status === 'active' ? 'bg-blue-600' : 'bg-zinc-200'
                                                 }`}
-                                            title={flow.status === 'active' ? 'Pause Flow' : 'Activate Flow'}
+                                            role="switch" aria-checked={flow.status === 'active'} aria-label={`Activate ${flow.name}`} title={flow.status === 'active' ? 'Pause Flow' : 'Activate Flow'}
                                         >
-                                            <motion.span
+                                            <Motion.span
                                                 animate={{ x: flow.status === 'active' ? 18 : 2 }}
                                                 transition={{ type: "spring", stiffness: 500, damping: 30 }}
                                                 className="pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm"
@@ -630,53 +496,50 @@ export default function FlowBuilder() {
 
                                         {/* Always Visible Actions */}
                                         <div className="flex items-center gap-1">
-                                            <motion.button
+                                            <Motion.button
                                                 whileTap={{ scale: 0.9 }}
                                                 onClick={() => handleDuplicateFlow(flow)}
-                                                className="p-1.5 text-zinc-400 hover:bg-zinc-100 rounded-none transition-all cursor-pointer"
-                                                title="Duplicate"
+                                                className="p-1.5 text-zinc-400 hover:bg-zinc-100 rounded-lg transition-all cursor-pointer"
+                                                aria-label={`Duplicate ${flow.name}`} title="Duplicate"
                                             >
                                                 <Copy className="h-3.5 w-3.5" />
-                                            </motion.button>
-                                            <motion.button
+                                            </Motion.button>
+                                            <Motion.button
                                                 whileTap={{ scale: 0.9 }}
                                                 onClick={() => handleDeleteFlow(flow.id)}
-                                                className="p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-650 rounded-none transition-all cursor-pointer"
-                                                title="Delete"
+                                                className="p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-all cursor-pointer"
+                                                aria-label={`Delete ${flow.name}`} title="Delete"
                                             >
                                                 <Trash2 className="h-3.5 w-3.5" />
-                                            </motion.button>
+                                            </Motion.button>
                                         </div>
                                     </div>
                                 </div>
 
                                 <div>
                                     {/* Structure and Volume */}
-                                    <div className="border-t border-dashed border-zinc-200 pt-3 flex items-center justify-between text-xs">
+                                    <div className="border-t border-gray-200 pt-3 flex items-center justify-between text-xs">
                                         <div>
-                                            <span className="block text-[8px] font-mono font-bold uppercase tracking-widest text-zinc-400 leading-none">Structure</span>
-                                            <span className="block text-xs font-bold text-zinc-950 mt-1.5 fb-font-outfit">{Array.isArray(flow.nodes) ? flow.nodes.length : 0} nodes</span>
+                                            <span className="block text-xs font-medium text-gray-500">Structure</span>
+                                            <span className="block text-xs font-bold text-zinc-950 mt-1.5 ">{Array.isArray(flow.nodes) ? flow.nodes.length : 0} nodes</span>
                                         </div>
                                         <div className="text-right">
-                                            <span className="block text-[8px] font-mono font-bold uppercase tracking-widest text-zinc-400 leading-none">Volume</span>
+                                            <span className="block text-xs font-medium text-gray-500">Volume</span>
                                             <div className="flex items-center gap-1.5 mt-1.5 justify-end">
-                                                <span className="block text-xs font-bold text-zinc-950 fb-font-outfit">{(flow.messagesSent || 0).toLocaleString()} sent</span>
-                                                <svg width="24" height="10" viewBox="0 0 24 10" fill="none" className="opacity-80 shrink-0">
-                                                    <path d="M2 8 L6 6.5 L10 3.5 L14 5 L22 1" stroke={flow.status === 'active' ? '#10b981' : '#a1a1aa'} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                                                </svg>
+                                                <span className="block text-xs font-bold text-zinc-950 ">{(flow.messagesSent || 0).toLocaleString()} sent</span>
                                             </div>
                                         </div>
                                     </div>
 
                                     {/* Triggers and Scope */}
-                                    <div className="border-t border-dashed border-zinc-200 pt-3.5 mt-3.5 flex items-start justify-between text-xs">
+                                    <div className="border-t border-gray-200 pt-3.5 mt-3.5 flex items-start justify-between text-xs">
                                         <div className="flex-1 pr-3">
-                                            <span className="block text-[8px] font-mono font-bold uppercase tracking-widest text-zinc-400 mb-1.5 leading-none">Triggers</span>
+                                            <span className="block text-xs  font-bold uppercase tracking-wide text-zinc-400 mb-1.5 leading-none">Triggers</span>
                                             <TriggersContainer triggers={flow.triggers} />
                                         </div>
                                         <div className="text-right shrink-0 flex flex-col items-end">
-                                            <span className="block text-[8px] font-mono font-bold uppercase tracking-widest text-zinc-400 mb-1.5 leading-none">Scope</span>
-                                            <span className="inline-block text-[9px] font-mono font-bold uppercase tracking-wider text-blue-750 bg-blue-50/60 border border-blue-100/30 rounded-none px-1.5 py-0.5 mt-0.5">
+                                            <span className="block text-xs  font-bold uppercase tracking-wide text-zinc-400 mb-1.5 leading-none">Scope</span>
+                                            <span className="inline-block text-xs  font-bold uppercase tracking-wider text-blue-750 bg-blue-50/60 border border-blue-100/30 rounded-lg px-1.5 py-0.5 mt-0.5">
                                                 {flow.wa_account_scope === 'all' ? 'All numbers' : `${flow.wa_account_ids?.length || 0} selected`}
                                             </span>
                                         </div>
@@ -685,53 +548,50 @@ export default function FlowBuilder() {
                             </div>
 
                             {/* Footer & Actions */}
-                            <div className="mt-4 pt-3.5 border-t border-dashed border-zinc-200 flex flex-col gap-3">
-                                <div className="flex items-center justify-between text-[9px] font-mono uppercase tracking-wider text-zinc-400">
+                            <div className="mt-4 pt-3.5 border-t border-gray-200 flex flex-col gap-3">
+                                <div className="flex items-center justify-between text-xs text-gray-500">
                                     <span>Last edited {formatRelativeTime(flow.updated_at || flow.created_at)}</span>
                                 </div>
                                 <div className="flex gap-2.5 w-full">
-                                    <motion.button
+                                    <Motion.button
                                         whileTap={{ scale: 0.98 }}
                                         onClick={() => setEditingFlow(flow)}
-                                        className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-none border border-zinc-200 bg-white py-2 text-xs font-semibold text-zinc-700 hover:border-zinc-350 hover:bg-zinc-50 hover:text-zinc-950 transition-all cursor-pointer shadow-sm"
+                                        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-gray-300 bg-white py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-blue-600"
                                     >
-                                        <Edit2 className="h-3.5 w-3.5 text-zinc-450" />
+                                        <Edit2 className="h-3.5 w-3.5 text-gray-500" />
                                         Edit Flow
-                                    </motion.button>
-                                    <motion.button
+                                    </Motion.button>
+                                    <Motion.button
                                         whileTap={{ scale: 0.96 }}
                                         onClick={() => openRunsModal(flow)}
-                                        className="inline-flex items-center justify-center rounded-none border border-zinc-200 bg-white px-3.5 py-2 text-zinc-500 hover:text-zinc-950 hover:border-zinc-350 transition-all cursor-pointer shadow-sm"
+                                        className="inline-flex items-center justify-center rounded-lg border border-zinc-200 bg-white px-3.5 py-2 text-zinc-500 hover:text-zinc-950 hover:border-zinc-350 transition-all cursor-pointer shadow-sm"
                                         title="Run logs"
                                     >
-                                        <Activity className="h-3.5 w-3.5 text-zinc-450" />
-                                    </motion.button>
+                                        <Activity className="h-3.5 w-3.5 text-gray-500" />
+                                    </Motion.button>
                                 </div>
                             </div>
-                        </GlowCard>
+                        </FlowSurface>
                     );
                 })}
 
                 {/* Create your next flow Card */}
-                <GlowCard
-                    onClick={() => setShowCreateModal(true)}
-                    glowColor="rgba(0, 0, 0, 0.02)"
-                    className="flow-card-anim flex flex-col items-center justify-center border-2 border-dashed border-zinc-200 hover:border-zinc-350 rounded-none bg-zinc-50/20 hover:bg-zinc-50 p-6 text-center min-h-[200px] sm:min-h-[240px] transition-all group cursor-pointer hover:shadow-[0_8px_30px_rgba(0,0,0,0.015)]"
+                <FlowSurface as="button" type="button"
+                    onClick={() => { setNewFlowQuickReply(null); setShowCreateModal(true); }}
+                    className="flow-card-anim group flex min-h-[200px] flex-col items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white p-5 text-center transition-colors hover:border-blue-400 hover:bg-blue-50/30 focus-visible:outline-2 focus-visible:outline-blue-600"
                 >
                     <div className="relative z-10 w-full h-full flex flex-col items-center justify-center">
-                        <motion.div
-                            whileHover={{ scale: 1.08 }}
-                            whileTap={{ scale: 0.95 }}
+                        <div
                             className="h-10 w-10 rounded-full bg-white group-hover:bg-zinc-50 flex items-center justify-center border border-zinc-200 group-hover:border-zinc-300 text-zinc-400 group-hover:text-zinc-650 transition-colors shadow-sm"
                         >
                             <Plus className="h-5 w-5" />
-                        </motion.div>
-                        <h3 className="text-sm sm:text-base font-semibold text-zinc-850 tracking-tight mt-4 fb-font-outfit group-hover:text-zinc-950">Create your next flow</h3>
-                        <p className="text-xs text-zinc-450 mt-1 max-w-[200px] leading-relaxed group-hover:text-zinc-500">
+                        </div>
+                        <h3 className="text-sm sm:text-base font-semibold text-zinc-850 tracking-tight mt-4  group-hover:text-zinc-950">{flows.length ? 'Create your next flow' : 'Create your first flow'}</h3>
+                        <p className="text-xs text-gray-500 mt-1 max-w-[200px] leading-relaxed group-hover:text-zinc-500">
                             Start building another automation for your business.
                         </p>
                     </div>
-                </GlowCard>
+                </FlowSurface>
             </div>
 
             <AnimatePresence>
@@ -757,7 +617,7 @@ export default function FlowBuilder() {
 
             <AnimatePresence>
                 {runsModalFlow && (
-                    <motion.div
+                    <Motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
@@ -765,38 +625,38 @@ export default function FlowBuilder() {
                         className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
                         onClick={() => { setRunsModalFlow(null); setFlowRuns([]); }}
                     >
-                        <motion.div
+                        <Motion.div
                             initial={{ scale: 0.96, y: 15, opacity: 0 }}
                             animate={{ scale: 1, y: 0, opacity: 1 }}
                             exit={{ scale: 0.96, y: 15, opacity: 0 }}
                             transition={{ type: "spring", stiffness: 450, damping: 30 }}
                             onClick={(e) => e.stopPropagation()}
-                            className="w-full max-w-3xl overflow-hidden rounded-none border border-zinc-200 bg-white shadow-2xl"
+                            className="w-full max-w-3xl overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-2xl"
                         >
                             <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-4">
                                 <div>
                                     <h2 className="text-lg font-bold text-gray-900">Flow Runs</h2>
                                     <p className="text-sm text-gray-500">{runsModalFlow.name}</p>
                                 </div>
-                                <motion.button
+                                <Motion.button
                                     whileTap={{ scale: 0.95 }}
                                     onClick={() => { setRunsModalFlow(null); setFlowRuns([]); }}
-                                    className="rounded-none p-2 text-gray-500 hover:bg-zinc-100 hover:text-gray-805 border border-zinc-200"
+                                    className="rounded-lg p-2 text-gray-500 hover:bg-zinc-100 hover:text-gray-805 border border-zinc-200"
                                 >
                                     <X className="h-5 w-5" />
-                                </motion.button>
+                                </Motion.button>
                             </div>
                             <div className="max-h-[60vh] overflow-y-auto p-5">
                                 {runsLoading ? (
                                     <div className="py-10 text-center text-sm text-gray-500">Loading runs...</div>
                                 ) : flowRuns.length === 0 ? (
-                                    <div className="rounded-none border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500">
+                                    <div className="rounded-lg border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500">
                                         No runs yet. Send a matching WhatsApp keyword to trigger this flow.
                                     </div>
                                 ) : (
-                                    <div className="overflow-hidden rounded-none border border-zinc-200">
+                                    <div className="overflow-hidden rounded-lg border border-zinc-200">
                                         <table className="min-w-full divide-y divide-dashed divide-zinc-200 text-sm">
-                                            <thead className="bg-zinc-50 text-xs font-mono text-zinc-500">
+                                            <thead className="bg-zinc-50 text-xs  text-zinc-500">
                                                 <tr>
                                                     <th className="px-4 py-3 text-left font-semibold">Started</th>
                                                     <th className="px-4 py-3 text-left font-semibold">Status</th>
@@ -809,14 +669,14 @@ export default function FlowBuilder() {
                                                     <tr key={run.id}>
                                                         <td className="px-4 py-3 text-gray-700">{run.started_at ? new Date(run.started_at).toLocaleString() : '-'}</td>
                                                         <td className="px-4 py-3">
-                                                            <span className={`rounded-none border px-2 py-0.5 text-xs font-semibold ${run.status === 'completed' ? 'border-green-200 bg-green-50/50 text-green-700' :
+                                                            <span className={`rounded-lg border px-2 py-0.5 text-xs font-semibold ${run.status === 'completed' ? 'border-green-200 bg-green-50/50 text-green-700' :
                                                                 run.status === 'failed' ? 'border-red-200 bg-red-50/50 text-red-700' :
                                                                     'border-blue-200 bg-blue-50/50 text-blue-700'
                                                                 }`}>
                                                                 {run.status}
                                                             </span>
                                                         </td>
-                                                        <td className="px-4 py-3 font-mono text-xs text-gray-500">{run.conversation_id}</td>
+                                                        <td className="px-4 py-3  text-xs text-gray-500">{run.conversation_id}</td>
                                                         <td className="px-4 py-3 text-red-650">{run.error_message || '-'}</td>
                                                     </tr>
                                                 ))}
@@ -825,8 +685,8 @@ export default function FlowBuilder() {
                                     </div>
                                 )}
                             </div>
-                        </motion.div>
-                    </motion.div>
+                        </Motion.div>
+                    </Motion.div>
                 )}
             </AnimatePresence>
 
@@ -837,11 +697,11 @@ export default function FlowBuilder() {
                 >
                     <div
                         onClick={(e) => e.stopPropagation()}
-                        className="relative w-full max-w-4xl overflow-hidden border border-zinc-200/20 bg-black shadow-2xl rounded-none aspect-video"
+                        className="relative w-full max-w-4xl overflow-hidden border border-zinc-200/20 bg-black shadow-2xl rounded-lg aspect-video"
                     >
                         <button
                             onClick={() => setExpandedVideoUrl(null)}
-                            className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-none bg-black/60 text-white/80 hover:bg-black/80 hover:text-white border border-zinc-200/20 transition-all"
+                            className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-lg bg-black/60 text-white/80 hover:bg-black/80 hover:text-white border border-zinc-200/20 transition-all"
                             title="Close preview"
                         >
                             <X className="h-5 w-5" />
@@ -861,7 +721,7 @@ export default function FlowBuilder() {
             {createPortal(
                 <AnimatePresence>
                     {showCreateModal && (
-                        <motion.div
+                        <Motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
@@ -875,7 +735,7 @@ export default function FlowBuilder() {
                                 setNewFlowAccountIds([]);
                             }}
                         >
-                            <motion.div
+                            <Motion.div
                                 initial={{ scale: 0.95, y: 15, opacity: 0 }}
                                 animate={{ scale: 1, y: 0, opacity: 1 }}
                                 exit={{ scale: 0.95, y: 15, opacity: 0 }}
@@ -889,6 +749,7 @@ export default function FlowBuilder() {
                                 </div>
 
                                 <div className="p-6 space-y-4">
+                                    {newFlowQuickReply && <p className="rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">Quick reply trigger: <strong>{newFlowQuickReply.keyword}</strong>. An exact-match Start node will be added. Build the next steps, then publish.</p>}
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Flow Name</label>
                                         <input
@@ -923,7 +784,7 @@ export default function FlowBuilder() {
                                 </div>
 
                                 <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
-                                    <motion.button
+                                    <Motion.button
                                         whileTap={{ scale: 0.97 }}
                                         onClick={() => {
                                             setShowCreateModal(false);
@@ -935,8 +796,8 @@ export default function FlowBuilder() {
                                         className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer"
                                     >
                                         Cancel
-                                    </motion.button>
-                                    <motion.button
+                                    </Motion.button>
+                                    <Motion.button
                                         whileTap={{ scale: 0.97 }}
                                         onClick={handleCreateFlow}
                                         disabled={!newFlowName.trim() || (newFlowAccountScope === 'selected' && newFlowAccountIds.length === 0)}
@@ -944,10 +805,10 @@ export default function FlowBuilder() {
                                     >
                                         <Plus className="h-4 w-4" />
                                         Create Flow
-                                    </motion.button>
+                                    </Motion.button>
                                 </div>
-                            </motion.div>
-                        </motion.div>
+                            </Motion.div>
+                        </Motion.div>
                     )}
                 </AnimatePresence>,
                 document.body
@@ -1050,7 +911,7 @@ function TemplateGalleryModal({
     const [isAboutOpen, setIsAboutOpen] = useState(false);
 
     return createPortal(
-        <motion.div
+        <Motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -1059,7 +920,7 @@ function TemplateGalleryModal({
             onClick={onClose}
         >
             {/* Mobile View (< md) */}
-            <motion.div
+            <Motion.div
                 initial={{ y: "100%" }}
                 animate={{ y: 0 }}
                 exit={{ y: "100%" }}
@@ -1096,13 +957,13 @@ function TemplateGalleryModal({
                                     <button onClick={() => setIsMobileSearchExpanded(true)} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg">
                                         <Search className="h-4 w-4" />
                                     </button>
-                                    <motion.button
+                                    <Motion.button
                                         whileTap={{ scale: 0.9 }}
                                         onClick={onClose}
                                         className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg ml-0.5"
                                     >
                                         <X className="h-4.5 w-4.5" />
-                                    </motion.button>
+                                    </Motion.button>
                                 </div>
                             </>
                         )}
@@ -1163,14 +1024,14 @@ function TemplateGalleryModal({
                                             <span className="rounded bg-gray-100 px-1.5 py-0.2 text-[8.5px] font-semibold text-gray-500 uppercase tracking-wider shrink-0">{template.category}</span>
                                         </div>
                                         <p className="text-[10px] text-gray-500 mt-1 line-clamp-1">{template.bestFor || template.description}</p>
-                                        <div className="flex items-center gap-2 text-[9px] text-gray-400 mt-1">
+                                        <div className="flex items-center gap-2 text-xs text-gray-400 mt-1">
                                             <span className="flex items-center gap-0.5"><Layers className="h-3 w-3" /> {template.preview.nodes.length} nodes</span>
                                             <span>•</span>
                                             <span>{template.difficulty}</span>
                                         </div>
                                     </div>
                                     <div className="flex flex-col items-end shrink-0 gap-1">
-                                        <span className={`inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.2 text-[9px] font-bold ${starred ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-gray-200 bg-white text-gray-500'}`}>
+                                        <span className={`inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.2 text-xs font-bold ${starred ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-gray-200 bg-white text-gray-500'}`}>
                                             <Star className={`h-2.5 w-2.5 ${starred ? 'fill-current text-amber-500' : ''}`} />
                                             {getTemplateStars(template, templateStarStats)}
                                         </span>
@@ -1273,24 +1134,24 @@ function TemplateGalleryModal({
                         </div>
                     </div>
                 )}
-            </motion.div>
+            </Motion.div>
 
             {/* Desktop View (>= md) */}
-            <motion.div
+            <Motion.div
                 initial={{ scale: 0.95, y: 15, opacity: 0 }}
                 animate={{ scale: 1, y: 0, opacity: 1 }}
                 exit={{ scale: 0.95, y: 15, opacity: 0 }}
                 transition={{ type: "spring", stiffness: 400, damping: 28 }}
                 onClick={(e) => e.stopPropagation()}
-                className="hidden md:flex h-full w-full max-w-7xl flex-col overflow-hidden rounded-none border border-gray-200 bg-white sm:h-[88vh] sm:rounded-lg lg:flex-row relative"
+                className="hidden md:flex h-full w-full max-w-7xl flex-col overflow-hidden rounded-lg border border-gray-200 bg-white sm:h-[88vh] sm:rounded-lg lg:flex-row relative"
             >
-                <motion.button
+                <Motion.button
                     whileTap={{ scale: 0.9 }}
                     onClick={onClose}
                     className="absolute top-4 right-4 z-50 rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-900 cursor-pointer"
                 >
                     <X className="h-5 w-5" />
-                </motion.button>
+                </Motion.button>
                 <div className="flex h-[46vh] w-full flex-col border-b border-gray-200 bg-white lg:h-auto lg:w-[420px] lg:border-b-0 lg:border-r">
                     <div className="border-b border-gray-200 bg-white p-4 sm:p-5">
                         <div className="flex items-center gap-3">
@@ -1325,7 +1186,7 @@ function TemplateGalleryModal({
                                 const starred = Boolean(templateStarStats[template.id]?.starred);
 
                                 return (
-                                    <motion.button
+                                    <Motion.button
                                         whileTap={{ scale: 0.99 }}
                                         key={template.id}
                                         type="button"
@@ -1351,7 +1212,7 @@ function TemplateGalleryModal({
                                             <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {template.minutes} min</span>
                                             <span>{template.difficulty}</span>
                                         </div>
-                                    </motion.button>
+                                    </Motion.button>
                                 );
                             })}
                         </div>
@@ -1371,7 +1232,7 @@ function TemplateGalleryModal({
                                     <div className="font-semibold text-gray-900">{selectedTemplate.preview.nodes.length} nodes</div>
                                     Ready-to-edit draft
                                 </div>
-                                <motion.button
+                                <Motion.button
                                     whileTap={{ scale: 0.94 }}
                                     onClick={() => onToggleStar(selectedTemplate.id)}
                                     className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold ${templateStarStats[selectedTemplate.id]?.starred
@@ -1381,7 +1242,7 @@ function TemplateGalleryModal({
                                 >
                                     <Star className={`h-4 w-4 ${templateStarStats[selectedTemplate.id]?.starred ? 'fill-current' : ''}`} />
                                     Star · {getTemplateStars(selectedTemplate, templateStarStats)}
-                                </motion.button>
+                                </Motion.button>
                             </div>
                         </div>
                     </div>
@@ -1424,19 +1285,19 @@ function TemplateGalleryModal({
                                 Created as a draft. You can edit every node, test it, then publish when ready.
                             </div>
 
-                            <motion.button
+                            <Motion.button
                                 whileTap={{ scale: 0.97 }}
                                 onClick={onUseTemplate}
                                 className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#25D366] px-5 text-sm font-semibold text-white hover:bg-[#1fb85a] cursor-pointer"
                             >
                                 <LayoutTemplate className="h-4 w-4" />
                                 Use Template
-                            </motion.button>
+                            </Motion.button>
                         </div>
                     </div>
                 </div>
-            </motion.div>
-        </motion.div>,
+            </Motion.div>
+        </Motion.div>,
         document.body
     );
 }
@@ -1622,7 +1483,7 @@ function TriggersContainer({ triggers }) {
                 <div className="flex flex-wrap gap-1.5 pb-2">
                     {triggers && triggers.length > 0 ? (
                         triggers.map((trigger, i) => (
-                            <span key={i} className="inline-flex items-center rounded-none border border-blue-200 bg-blue-50/40 px-2 py-0.5 text-[9px] font-bold text-blue-700 shadow-sm">
+                            <span key={i} className="inline-flex items-center rounded-lg border border-blue-200 bg-blue-50/40 px-2 py-0.5 text-xs font-bold text-blue-700 shadow-sm">
                                 {trigger}
                             </span>
                         ))
@@ -1641,56 +1502,7 @@ function TriggersContainer({ triggers }) {
     );
 }
 
-// Premium Animation Helper: Spotlight Mouse Tracker Card
-function GlowCard({ children, className = '', glowColor = 'rgba(9, 9, 11, 0.04)', ...props }) {
-    const mouseX = useMotionValue(0);
-    const mouseY = useMotionValue(0);
-
-    function handleMouseMove({ currentTarget, clientX, clientY }) {
-        const { left, top } = currentTarget.getBoundingClientRect();
-        mouseX.set(clientX - left);
-        mouseY.set(clientY - top);
-    }
-
-    return (
-        <div
-            onMouseMove={handleMouseMove}
-            className={`group relative overflow-hidden ${className}`}
-            {...props}
-        >
-            <motion.div
-                className="pointer-events-none absolute -inset-px opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-0"
-                style={{
-                    background: useTransform(
-                        [mouseX, mouseY],
-                        ([x, y]) => `radial-gradient(350px circle at ${x}px ${y}px, ${glowColor}, transparent 80%)`
-                    ),
-                }}
-            />
-            {children}
-        </div>
-    );
+function FlowSurface({ children, className = '', as: element = 'div', ...props }) {
+    const Element = element;
+    return <Element className={className} {...props}>{children}</Element>;
 }
-
-// Premium Animation Helper: GSAP-based dynamic count-up text
-function AnimatedNumber({ value }) {
-    const [displayVal, setDisplayVal] = useState(0);
-    const prevValueRef = useRef(0);
-
-    useEffect(() => {
-        const obj = { val: prevValueRef.current };
-        gsap.to(obj, {
-            val: value,
-            duration: 0.8,
-            ease: 'power2.out',
-            onUpdate: () => {
-                setDisplayVal(Math.floor(obj.val));
-            }
-        });
-        prevValueRef.current = value;
-    }, [value]);
-
-    return <span>{displayVal.toLocaleString()}</span>;
-}
-
-
