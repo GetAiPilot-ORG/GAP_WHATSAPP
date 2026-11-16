@@ -9,13 +9,21 @@ export function bookingAction(text: string): 'review' | 'confirm' | 'change' | '
   if (/^(cancel booking request|cancel request)$/.test(value)) return 'cancel';
   if (/^(change booking details|change details)$/.test(value) || /(?:info|details).*(?:update|change)|(?:update|change).*(?:info|details)/.test(value)) return 'change';
   // Asking for confirmation/status is not consent and must never become payment intent.
-  if (/^(?:confirmation|conformation|booking status|booking confirmation|booking review)$/.test(value) || /^review\b/.test(value)) return 'review';
+  if (/^(?:confirmation|conformation|booking status|booking confirmation|booking review|zala ka.*registration|registration.*zala ka|registration status)$/.test(value) || /^review\b/.test(value)) return 'review';
   return null;
 }
 
 export function needsBookingReview(history: Message[], text: string) {
-  const users = [...history.filter(m => m.role === 'user').map(m => m.content), text];
-  return bookingAction(text) !== null || users.some(value => bookingIntent.test(value));
+  const clean = text.trim().toLowerCase();
+  // Never hijack direct informational queries about contacts, phone numbers, email, or location
+  if (/\b(contact|phone|number|no\b|call|email|mail|address|location|kidhar|kaha|where|reach)\b/i.test(clean)) {
+    return false;
+  }
+  const action = bookingAction(text);
+  if (action !== null) return true;
+  if (bookingIntent.test(clean)) return true;
+  const users = history.filter(m => m.role === 'user').map(m => m.content);
+  return users.some(value => bookingIntent.test(value));
 }
 
 // The model extracts fields only. Code owns the stage, summary and buttons.

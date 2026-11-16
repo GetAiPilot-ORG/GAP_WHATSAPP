@@ -392,14 +392,25 @@ export async function deleteAccount(req: any, res: Response) {
       return res.status(404).json({ error: "WhatsApp account not found" });
     }
 
-    // 2. If Meta Cloud API, attempt to unsubscribe webhooks so Meta stops pinging this server
+    // 2. If Meta Cloud API, attempt to unsubscribe webhooks only if no other active accounts share this WABA
     if (account.whatsapp_business_account_id && account.access_token_encrypted) {
       try {
-        const token = decryptToken(account.access_token_encrypted);
-        await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${encodeURIComponent(account.whatsapp_business_account_id)}/subscribed_apps`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const { count } = await supabase
+          .from("w_wa_accounts")
+          .select("id", { count: 'exact', head: true })
+          .eq("whatsapp_business_account_id", account.whatsapp_business_account_id)
+          .neq("id", id)
+          .neq("status", "disconnected");
+
+        if (!count || count === 0) {
+          const token = decryptToken(account.access_token_encrypted);
+          await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${encodeURIComponent(account.whatsapp_business_account_id)}/subscribed_apps`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` }
+          });
+        } else {
+          console.log(`[deleteAccount] Preserving WABA webhook subscription: ${count} other accounts still active on WABA ${account.whatsapp_business_account_id}`);
+        }
       } catch (e: any) {
         console.warn(`[deleteAccount] Unsubscribe from Meta failed:`, e?.message);
       }

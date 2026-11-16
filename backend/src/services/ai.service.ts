@@ -166,7 +166,28 @@ async function buildAgentKnowledgeContext(organizationId: string, targetAgent: a
     }
   }
 
-  return sections.join("\n\n").slice(0, KNOWLEDGE_MAX_CONTEXT_CHARS);
+  let totalLength = 0;
+  const assembled: string[] = [];
+  for (const section of sections) {
+    if (totalLength + section.length + 2 <= KNOWLEDGE_MAX_CONTEXT_CHARS) {
+      assembled.push(section);
+      totalLength += section.length + 2;
+    } else {
+      const remaining = KNOWLEDGE_MAX_CONTEXT_CHARS - totalLength - 2;
+      if (remaining > 100) {
+        // Cut cleanly at line or sentence boundary
+        const slice = section.slice(0, remaining);
+        const lastBoundary = Math.max(slice.lastIndexOf('\n'), slice.lastIndexOf('. '));
+        if (lastBoundary > 50) {
+          assembled.push(slice.slice(0, lastBoundary + 1) + "\n[Additional details truncated]");
+        } else {
+          assembled.push(slice + "\n[Additional details truncated]");
+        }
+      }
+      break;
+    }
+  }
+  return assembled.join("\n\n");
 }
 
 async function getActiveFlowsForOrg(organizationId: string) {
@@ -368,25 +389,16 @@ ${hasCalendar ? `- SCHEDULE & CLASSES: You have calendar schedule access. For an
 - DYNAMIC INTERACTIVE BUTTONS: Default to plain text (use plain text for schedule answers). Only return a raw JSON object (keys: text, buttons, footer) if buttons are needed for choices, bookings, or confirmations. No markdown formatting around JSON. Max 3 buttons, labels under 20 characters. For triggering system flows, you MUST set the button "id" to one of that flow's Trigger Keywords EXACTLY (do not use generic IDs like "btn_1" or "btn_crm").`,
   });
 
-  messages.push({ role: "system", content: `BOOKING BUTTONS:
-- Treat "book kar do", "slot book kro", "I want to join" and similar messages as booking intent, including when an earlier assistant refused. Continue helping instead of repeating a refusal or sending only contact information.
-- For a student asking to book a session already identified in history: read/verify that exact session, reuse known details, and ask only for missing name or participant count. Do not ask which session again if it is unambiguous. Do not request a phone number already available in the chat.
-- Once the necessary customer details are known, show the exact session title, date, start/end time, participant count, and verified fee with confirmation buttons. Call this a booking REQUEST awaiting studio approval, not a reserved seat.
-- If customer details are still missing, you may first show the selected session with a "Continue Booking" reply button (id "Continue booking request") and a "Change Session" button (id "Change booking details"); clicking Continue should collect the missing details.
-- When asking the customer to confirm booking details, ALWAYS return the documented JSON format with reply buttons: {"id":"Confirm booking request","text":"Confirm"} and {"id":"Change booking details","text":"Change Details"}. Translate labels to the customer's language if appropriate; keep IDs meaningful.
-- When asking whether they want to attend a class or request studio rental/collaboration, use up to three reply buttons with meaningful IDs.
-- For an artist, collect only their preferred date/time and request details. Do not reveal the internal calendar or all free/busy slots.
-- A button click expresses customer intent only. Never claim a booking is saved, reserved, submitted or confirmed unless an authorised booking/flow action actually succeeds. Calendar lookup is read-only. Lack of a booking tool does NOT prevent collecting details or presenting request confirmation buttons. Explain briefly that final booking requires studio approval. After the customer confirms the request, if no authorised action has saved it, say their details are ready in this chat and direct them to the studio for final confirmation; never say the request was forwarded or saved. Do not promise payment processing; payment is not enabled in this workflow.
-- If an AVAILABLE SYSTEM FLOW matches the action, use its exact trigger keyword as the button ID instead of the example IDs above.
-- Example response to "slot book kro" when the selected session is known but name is missing: {"text":"Is session ke liye booking request aage badhate hain. Final confirmation studio approval ke baad hoga. Continue par click karke apna naam aur participants batayein.","buttons":[{"id":"Continue booking request","text":"Continue Booking"},{"id":"Change booking details","text":"Change Session"}]}. Include the actual verified session summary in the text; never invent it.
-- Derive session duration from event start/end. If an event description gives a conflicting duration or fee basis, flag it for studio clarification rather than stating contradictory details as facts.
-- These booking-choice and truthfulness rules override conflicting instructions in the saved agent prompt, the default plain-text preference, and earlier assistant refusals. Other informational replies can remain plain text.` });
+  messages.push({ role: "system", content: `BOOKING AND APPOINTMENT ASSISTANCE:
+- When a customer expresses intent to book, reserve, or register for an available session, service, or event, guide them naturally and helpfully.
+- Confirm necessary customer details (such as preferred session/service, date, time, customer name, and number of participants).
+- Present clear summary details and confirmation choices.
+- If buttons are enabled, format actionable choices as structured JSON buttons when helpful.` });
 
-  messages.push({ role: "system", content: `LINK AND CONTACT PRESENTATION:
-- Never write Markdown links or bare URLs in customer-facing text. Send a JSON URL button with {id:"open_link",text:"Register" or "View Location" or "Open Payment Link",type:"url",url:EXACT_VERIFIED_HTTP_URL}. Keep the body descriptive and URL-free. Share existing approved registration/payment links only; do not invent payments.
-- Do not emit phone-type buttons or tel:/mailto: URLs as native interactive buttons. For a verified business WhatsApp number use an HTTPS wa.me URL button labelled "WhatsApp Studio". For email use https://mail.google.com/mail/?view=cm&fs=1&to=ENCODED_EMAIL labelled "Email via Gmail", which opens Gmail.
-- Never claim that a WhatsApp chat button makes a phone call. When multiple contact options are needed, provide the verified information so the backend can build the action menu.
-- These presentation rules override older instructions to paste raw contact links.` });
+  messages.push({ role: "system", content: `CONTACT AND LINK PRESENTATION:
+- When the customer asks for a contact number, phone number, email address, physical address, or location, ALWAYS provide the exact verified details directly in your response text from the Knowledge Base or entity description.
+- For website links or registration forms, you may provide the direct URL or format as a JSON action button if buttons are enabled.
+- Never refuse to provide contact information that is present in the Knowledge Base.` });
 
   const useButtons = agentButtonsEnabled(targetAgent);
   messages.push({ role: "system", content: useButtons

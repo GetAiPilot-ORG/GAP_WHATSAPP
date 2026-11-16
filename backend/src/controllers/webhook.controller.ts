@@ -24,6 +24,15 @@ const WEBHOOK_DEBUG = String(process.env.WEBHOOK_DEBUG || "true").toLowerCase() 
 
 const botDebounceMap = new Map<string, NodeJS.Timeout>();
 const botLockMap = new Map<string, Promise<void>>();
+const processedWebhookMessages = new Map<string, number>();
+
+// Periodic cleanup of deduplication cache (keep IDs for 15 minutes)
+setInterval(() => {
+  const cutoff = Date.now() - 15 * 60 * 1000;
+  for (const [id, ts] of processedWebhookMessages.entries()) {
+    if (ts < cutoff) processedWebhookMessages.delete(id);
+  }
+}, 5 * 60 * 1000).unref();
 
 function botDebugLog(text: string) {
   try {
@@ -792,6 +801,35 @@ export async function handleWebhook(req: any, res: Response) {
         contacts[0]?.profile?.name ||
         null;
       const wa_message_id = msg.id;
+
+      // Inbound Webhook Idempotency: Ignore duplicate deliveries from Meta retries
+      if (wa_message_id) {
+        if (processedWebhookMessages.has(wa_message_id)) {
+          webhookLog("message.duplicate_skipped_memory", {
+            requestId,
+            wa_message_id,
+          });
+          continue;
+        }
+
+        const { data: existingMsg } = await supabase
+          .from("w_messages")
+          .select("id")
+          .eq("wa_message_id", wa_message_id)
+          .maybeSingle();
+
+        if (existingMsg?.id) {
+          processedWebhookMessages.set(wa_message_id, Date.now());
+          webhookLog("message.duplicate_skipped_db", {
+            requestId,
+            wa_message_id,
+            existing_id: existingMsg.id,
+          });
+          continue;
+        }
+
+        processedWebhookMessages.set(wa_message_id, Date.now());
+      }
 
       let type = msg.type;
       let text = "";

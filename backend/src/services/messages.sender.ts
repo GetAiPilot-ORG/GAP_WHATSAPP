@@ -338,21 +338,39 @@ export async function sendInteractiveButtons(
       },
     };
   } else if (phoneButtons.length > 0) {
-    // WhatsApp phone_number button type
-    interactivePayload = {
-      type: "button",
-      body: { text: body },
-      ...(footer ? { footer: { text: footer } } : {}),
-      action: {
-        buttons: phoneButtons.slice(0, 3).map((b) => ({
-          type: "phone_number",
-          phone_number: {
-            display_text: String(b.text || "Call Us").slice(0, 20),
-            phone_number: String(b.phone || b.id || ""),
+    // Meta Cloud API interactive 'button' messages only support type: 'reply'.
+    // Convert phone action to an HTTPS wa.me click-to-chat CTA URL or valid reply button.
+    const firstPhone = phoneButtons[0];
+    const cleanDigits = String(firstPhone.phone || firstPhone.id || '').replace(/\D/g, '');
+    if (cleanDigits) {
+      interactivePayload = {
+        type: "cta_url",
+        body: { text: body },
+        ...(footer ? { footer: { text: footer } } : {}),
+        action: {
+          name: "cta_url",
+          parameters: {
+            display_text: String(firstPhone.text || "WhatsApp Chat").slice(0, 20),
+            url: `https://wa.me/${cleanDigits}`,
           },
-        })),
-      },
-    };
+        },
+      };
+    } else {
+      interactivePayload = {
+        type: "button",
+        body: { text: body },
+        ...(footer ? { footer: { text: footer } } : {}),
+        action: {
+          buttons: phoneButtons.slice(0, 3).map((b) => ({
+            type: "reply",
+            reply: {
+              id: String(b.id || b.phone || b.text || "call").slice(0, 256),
+              title: String(b.text || "Contact Us").slice(0, 20),
+            },
+          })),
+        },
+      };
+    }
   } else {
     // Standard quick-reply buttons
     interactivePayload = {
