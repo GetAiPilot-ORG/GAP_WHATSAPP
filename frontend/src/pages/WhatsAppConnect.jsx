@@ -234,6 +234,15 @@ function WhatsAppConnectContent() {
 
         setEmbedStatus('saving')
         setEmbedError('')
+        const controller = new AbortController()
+        const timeoutMessage = 'Meta connection could not finish within 45 seconds. Refresh your accounts before retrying; your number may already be saved.'
+        // A UI timer is necessary as well as aborting fetch: a stalled transport
+        // must never leave the button spinning indefinitely.
+        const saveTimer = setTimeout(() => {
+            controller.abort()
+            setEmbedError(timeoutMessage)
+            setEmbedStatus('error')
+        }, 45000)
         try {
             // Meta may deliver the FINISH message just after the login callback.
             if (!capturedMetaSessionRef.current?.phone_number_id) {
@@ -248,9 +257,10 @@ function WhatsAppConnectContent() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
                 body: JSON.stringify(payload),
-                signal: AbortSignal.timeout(60000),
+                signal: controller.signal,
             })
             const data = await res.json().catch(() => ({}))
+            if (controller.signal.aborted) throw new DOMException('Connection timed out', 'AbortError')
             if (!res.ok) throw new Error(data.error || 'Connection failed')
             if (!data.success || !Array.isArray(data.accounts) || !data.accounts.length) {
                 throw new Error('No connected account was returned. Refresh your accounts before retrying.')
@@ -266,9 +276,11 @@ function WhatsAppConnectContent() {
             // Show errors immediately, including an ambiguous timeout after a server save.
             const timedOut = err.name === 'TimeoutError' || err.name === 'AbortError'
             setEmbedError(timedOut
-                ? 'Connection is taking longer than expected. Refresh your accounts before trying again; your number may already be saved.'
+                ? timeoutMessage
                 : (err.message || 'Connection failed'))
             setEmbedStatus('error')
+        } finally {
+            clearTimeout(saveTimer)
         }
     }
 
@@ -300,11 +312,12 @@ function WhatsAppConnectContent() {
             setEmbedStatus('loading')
             setEmbedError('')
             window.FB.login((response) => handleEmbeddedSignupResponse(response), {
-                scope: 'business_management,whatsapp_business_management,whatsapp_business_messaging,public_profile',
+                config_id: META_CONFIG_ID,
                 response_type: 'code',
                 override_default_response_type: true,
                 extras: {
-                    feature: 'whatsapp_embedded_signup',
+                    setup: {},
+                version: META_EMBEDDED_SIGNUP_VERSION,
                     sessionInfoVersion: META_EMBEDDED_SESSION_INFO_VERSION,
                 },
             })
@@ -334,11 +347,12 @@ function WhatsAppConnectContent() {
         setEmbedStatus('loading')
         setEmbedError('')
         window.FB.login((response) => handleEmbeddedSignupResponse(response), {
-            scope: 'business_management,whatsapp_business_management,whatsapp_business_messaging,public_profile',
+            config_id: META_CONFIG_ID,
             response_type: 'code',
             override_default_response_type: true,
             extras: {
-                feature: 'whatsapp_embedded_signup',
+                setup: {},
+                version: META_EMBEDDED_SIGNUP_VERSION,
                 sessionInfoVersion: META_EMBEDDED_SESSION_INFO_VERSION,
             },
         })
