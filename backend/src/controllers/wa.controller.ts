@@ -46,7 +46,17 @@ export async function connectStart(req: any, res: Response) {
 }
 
 async function fetchSignupMeta(url: string, init: RequestInit = {}) {
-    return fetch(url, { ...init, signal: init.signal || AbortSignal.timeout(10000) });
+    const started = Date.now();
+    // Log only the Graph path; query strings contain credentials and signup codes.
+    const step = new URL(url).pathname;
+    try {
+        const response = await fetch(url, { ...init, signal: init.signal || AbortSignal.timeout(10000) });
+        console.info(`[ConnectCallback] Meta ${step}: HTTP ${response.status} in ${Date.now() - started}ms`);
+        return response;
+    } catch (error: any) {
+        console.warn(`[ConnectCallback] Meta ${step}: ${error.name || 'Error'} after ${Date.now() - started}ms`);
+        throw error;
+    }
 }
 
 export async function connectCallback(req: any, res: Response) {
@@ -65,30 +75,48 @@ export async function connectCallback(req: any, res: Response) {
             return res.status(500).json({ error: 'Meta app configuration is missing. Set META_APP_ID and META_APP_SECRET.' });
         }
 
-        const tokenUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/oauth/access_token` +
-            `?client_id=${appId}` +
-            `&client_secret=${appSecret}` +
-            `&code=${code}` +
-            (redirectUri ? `&redirect_uri=${encodeURIComponent(redirectUri)}` : '');
+        // SDK signup has no application redirect URI. Only include an explicit
+        // URI for callers that actually used it in their OAuth dialog.
+        const tokenParams = new URLSearchParams({
+            client_id: appId,
+            client_secret: appSecret,
+            code: String(code),
+        });
+        if (redirectUri) tokenParams.set('redirect_uri', redirectUri);
+        const tokenUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/oauth/access_token?${tokenParams}`;
         const tokenRes = await fetchSignupMeta(tokenUrl);
         const tokenData: any = await tokenRes.json();
 
         if (!tokenRes.ok || tokenData.error || !tokenData.access_token) {
+            console.warn('[ConnectCallback] Token exchange rejected', {
+                status: tokenRes.status,
+                error_code: tokenData.error?.code || null,
+                error_subcode: tokenData.error?.error_subcode || null,
+                has_redirect_uri: Boolean(redirectUri),
+            });
             return res.status(400).json({
-                error: getMetaErrorMessage(tokenData, 'Meta could not exchange the signup code. Please retry Connect with Meta.')
+                error: getMetaErrorMessage(tokenData, 'Meta could not exchange the signup code. Please retry Connect with Meta.'),
+                error_code: tokenData.error?.code,
+                error_subcode: tokenData.error?.error_subcode,
+                stage: 'token_exchange'
             });
         }
 
         const shortToken = tokenData.access_token;
+        // Token extension is optional. Overlap it with required setup instead of
+        // holding every subsequent request behind its five-second timeout.
         const longTokenUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${encodeURIComponent(shortToken)}`;
+        const extendedToken = (async () => {
+            try {
+                const longRes = await fetchSignupMeta(longTokenUrl, { signal: AbortSignal.timeout(5000) });
+                const longData: any = await longRes.json();
+                return longRes.ok && longData.access_token ? longData.access_token : shortToken;
+            } catch {
+                console.warn('[ConnectCallback] Token extension unavailable; using the exchanged signup token.');
+                return shortToken;
+            }
+        })();
         let finalToken = shortToken;
-        try {
-            const longRes = await fetchSignupMeta(longTokenUrl, { signal: AbortSignal.timeout(5000) });
-            const longData: any = await longRes.json();
-            if (longRes.ok && longData.access_token) finalToken = longData.access_token;
-        } catch {
-            console.warn('[ConnectCallback] Token extension unavailable; using the exchanged signup token.');
-        }
         const insertedAccounts = [];
         const discoveryErrors: string[] = [];
 
@@ -113,17 +141,22 @@ export async function connectCallback(req: any, res: Response) {
 
         for (const waba of discoveredWabaIds) {
             const currentWabaId = waba.id;
-            try {
-                await subscribeMetaAppToWaba(currentWabaId, finalToken);
-            } catch (error: any) {
-                discoveryErrors.push(`Could not enable inbound webhooks for WABA ${currentWabaId}: ${error.message}`);
-                continue;
-            }
             const numberPath = requestedPhoneNumberId
                 ? encodeURIComponent(String(requestedPhoneNumberId).trim())
                 : `${currentWabaId}/phone_numbers`;
             const numbersUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/${numberPath}?fields=id,display_phone_number,verified_name,quality_rating,code_verification_status&access_token=${encodeURIComponent(finalToken)}`;
-            const numRes = await fetchSignupMeta(numbersUrl);
+            // Both operations depend only on the exchanged token, not each other.
+            // allSettled observes both failures, even if one request fails first.
+            const [subscription, numbers] = await Promise.allSettled([
+                subscribeMetaAppToWaba(currentWabaId, finalToken),
+                fetchSignupMeta(numbersUrl)
+            ]);
+            if (subscription.status === 'rejected') {
+                discoveryErrors.push(`Could not enable inbound webhooks for WABA ${currentWabaId}: ${subscription.reason?.message || 'Meta request failed'}`);
+                continue;
+            }
+            if (numbers.status === 'rejected') throw numbers.reason;
+            const numRes = numbers.value;
             const numData: any = await numRes.json();
 
             if (!numRes.ok || numData.error) {
@@ -160,7 +193,9 @@ export async function connectCallback(req: any, res: Response) {
                     const phone_number_id = item.id;
                     const display_phone_number = item.display_phone_number;
 
+                    const limitCheckStarted = Date.now();
                     await enforceWhatsAppCloudNumberLimit(targetOrgId, phone_number_id);
+                    console.info(`[ConnectCallback] Number limit check: ${Date.now() - limitCheckStarted}ms`);
 
                     // Registration is required before reporting a connected account.
                     const registerUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/${phone_number_id}/register`;
@@ -179,7 +214,9 @@ export async function connectCallback(req: any, res: Response) {
                         throw registrationError;
                     }
 
+                    finalToken = await extendedToken;
                     const now = new Date().toISOString();
+                    const saveStarted = Date.now();
                     const { data, error } = await supabase.from('w_wa_accounts').upsert({
                         organization_id: targetOrgId,
                         whatsapp_business_account_id: currentWabaId,
@@ -194,6 +231,7 @@ export async function connectCallback(req: any, res: Response) {
                         last_health_check_at: now
                     }, { onConflict: 'phone_number_id' }).select();
 
+                    console.info(`[ConnectCallback] Account save: ${Date.now() - saveStarted}ms`);
                     if (error) {
                         console.error(`DB Save Error for phone ${phone_number_id}:`, error);
                         discoveryErrors.push(`Could not save phone ${display_phone_number || phone_number_id}: ${error.message}`);

@@ -43,7 +43,7 @@ export function loadFacebookSDK() {
           cookie: true,
           autoLogAppEvents: true,
           xfbml: true,
-          version: 'v18.0'
+          version: import.meta.env.VITE_META_GRAPH_VERSION || 'v21.0'
         });
         resolve(window.FB);
       } catch (err) {
