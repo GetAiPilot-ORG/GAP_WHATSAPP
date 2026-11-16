@@ -73,13 +73,13 @@ export function formatAgentLinks(reply: string): string {
   });
   body = body.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, email => {
     add('Email via Gmail', `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}`);
-    return 'Email via Gmail';
+    return email;
   });
   body = body.replace(/(?:\+91[\s-]?)?[6-9]\d{9}\b/g, phone => {
     let digits = phone.replace(/\D/g, '');
     if (digits.length === 10) digits = `91${digits}`;
     add('WhatsApp Chat', `https://wa.me/${digits}`);
-    return 'WhatsApp contact';
+    return phone;
   });
   if (!actions.length) return reply;
   const cleaned = body.replace(/\(\s*\)/g, '').replace(/\n{3,}/g, '\n\n').trim() || 'Please use the button below to proceed:';

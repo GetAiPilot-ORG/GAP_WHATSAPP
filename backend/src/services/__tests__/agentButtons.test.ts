@@ -39,8 +39,8 @@ test('contact menus retain trusted followup actions', () => {
   const menu = formatAgentLinks('Contact +91 9860949200 or kriyastudio1224@gmail.com');
   const decoded = JSON.parse(menu);
   assert.equal(decoded.buttons.length, 2);
-  assert.ok(!decoded.text.includes('9860949200'));
-  assert.ok(!decoded.text.includes('kriyastudio1224@gmail.com'));
+  assert.ok(decoded.text.includes('9860949200'));
+  assert.ok(decoded.text.includes('kriyastudio1224@gmail.com'));
   const action = decoded.buttons.find((b: any) => b.text === 'Email via Gmail');
   const resolved = JSON.parse(resolveLinkAction(action.id, [{ role: 'assistant', content: menu }])!);
   assert.match(resolved.buttons[0].url, /^https:\/\/mail.google.com/);
