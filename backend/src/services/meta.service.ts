@@ -28,7 +28,7 @@ export async function fetchWithMetaBackoff(url: string, init?: RequestInit, maxR
     while (attempt <= maxRetries) {
         const start = Date.now();
         try {
-            const res = await fetch(url, init);
+            const res = await fetch(url, { ...init, signal: init?.signal || AbortSignal.timeout(10000) });
             const durationMs = Date.now() - start;
             if (res.status === 429 && attempt < maxRetries) {
                 const backoffMs = Math.pow(2, attempt) * 1000 + Math.floor(Math.random() * 500);
@@ -42,6 +42,7 @@ export async function fetchWithMetaBackoff(url: string, init?: RequestInit, maxR
             }
             return res;
         } catch (err: any) {
+            if (init?.signal?.aborted) throw err;
             if (attempt < maxRetries) {
                 const backoffMs = Math.pow(2, attempt) * 1000 + Math.floor(Math.random() * 500);
                 console.warn(`[MetaAPI Network Exception] Retrying in ${backoffMs}ms (attempt ${attempt + 1}/${maxRetries}): ${err.message}`);
@@ -52,7 +53,7 @@ export async function fetchWithMetaBackoff(url: string, init?: RequestInit, maxR
             throw err;
         }
     }
-    return fetch(url, init);
+    return fetch(url, { ...init, signal: init?.signal || AbortSignal.timeout(10000) });
 }
 
 export async function inspectMetaTokenPermissions(token: string) {
@@ -164,7 +165,8 @@ export async function subscribeMetaAppToWaba(wabaId: string, token: string) {
         `https://graph.facebook.com/${GRAPH_API_VERSION}/${encodeURIComponent(wabaId)}/subscribed_apps`,
         {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}` }
+            headers: { Authorization: `Bearer ${token}` },
+            signal: AbortSignal.timeout(10000)
         }
     );
     const data: any = await response.json();

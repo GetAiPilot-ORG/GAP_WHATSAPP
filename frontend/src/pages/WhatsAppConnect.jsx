@@ -50,7 +50,7 @@ function SafeIcon({ icon, className = "h-4 w-4", fallback: Fallback = HelpCircle
 function WhatsAppConnectContent() {
     const { session, apiCall } = useAuth()
     const { alertDialog, confirmDialog } = useDialog()
-    const { accounts, numberCapacity, refreshNumberPlan, isLoading: loadingAccounts, error: accountsLoadError, refetchAccounts: fetchAccounts } = useWhatsAppAccounts()
+    const { accounts, numberCapacity, refreshNumberPlan, isLoading: loadingAccounts, error: accountsLoadError, refetchAccounts: fetchAccounts, mergeConnectedAccounts } = useWhatsAppAccounts()
     const [recentCampaigns, setRecentCampaigns] = useState(null)
     useEffect(() => {
         let cancelled = false
@@ -61,6 +61,7 @@ function WhatsAppConnectContent() {
     }, [session?.access_token, apiCall])
     const [embedStatus, setEmbedStatus] = useState('idle')
     const [embedError, setEmbedError] = useState('')
+    const [metaSignupFinished, setMetaSignupFinished] = useState(false)
     const [connectionSetupOpen, setConnectionSetupOpen] = useState(false)
     const [manualOpen, setManualOpen] = useState(false)
     const [manualCreds, setManualCreds] = useState({ businessAccountId: '', accessToken: '' })
@@ -94,11 +95,25 @@ function WhatsAppConnectContent() {
     const activeConnections = useMemo(() => accounts, [accounts])
 
     useEffect(() => {
+        if (embedStatus !== 'loading' || !metaSignupFinished) return
+        const timer = setTimeout(() => {
+            setEmbedError('Meta signup has not returned a result. Close the signup window and try again.')
+            setEmbedStatus('error')
+        }, 30000)
+        return () => clearTimeout(timer)
+    }, [embedStatus, metaSignupFinished])
+
+    useEffect(() => {
         const handleMetaMessage = (event) => {
-            if (!event.origin || (!event.origin.includes('facebook.com') && !event.origin.includes('fb.com'))) return
+            if (!/^https:\/\/([a-z0-9-]+\.)*(facebook\.com|fb\.com)$/i.test(event.origin)) return
             try {
                 const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
                 if (data?.type === 'WA_EMBEDDED_SIGNUP') {
+                    if (String(data.event || '').startsWith('FINISH')) setMetaSignupFinished(true)
+                    if (data.event === 'CANCEL' || data.event === 'ERROR') {
+                        setEmbedStatus(current => current === 'loading' ? 'idle' : current)
+                        return
+                    }
                     const sessionData = data.data || {}
                     if (sessionData.phone_number_id || sessionData.waba_id) {
                         capturedMetaSessionRef.current = {
@@ -220,6 +235,10 @@ function WhatsAppConnectContent() {
         setEmbedStatus('saving')
         setEmbedError('')
         try {
+            // Meta may deliver the FINISH message just after the login callback.
+            if (!capturedMetaSessionRef.current?.phone_number_id) {
+                await new Promise(resolve => setTimeout(resolve, 500))
+            }
             const payload = {
                 code: response.authResponse.code,
                 phone_number_id: capturedMetaSessionRef.current?.phone_number_id || undefined,
@@ -229,26 +248,26 @@ function WhatsAppConnectContent() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
                 body: JSON.stringify(payload),
+                signal: AbortSignal.timeout(60000),
             })
             const data = await res.json().catch(() => ({}))
             if (!res.ok) throw new Error(data.error || 'Connection failed')
+            if (!data.success || !Array.isArray(data.accounts) || !data.accounts.length) {
+                throw new Error('No connected account was returned. Refresh your accounts before retrying.')
+            }
+            mergeConnectedAccounts(data.accounts)
             capturedMetaSessionRef.current = null
             setEmbedStatus('saved')
             setEmbedError('')
-            await fetchAccounts()
-            await fetchBilling()
+            // Billing refresh must not hold up connection success.
+            void fetchBilling().catch(() => {})
             setTimeout(() => setEmbedStatus('idle'), 5000)
         } catch (err) {
-            const refreshedAccounts = await fetchAccounts()
-            await fetchBilling()
-            const hasConnectedMetaAccount = refreshedAccounts.some(acc => acc.connection_type === 'meta_cloud_api' || acc.whatsapp_business_account_id)
-            if (hasConnectedMetaAccount && String(err.message || '').toLowerCase().includes('limit reached')) {
-                setEmbedError('')
-                setEmbedStatus('saved')
-                setTimeout(() => setEmbedStatus('idle'), 5000)
-                return
-            }
-            setEmbedError(err.message || 'Connection failed')
+            // Show errors immediately, including an ambiguous timeout after a server save.
+            const timedOut = err.name === 'TimeoutError' || err.name === 'AbortError'
+            setEmbedError(timedOut
+                ? 'Connection is taking longer than expected. Refresh your accounts before trying again; your number may already be saved.'
+                : (err.message || 'Connection failed'))
             setEmbedStatus('error')
         }
     }
@@ -277,6 +296,7 @@ function WhatsAppConnectContent() {
             setIsSdkLoading(false)
             // Trigger login immediately
             capturedMetaSessionRef.current = null
+            setMetaSignupFinished(false)
             setEmbedStatus('loading')
             setEmbedError('')
             window.FB.login((response) => handleEmbeddedSignupResponse(response), {
@@ -310,6 +330,7 @@ function WhatsAppConnectContent() {
         }
 
         capturedMetaSessionRef.current = null
+        setMetaSignupFinished(false)
         setEmbedStatus('loading')
         setEmbedError('')
         window.FB.login((response) => handleEmbeddedSignupResponse(response), {
