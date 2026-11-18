@@ -717,6 +717,18 @@ export async function handleWebhook(req: any, res: Response) {
       continue;
     }
 
+    // Account-level onboarding notifications do not carry message metadata.
+    // They cannot establish a tenant mapping or replace the authenticated OAuth
+    // callback that saves the number and its access token.
+    if (change?.field === "account_update" && !metadata?.phone_number_id) {
+      webhookLog("account.update.received", {
+        requestId,
+        event: value?.event || null,
+        waba_id: value?.waba_info?.waba_id || entry?.id || null,
+      });
+      continue;
+    }
+
     // 1. Identify Organization & Account
     const phone_number_id = metadata?.phone_number_id;
     let organization_id: string | null = null;

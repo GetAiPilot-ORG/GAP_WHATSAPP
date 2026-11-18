@@ -50,6 +50,7 @@ export function WhatsAppAccountProvider({ children }) {
 
             const list = Array.isArray(data) ? data : []
             setAccounts(list)
+            return list
         } catch (err) {
             console.error('[WhatsAppAccountContext] Error fetching accounts:', err)
             setError(err.message || 'Could not load WhatsApp accounts')
@@ -57,6 +58,20 @@ export function WhatsAppAccountProvider({ children }) {
             setIsLoading(false)
         }
     }, [session?.access_token, apiCall])
+
+    // Apply the saved callback result immediately without another loading screen.
+    const mergeConnectedAccounts = useCallback((connectedAccounts) => {
+        setAccounts(previous => {
+            const next = [...previous]
+            for (const account of connectedAccounts) {
+                const index = next.findIndex(item => String(item.id) === String(account.id))
+                if (index >= 0) next[index] = { ...next[index], ...account }
+                else next.unshift(account)
+            }
+            return next
+        })
+        setError(null)
+    }, [])
 
     // Initial Fetch on session load
     useEffect(() => {
@@ -199,7 +214,8 @@ export function WhatsAppAccountProvider({ children }) {
         isLoading,
         error,
         refetchAccounts: fetchAccounts,
-    }), [accounts, numberPlan, refreshNumberPlan, selectedAccount, selectedAccountId, handleSelectAccount, isLoading, error, fetchAccounts])
+        mergeConnectedAccounts,
+    }), [accounts, numberPlan, refreshNumberPlan, selectedAccount, selectedAccountId, handleSelectAccount, isLoading, error, fetchAccounts, mergeConnectedAccounts])
 
     return (
         <WhatsAppAccountContext.Provider value={value}>
