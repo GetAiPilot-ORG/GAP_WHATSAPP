@@ -1067,7 +1067,7 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
 
                                         botLockMap.set(debounceKey, nextPromise);
                                         
-                                    }, 6000));
+                                    }, 750));
                                 }
                             } catch (botErr: any) {
                                 console.error('Bot auto-reply error (Baileys):', botErr.message || botErr);

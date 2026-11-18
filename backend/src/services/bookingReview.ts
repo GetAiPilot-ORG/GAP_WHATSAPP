@@ -1,7 +1,7 @@
 import { parseInteractiveReply } from './agentButtons.js';
 
 type Message = { role: string; content: string };
-const bookingIntent = /\b(book(?:ing)?|reserve|registration|join|enroll)\b|बुक|बुकिंग/i;
+const bookingIntent = /\b(book(?:ing)?|reserve|register|registration|join|enroll)\b|बुक|बुकिंग/i;
 
 export function bookingAction(text: string): 'review' | 'confirm' | 'change' | 'cancel' | null {
   const value = text.trim().toLowerCase().replace(/[!?।.]+$/g, '').trim();
