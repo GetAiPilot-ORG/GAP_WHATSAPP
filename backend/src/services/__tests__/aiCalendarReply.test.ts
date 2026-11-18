@@ -12,7 +12,9 @@ async function scenario(mode = 'success') {
     const fixtures: any = {
       w_conversations: { bot_enabled: true, assigned_bot_id: agent.id }, bot_agents: agent,
       organizations: { settings: {} }, openai_settings: null, w_flows: [],
-      w_messages: [{ direction: 'outbound', automation_source: 'ai_agent', content: { text: "Hi! I'm Test Assistant." } }],
+      w_messages: mode === 'greeting'
+        ? [{ direction: 'inbound', content: { text: 'I want to book a workshop' } }]
+        : [{ direction: 'outbound', automation_source: 'ai_agent', content: { text: "Hi! I'm Test Assistant." } }],
       w_integrations: { refresh_token_encrypted: 'fake', access_token_encrypted: 'fake', token_expiry: '2099-01-01' },
     };
     const response = { data: fixtures[table], error: null };
@@ -33,6 +35,16 @@ async function scenario(mode = 'success') {
     }
     assert.equal(url, 'https://api.openai.com/v1/chat/completions');
     const request = JSON.parse(init.body); calls++;
+    if (mode === 'greeting') {
+      assert.equal(request.tools, undefined);
+      assert.equal(request.response_format, undefined);
+      return Response.json({ choices: [{ message: { content: 'Hi! How can I help?' } }] });
+    }
+    if (mode === 'registration') {
+      assert.equal(request.response_format?.type, 'json_object');
+      return Response.json({ choices: [{ message: { content: JSON.stringify({ kind: 'student', action: 'review', event_id: null }) } }] });
+    }
+    if (mode === 'openai-timeout') throw new DOMException('Request timed out', 'TimeoutError');
     if (mode === 'buttons-off') assert.ok(request.messages.some((m: any) => m.role === 'system' && m.content.includes('AGENT PREFERENCE OVERRIDE: Buttons are OFF')));
     if (calls === 1 && mode !== 'disabled') {
       assert.equal(request.tools[0].function.name, 'get_upcoming_sessions');
@@ -46,11 +58,13 @@ async function scenario(mode = 'success') {
       else assert.equal(data.events.length, mode === 'empty' ? 0 : 1);
       assert.ok(request.messages.some((m: any) => m.role === 'assistant' && m.tool_calls?.[0]?.id === 'lookup'));
     } else assert.equal(request.tools, undefined);
+    if (mode === 'empty-completion') return Response.json({ choices: [{ finish_reason: 'stop', message: { content: ' ' } }] });
     return new Response(JSON.stringify({ choices: [{ message: { content: mode === 'buttons-off' ? JSON.stringify({ text: 'Workshop registration', buttons: [{ id: 'register', text: 'Register', type: 'url', url: 'https://example.com/workshop' }] }) : mode === 'failure' ? 'Schedule unverified.' : mode === 'empty' ? 'No sessions found.' : 'Synthetic Workshop: 5–6 PM.' } }] }));
   }) as any;
   try {
     invalidateFlowsCache('synthetic-org');
-    const result = await getBotAgentReply({ organization_id: 'synthetic-org', conversation_id: 'synthetic-conversation', text: 'Aaj workshop kitne baje hai?' });
+    const text = mode === 'greeting' ? 'Hi!' : mode === 'registration' ? 'I want to register for upcoming workshop' : 'Aaj workshop kitne baje hai?';
+    const result = await getBotAgentReply({ organization_id: 'synthetic-org', conversation_id: 'synthetic-conversation', text });
     return { result, calls, calendarReads };
   } finally {
     globalThis.fetch = previous.fetch; supabase.from = previous.from;
@@ -60,6 +74,24 @@ async function scenario(mode = 'success') {
 
 test('zero-doc agent reads calendar and returns time rather than repeated introduction', async () => {
   const r = await scenario(); assert.equal(r.calls, 2); assert.equal(r.calendarReads, 1); assert.match(r.result!.reply, /5–6 PM/);
+});
+test('a greeting after booking history needs one completion and no calendar lookup', async () => {
+  const r = await scenario('greeting');
+  assert.equal(r.calls, 1);
+  assert.equal(r.calendarReads, 0);
+  assert.equal(r.result!.reply, 'Hi! How can I help?');
+});
+test('workshop registration asks for the session when the request is ambiguous', async () => {
+  const r = await scenario('registration');
+  assert.equal(r.calendarReads, 1);
+  assert.equal(r.calls, 1);
+  assert.match(r.result!.reply, /exact workshop aur date/);
+});
+test('empty completion after calendar lookup and OpenAI timeout both produce a reply', async () => {
+  for (const mode of ['empty-completion', 'openai-timeout']) {
+    const r = await scenario(mode);
+    assert.match(r.result!.reply, /having trouble processing/);
+  }
 });
 test('calendar failure is sent as an error to the model', async () => {
   const r = await scenario('failure'); assert.match(r.result!.reply, /unverified/);
@@ -79,7 +111,8 @@ test('missing platform key does not masquerade as an introduction', async () => 
   const r = await scenario('no-key'); assert.equal(r.calls, 0); assert.match(r.result!.reply, /temporarily unavailable/);
 });
 
-test('DB-synced upcoming dance class answers with date/time, supports preset=upcoming, deduplicates KB, and survives Google error via cache', async () => {
+test('DB-synced upcoming dance class answers with date/time, supports preset=upcoming, deduplicates KB, and survives Google error via cache', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-11-11T09:00:00Z') });
   const { testBotAgentReply } = await import('../ai.service.js');
   const previous = { fetch: globalThis.fetch, from: supabase.from, key: process.env.OPENAI_API_KEY };
   process.env.OPENAI_API_KEY = 'synthetic-key';
