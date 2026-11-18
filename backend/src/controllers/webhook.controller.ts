@@ -117,7 +117,7 @@ export function queueBotAgentReply(params: {
           const botResult = await getBotAgentReply({
             organization_id,
             conversation_id: conv.id,
-            text, // This will be the text of the LAST message sent within the 5 seconds
+            text, // Use the latest message in the debounce window.
           });
 
           webhookLog("bot_agent.process.done", {
@@ -428,7 +428,7 @@ export function queueBotAgentReply(params: {
       });
 
       botLockMap.set(conv.id, currentPromise);
-    }, 5000)
+    }, 750)
   );
 }
 
