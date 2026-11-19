@@ -38,7 +38,7 @@ export function resolveLinkAction(text: string, history: Array<{ role: string; c
     const target = new URL(url);
     if (!['https:', 'http:'].includes(target.protocol) || target.username || target.password) return null;
   } catch { return null; }
-  return JSON.stringify({ text: 'Neeche button se open karein.', buttons: [{ id: 'open_link', text: 'Open Link', type: 'url', url }] });
+  return JSON.stringify({ text: 'Please use the button below to open the link:', buttons: [{ id: 'open_link', text: 'Open Link', type: 'url', url }] });
 }
 
 // Convert model-produced links/contact information into actual action buttons.
@@ -57,7 +57,7 @@ export function formatAgentLinks(reply: string): string {
   };
   for (const button of interactive?.buttons || []) {
     if (button.type === 'url' || button.type === 'form') add(button.text, button.url);
-    if (button.type === 'phone') add('WhatsApp Studio', `https://wa.me/${String(button.phone).replace(/\D/g, '')}`);
+    if (button.type === 'phone') add('WhatsApp Chat', `https://wa.me/${String(button.phone).replace(/\D/g, '')}`);
   }
   // Match Markdown first, preserving balanced parentheses inside real URLs.
   body = body.replace(/\[([^\]]+)\]\((https?:\/\/(?:[^\s()]|\([^\s()]*\))+)\)/g, (_all, label, url) => {
@@ -73,16 +73,16 @@ export function formatAgentLinks(reply: string): string {
   });
   body = body.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, email => {
     add('Email via Gmail', `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}`);
-    return 'Email via Gmail';
+    return email;
   });
   body = body.replace(/(?:\+91[\s-]?)?[6-9]\d{9}\b/g, phone => {
     let digits = phone.replace(/\D/g, '');
     if (digits.length === 10) digits = `91${digits}`;
-    add('WhatsApp Studio', `https://wa.me/${digits}`);
-    return 'WhatsApp contact';
+    add('WhatsApp Chat', `https://wa.me/${digits}`);
+    return phone;
   });
   if (!actions.length) return reply;
-  const cleaned = body.replace(/\(\s*\)/g, '').replace(/\n{3,}/g, '\n\n').trim() || 'Neeche button se open karein.';
+  const cleaned = body.replace(/\(\s*\)/g, '').replace(/\n{3,}/g, '\n\n').trim() || 'Please use the button below to proceed:';
   if (actions.length === 1 && !interactive?.buttons.some((b: any) => b.type === 'reply')) {
     return JSON.stringify({ text: cleaned.slice(0, 1024), buttons: [{ id: 'open_link', text: actions[0].label, type: 'url', url: actions[0].url }] });
   }

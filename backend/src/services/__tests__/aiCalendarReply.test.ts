@@ -159,18 +159,23 @@ test('DB-synced upcoming dance class answers with date/time, supports preset=upc
   const previous = { fetch: globalThis.fetch, from: supabase.from, key: process.env.OPENAI_API_KEY };
   process.env.OPENAI_API_KEY = 'synthetic-key';
 
+  const futureDate = new Date(Date.now() + 7 * 86400000);
+  const local_date = futureDate.toISOString().slice(0, 10);
+  const local_date_label = futureDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+  const local_weekday = futureDate.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'Asia/Kolkata' });
+
   const syncedEvent = {
     id: 'dance-2',
     title: 'DANCE CLASS 2',
-    start: { dateTime: '2026-11-12T15:00:00+05:30' },
-    end: { dateTime: '2026-11-12T16:00:00+05:30' },
+    start: { dateTime: `${local_date}T15:00:00+05:30` },
+    end: { dateTime: `${local_date}T16:00:00+05:30` },
     location: 'Studio 1',
     description: 'Trainer: Priya | Fee: Rs 500',
     timezone: 'Asia/Kolkata',
     is_all_day: false,
-    local_date: '2026-11-12',
-    local_weekday: 'Thursday',
-    local_date_label: '12 Nov 2026',
+    local_date,
+    local_weekday,
+    local_date_label,
     local_start: '3:00 PM',
     local_end: '4:00 PM',
   };
@@ -249,8 +254,8 @@ test('DB-synced upcoming dance class answers with date/time, supports preset=upc
               summary: 'DANCE CLASS 2',
               location: 'Studio 1',
               description: 'Trainer: Priya | Fee: Rs 500',
-              start: { dateTime: '2026-11-12T15:00:00+05:30' },
-              end: { dateTime: '2026-11-12T16:00:00+05:30' },
+              start: { dateTime: `${local_date}T15:00:00+05:30` },
+              end: { dateTime: `${local_date}T16:00:00+05:30` },
             },
           ],
         }),
@@ -299,7 +304,7 @@ test('DB-synced upcoming dance class answers with date/time, supports preset=upc
     const parsedTool = JSON.parse(toolMsg.content);
     assert.equal(parsedTool.events.length, 1);
     assert.equal(parsedTool.events[0].title, 'DANCE CLASS 2');
-    assert.equal(parsedTool.events[0].local_date_label, '12 Nov 2026');
+    assert.equal(parsedTool.events[0].local_date_label, local_date_label);
     assert.equal(parsedTool.events[0].local_start, '3:00 PM');
     if (googleFails) {
       assert.equal(parsedTool.source, 'database_cache');
@@ -310,7 +315,7 @@ test('DB-synced upcoming dance class answers with date/time, supports preset=upc
         choices: [
           {
             message: {
-              content: '**DANCE CLASS 2** is scheduled on Thursday, 12 Nov 2026 from 3:00 PM to 4:00 PM.',
+              content: `**DANCE CLASS 2** is scheduled on ${local_weekday}, ${local_date_label} from 3:00 PM to 4:00 PM.`,
             },
           },
         ],
@@ -331,7 +336,7 @@ test('DB-synced upcoming dance class answers with date/time, supports preset=upc
     assert.equal(liveRes.schedule_source, 'live');
     assert.equal(liveRes.synced_event_count, 1);
     assert.match(liveRes.reply, /\*DANCE CLASS 2\*/);
-    assert.match(liveRes.reply, /12 Nov 2026/);
+    assert.match(liveRes.reply, new RegExp(local_date_label));
 
     // 2. Google API 503 failure falls back cleanly to DB-synced events
     callCount = 0;
@@ -344,7 +349,7 @@ test('DB-synced upcoming dance class answers with date/time, supports preset=upc
     assert.equal(cachedRes.is_fallback, false);
     assert.equal(cachedRes.used_calendar_tool, true);
     assert.equal(cachedRes.schedule_source, 'database_cache');
-    assert.match(cachedRes.reply, /12 Nov 2026/);
+    assert.match(cachedRes.reply, new RegExp(local_date_label));
   } finally {
     globalThis.fetch = previous.fetch;
     supabase.from = previous.from;

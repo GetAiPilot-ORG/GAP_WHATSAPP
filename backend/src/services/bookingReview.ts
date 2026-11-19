@@ -11,7 +11,7 @@ export function bookingAction(text: string): 'review' | 'confirm' | 'change' | '
   if (/^(cancel booking request|cancel request)$/.test(value)) return 'cancel';
   if (/^(change booking details|change details)$/.test(value) || /(?:info|details).*(?:update|change)|(?:update|change).*(?:info|details)/.test(value)) return 'change';
   // Asking for confirmation/status is not consent and must never become payment intent.
-  if (/^(?:confirmation|conformation|booking status|booking confirmation|booking review)$/.test(value) || /^review\b/.test(value)) return 'review';
+  if (/^(?:confirmation|conformation|booking status|booking confirmation|booking review|zala ka.*registration|registration.*zala ka|registration status)$/.test(value) || /^review\b/.test(value)) return 'review';
   return null;
 }
 
