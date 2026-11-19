@@ -16,7 +16,27 @@ import { getMeetingTimeStatus } from '../utils/meetingTimeValidator'
 
 export default function MeetingWaitingRoom() {
     const [searchParams] = useSearchParams()
-    const rawLink = searchParams.get('link') || ''
+
+    // Resolve masked third-party link from token or direct link
+    const rawLink = useMemo(() => {
+        const directLink = searchParams.get('link')
+        if (directLink) return directLink
+
+        const token = searchParams.get('token') || searchParams.get('room')
+        if (token) {
+            try {
+                return decodeURIComponent(escape(atob(token)))
+            } catch {
+                try {
+                    return atob(token)
+                } catch {
+                    return token
+                }
+            }
+        }
+        return ''
+    }, [searchParams])
+
     const date = searchParams.get('date') || ''
     const time = searchParams.get('time') || ''
     const serviceName = searchParams.get('service') || '1-on-1 Consultation'

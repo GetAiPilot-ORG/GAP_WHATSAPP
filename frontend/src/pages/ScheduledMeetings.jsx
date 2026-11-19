@@ -35,6 +35,7 @@ import {
     Globe,
     CheckCircle,
     Lock,
+    ShieldCheck,
 } from 'lucide-react'
 import QRCode from 'react-qr-code'
 import { useAuth } from '../context/AuthContext'
@@ -1210,6 +1211,14 @@ export default function ScheduledMeetings() {
                                                     30,
                                                     10
                                                 )
+                                                const itemProtectedUrl = getProtectedMeetingUrl(
+                                                    itemMeetUrl,
+                                                    item.appointment_date,
+                                                    item.display_time || item.appointment_time,
+                                                    item.flow_name || 'Meeting',
+                                                    item.contact_name,
+                                                    item.id
+                                                )
 
                                                 return (
                                                     <tr key={item.id} className="hover:bg-blue-50/30 transition-colors group">
@@ -1329,8 +1338,8 @@ export default function ScheduledMeetings() {
                                                                         <Send className="w-3.5 h-3.5" />
                                                                     </button>
                                                                 </div>
-                                                                <p className="text-[10px] font-mono text-gray-400 truncate max-w-[160px] lg:max-w-[210px]">
-                                                                    {itemMeetUrl}
+                                                                <p className="text-[10px] font-mono text-gray-400 truncate max-w-[160px] lg:max-w-[210px]" title={itemProtectedUrl}>
+                                                                    {itemProtectedUrl}
                                                                 </p>
                                                             </div>
                                                         </td>
@@ -1461,6 +1470,14 @@ export default function ScheduledMeetings() {
                                             item.display_time || item.appointment_time,
                                             30,
                                             10
+                                        )
+                                        const itemProtectedUrl = getProtectedMeetingUrl(
+                                            itemMeetUrl,
+                                            item.appointment_date,
+                                            item.display_time || item.appointment_time,
+                                            item.flow_name || 'Meeting',
+                                            item.contact_name,
+                                            item.id
                                         )
 
                                         return (
@@ -1634,8 +1651,8 @@ export default function ScheduledMeetings() {
                                                         </button>
                                                     </div>
 
-                                                    <p className="text-[10px] font-mono text-gray-500 truncate">
-                                                        {itemMeetUrl}
+                                                    <p className="text-[10px] font-mono text-gray-500 truncate" title={itemProtectedUrl}>
+                                                        {itemProtectedUrl}
                                                     </p>
                                                 </div>
 
@@ -1964,98 +1981,102 @@ export default function ScheduledMeetings() {
                         </div>
 
                         {/* Success State view */}
-                        {createdMeetingResult ? (
-                            <div className="space-y-4 py-2">
-                                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2">
-                                    <div className="flex items-center gap-2 text-emerald-800 font-bold text-sm">
-                                        <CheckCircle className="w-4 h-4 text-emerald-600" />
-                                        Meeting Confirmed!
-                                    </div>
-                                    <p className="text-xs text-emerald-700">
-                                        Appointment with <span className="font-semibold">{createdMeetingResult.contact_name || createdMeetingResult.contact_phone || 'Client'}</span> scheduled for{' '}
-                                        <span className="font-semibold">{formatDateDisplay(createdMeetingResult.appointment_date)}</span> at{' '}
-                                        <span className="font-semibold">{createdMeetingResult.appointment_time}</span>.
-                                    </p>
-                                </div>
+                        {createdMeetingResult ? (() => {
+                            const maskedMeetingUrl = getProtectedMeetingUrl(
+                                createdMeetingResult.meet_link,
+                                createdMeetingResult.appointment_date,
+                                createdMeetingResult.appointment_time,
+                                createdMeetingResult.service_name || 'Consultation',
+                                createdMeetingResult.contact_name || createdMeetingResult.contact_phone,
+                                createdMeetingResult.id
+                            )
+                            const createdTimeStatus = getMeetingTimeStatus(
+                                createdMeetingResult.appointment_date,
+                                createdMeetingResult.appointment_time,
+                                30,
+                                10
+                            )
 
-                                <div>
-                                    <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                                        Dedicated Video Room Link
-                                    </label>
-                                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 font-mono text-xs text-gray-800 break-all select-all flex items-center justify-between gap-2">
-                                        <span>{createdMeetingResult.meet_link}</span>
+                            return (
+                                <div className="space-y-4 py-2">
+                                    <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2">
+                                        <div className="flex items-center gap-2 text-emerald-800 font-bold text-sm">
+                                            <CheckCircle className="w-4 h-4 text-emerald-600" />
+                                            Meeting Confirmed!
+                                        </div>
+                                        <p className="text-xs text-emerald-700">
+                                            Appointment with <span className="font-semibold">{createdMeetingResult.contact_name || createdMeetingResult.contact_phone || 'Client'}</span> scheduled for{' '}
+                                            <span className="font-semibold">{formatDateDisplay(createdMeetingResult.appointment_date)}</span> at{' '}
+                                            <span className="font-semibold">{createdMeetingResult.appointment_time}</span>.
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <div className="flex items-center justify-between mb-1.5">
+                                            <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                                Dedicated Video Room Link
+                                            </label>
+                                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                                                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                                Masked Link Active
+                                            </span>
+                                        </div>
+                                        <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 font-mono text-xs text-gray-800 break-all select-all flex items-center justify-between gap-2 shadow-xs">
+                                            <span className="truncate">{maskedMeetingUrl}</span>
+                                            <button
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(maskedMeetingUrl)
+                                                    notify.success('Masked meeting link copied!')
+                                                }}
+                                                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors shrink-0"
+                                                title="Copy Masked Link"
+                                            >
+                                                <Copy className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                        <p className="text-[11px] text-gray-500 mt-1">
+                                            Third-party platform room is masked behind this gateway link. Early entry is locked until 10 minutes prior to scheduled time.
+                                        </p>
+                                    </div>
+
+                                    {/* Room Lock Notice if Scheduled in the Future */}
+                                    {!createdTimeStatus.isJoinable && (
+                                        <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+                                            <Lock className="w-4 h-4 shrink-0 text-amber-600" />
+                                            <span>
+                                                <strong>Room Locked Before Time:</strong> To prevent joining before the scheduled meeting, the video room unlocks 10 minutes prior to {formatDateDisplay(createdMeetingResult.appointment_date)} at {createdMeetingResult.appointment_time}.
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    <div className="flex flex-col sm:flex-row gap-2 pt-2">
                                         <button
                                             onClick={() => {
-                                                navigator.clipboard.writeText(createdMeetingResult.meet_link)
-                                                notify.success('Meeting link copied!')
+                                                const phone = (createdMeetingResult.contact_phone || '').replace(/\D/g, '')
+                                                const name = createdMeetingResult.contact_name || 'there'
+                                                const msg = `Hi ${name}! Here are our confirmed meeting details:\n📅 Date: ${formatDateDisplay(createdMeetingResult.appointment_date)} at ${createdMeetingResult.appointment_time}\n📌 Service: ${createdMeetingResult.service_name || 'WhatsApp Meeting'}\n🔗 Join Meeting: ${maskedMeetingUrl}\n\n🔒 Note: Video room is secured. Access link is disabled until 10 minutes before the scheduled time.\n\nLooking forward to speaking with you!`
+                                                const wa = phone
+                                                    ? `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(msg)}`
+                                                    : `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`
+                                                window.open(wa, '_blank')
                                             }}
-                                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors shrink-0"
-                                            title="Copy Link"
+                                            className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors"
                                         >
-                                            <Copy className="w-4 h-4" />
+                                            <Send className="w-4 h-4" />
+                                            Send on WhatsApp
                                         </button>
-                                    </div>
-                                </div>
 
-                                {/* Room Lock Notice if Scheduled in the Future */}
-                                {(() => {
-                                    const createdTimeStatus = getMeetingTimeStatus(
-                                        createdMeetingResult.appointment_date,
-                                        createdMeetingResult.appointment_time,
-                                        30,
-                                        10
-                                    )
-                                    if (!createdTimeStatus.isJoinable) {
-                                        return (
-                                            <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
-                                                <Lock className="w-4 h-4 shrink-0 text-amber-600" />
-                                                <span>
-                                                    <strong>Room Locked Before Time:</strong> To prevent joining before the scheduled meeting, the video room unlocks 10 minutes prior to {formatDateDisplay(createdMeetingResult.appointment_date)} at {createdMeetingResult.appointment_time}.
-                                                </span>
-                                            </div>
-                                        )
-                                    }
-                                    return null
-                                })()}
-
-                                <div className="flex flex-col sm:flex-row gap-2 pt-2">
-                                    <button
-                                        onClick={() => {
-                                            const phone = (createdMeetingResult.contact_phone || '').replace(/\D/g, '')
-                                            const name = createdMeetingResult.contact_name || 'there'
-                                            const msg = `Hi ${name}! Here is the direct meeting link for our session on ${formatDateDisplay(createdMeetingResult.appointment_date)} at ${createdMeetingResult.appointment_time}:\n\n🔗 ${createdMeetingResult.meet_link}\n\nLooking forward to speaking with you!`
-                                            const wa = phone
-                                                ? `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(msg)}`
-                                                : `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`
-                                            window.open(wa, '_blank')
-                                        }}
-                                        className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors"
-                                    >
-                                        <Send className="w-4 h-4" />
-                                        Send on WhatsApp
-                                    </button>
-
-                                    {(() => {
-                                        const createdTimeStatus = getMeetingTimeStatus(
-                                            createdMeetingResult.appointment_date,
-                                            createdMeetingResult.appointment_time,
-                                            30,
-                                            10
-                                        )
-                                        if (createdTimeStatus.isJoinable) {
-                                            return (
-                                                <a
-                                                    href={createdMeetingResult.meet_link}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="inline-flex items-center justify-center gap-1.5 py-2.5 px-4 bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 text-xs font-semibold rounded-xl transition-colors"
-                                                >
-                                                    <Video className="w-4 h-4 text-purple-600" />
-                                                    Join Room
-                                                </a>
-                                            )
-                                        }
-                                        return (
+                                        {createdTimeStatus.isJoinable ? (
+                                            <a
+                                                href={createdMeetingResult.meet_link}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center justify-center gap-1.5 py-2.5 px-4 bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 text-xs font-semibold rounded-xl transition-colors"
+                                            >
+                                                <Video className="w-4 h-4 text-purple-600" />
+                                                Join Room
+                                            </a>
+                                        ) : (
                                             <button
                                                 type="button"
                                                 onClick={() => {
@@ -2071,21 +2092,21 @@ export default function ScheduledMeetings() {
                                                 <Lock className="w-4 h-4 text-gray-400 shrink-0" />
                                                 <span className="whitespace-nowrap font-medium">Join Room ({createdTimeStatus.status === 'ended' ? 'Ended' : createdTimeStatus.countdown || 'Locked'})</span>
                                             </button>
-                                        )
-                                    })()}
+                                        )}
 
-                                    <button
-                                        onClick={() => {
-                                            setShowCreateModal(false)
-                                            setCreatedMeetingResult(null)
-                                        }}
-                                        className="py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-xl transition-colors"
-                                    >
-                                        Done
-                                    </button>
+                                        <button
+                                            onClick={() => {
+                                                setShowCreateModal(false)
+                                                setCreatedMeetingResult(null)
+                                            }}
+                                            className="py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-xl transition-colors"
+                                        >
+                                            Done
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
-                        ) : (
+                            )
+                        })() : (
                             /* Form view */
                             <form onSubmit={handleCreateMeetingSubmit} className="space-y-4">
                                 <div>

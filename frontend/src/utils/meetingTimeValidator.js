@@ -117,18 +117,29 @@ export function getMeetingTimeStatus(dateStr, timeStr, durationMinutes = 30, ear
 }
 
 /**
- * Builds a protected waiting-room meeting link that prevents joining before time.
+ * Builds a protected & masked waiting-room meeting link that prevents joining before time.
+ * Masks raw third-party meeting links (e.g. meet.jit.si or meet.google.com) behind an encoded token.
  */
-export function getProtectedMeetingUrl(rawUrl, date, time, serviceName, clientName) {
+export function getProtectedMeetingUrl(rawUrl, date, time, serviceName, clientName, appointmentId) {
     if (!rawUrl) return ''
     try {
         const origin = typeof window !== 'undefined' ? window.location.origin : ''
         const params = new URLSearchParams()
-        params.set('link', rawUrl)
+        
+        // Obfuscate / mask third-party video room link into an opaque token
+        try {
+            const token = btoa(unescape(encodeURIComponent(rawUrl)))
+            params.set('token', token)
+        } catch {
+            params.set('link', rawUrl)
+        }
+
         if (date) params.set('date', String(date).slice(0, 10))
         if (time) params.set('time', String(time))
         if (serviceName) params.set('service', String(serviceName))
         if (clientName) params.set('name', String(clientName))
+        if (appointmentId) params.set('id', String(appointmentId))
+
         return `${origin}/join-meeting?${params.toString()}`
     } catch {
         return rawUrl
