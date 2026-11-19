@@ -1698,7 +1698,7 @@ export default function ScheduledMeetings() {
 
             {/* TAB CONTENT: LIVE CLIENT PREVIEW */}
             {activeTab === 'preview' && (
-                <div className="space-y-4 max-w-3xl mx-auto">
+                <div className="space-y-4 w-full">
                     <div className="p-4 bg-purple-50/80 border border-purple-200 rounded-xl flex items-center justify-between text-xs text-purple-900">
                         <div className="flex items-center gap-2">
                             <Sparkles className="w-4 h-4 text-purple-600" />
@@ -1935,7 +1935,7 @@ export default function ScheduledMeetings() {
             {/* MODAL 1: CREATE MEETING LINK / INSTANT SCHEDULE */}
             {showCreateModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-xs animate-in fade-in duration-150">
-                    <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl max-w-2xl sm:max-w-3xl w-full max-h-[92vh] overflow-y-auto p-6 space-y-5">
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl max-w-4xl w-full max-h-[92vh] overflow-y-auto p-6 space-y-5">
                         <div className="flex items-center justify-between pb-3 border-b border-gray-100">
                             <div className="flex items-center gap-2.5">
                                 <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">

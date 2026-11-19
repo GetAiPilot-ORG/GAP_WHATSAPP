@@ -781,3 +781,80 @@ export async function createAppointment(req: Request, res: Response) {
     return res.status(500).json({ error: err.message || "Failed to create appointment" });
   }
 }
+
+/**
+ * GET /api/appointments/:id/join
+ * Masked meeting gateway: verifies scheduled time before redirecting or providing the real video link.
+ */
+export async function getAppointmentJoin(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const shouldRedirect = req.query.redirect === "true";
+
+    if (!id) {
+      return res.status(400).json({ error: "Missing appointment id" });
+    }
+
+    // Lookup session in w_flow_sessions
+    const { data: session } = await supabase
+      .from("w_flow_sessions")
+      .select("id, state_data")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (!session || !session.state_data) {
+      return res.status(404).json({ error: "Appointment not found or expired." });
+    }
+
+    const sd = session.state_data;
+    const dateStr = sd.appointment_date;
+    const timeStr = sd.selected_time_raw || sd.appointment_time || "10:00";
+    const rawMeetLink = sd.meet_link;
+
+    if (!rawMeetLink) {
+      return res.status(404).json({ error: "No video meeting room assigned to this appointment." });
+    }
+
+    // Check meeting time window
+    const [y, m, d] = String(dateStr).split("-").map(Number);
+    const [h, min] = String(timeStr).split(":").map(Number);
+    const meetingStart = new Date(y, (m || 1) - 1, d || 1, h || 0, min || 0);
+
+    const now = new Date();
+    const earlyEntryMs = 10 * 60 * 1000; // 10 minutes early entry
+    const earliestJoin = new Date(meetingStart.getTime() - earlyEntryMs);
+    const meetingEnd = new Date(meetingStart.getTime() + 30 * 60 * 1000);
+
+    if (now < earliestJoin) {
+      const remainingSec = Math.ceil((earliestJoin.getTime() - now.getTime()) / 1000);
+      return res.status(403).json({
+        isLocked: true,
+        error: "Meeting room is locked before scheduled time.",
+        unlocksAt: earliestJoin.toISOString(),
+        scheduledStart: meetingStart.toISOString(),
+        secondsRemaining: remainingSec,
+      });
+    }
+
+    if (now > meetingEnd) {
+      return res.status(410).json({
+        isLocked: true,
+        isEnded: true,
+        error: "This meeting session has ended.",
+      });
+    }
+
+    // Unlocked!
+    if (shouldRedirect) {
+      return res.redirect(rawMeetLink);
+    }
+
+    return res.json({
+      isLocked: false,
+      meetLink: rawMeetLink,
+    });
+  } catch (err: any) {
+    console.error("Error in getAppointmentJoin:", err);
+    return res.status(500).json({ error: err.message || "Failed to verify meeting time." });
+  }
+}

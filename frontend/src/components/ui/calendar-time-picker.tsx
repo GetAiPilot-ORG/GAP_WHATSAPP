@@ -227,26 +227,26 @@ export function CalendarTimePicker({
       )}
     >
       {/* LEFT COLUMN: Clean Calendar */}
-      <div className="p-4 sm:p-5 flex flex-col justify-between select-none">
+      <div className="p-4 sm:p-6 lg:p-7 flex flex-col justify-between select-none">
         {/* Month Header Navigation */}
-        <div className="flex items-center justify-between pb-3">
+        <div className="flex items-center justify-between pb-4">
           <button
             type="button"
             onClick={handlePrevMonth}
-            className="p-1.5 rounded-lg text-gray-700 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+            className="p-2 rounded-lg text-gray-700 hover:text-gray-900 hover:bg-gray-100 transition-colors cursor-pointer"
             aria-label="Previous month"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
 
-          <h2 className="text-sm font-semibold text-gray-900 tracking-tight">
+          <h2 className="text-sm sm:text-base font-semibold text-gray-900 tracking-tight">
             {MONTH_NAMES[currentMonth]} {currentYear}
           </h2>
 
           <button
             type="button"
             onClick={handleNextMonth}
-            className="p-1.5 rounded-lg text-gray-700 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+            className="p-2 rounded-lg text-gray-700 hover:text-gray-900 hover:bg-gray-100 transition-colors cursor-pointer"
             aria-label="Next month"
           >
             <ChevronRight className="w-4 h-4" />
@@ -258,7 +258,7 @@ export function CalendarTimePicker({
           {WEEKDAYS.map((weekday) => (
             <div
               key={weekday}
-              className="text-[11px] sm:text-xs font-medium text-gray-400 py-1"
+              className="text-xs sm:text-sm font-medium text-gray-400 py-1.5"
             >
               {weekday}
             </div>
@@ -266,7 +266,7 @@ export function CalendarTimePicker({
         </div>
 
         {/* 42 Calendar Cells Grid */}
-        <div className="grid grid-cols-7 gap-1 text-center">
+        <div className="grid grid-cols-7 gap-1.5 sm:gap-2 text-center">
           {calendarGrid.map((cell, idx) => {
             const isClickable = !cell.isDisabled
 
@@ -286,7 +286,7 @@ export function CalendarTimePicker({
                   }
                 }}
                 className={cn(
-                  "h-9 sm:h-9 w-full flex items-center justify-center text-xs sm:text-sm transition-all relative font-medium",
+                  "h-10 sm:h-11 w-full flex items-center justify-center text-xs sm:text-sm transition-all relative font-medium",
                   // Selected State: Solid black rounded rectangle with white text (matches image exactly)
                   cell.isSelected &&
                     "bg-neutral-900 text-white font-semibold rounded-xl shadow-xs z-10 hover:bg-neutral-900",
@@ -311,7 +311,7 @@ export function CalendarTimePicker({
               >
                 <span>{cell.dayNum}</span>
                 {cell.isToday && !cell.isSelected && (
-                  <span className="absolute bottom-1 w-1 h-1 rounded-full bg-blue-600" />
+                  <span className="absolute bottom-1 w-1.5 h-1.5 rounded-full bg-blue-600" />
                 )}
               </button>
             )
@@ -320,18 +320,18 @@ export function CalendarTimePicker({
       </div>
 
       {/* RIGHT COLUMN: Available Times */}
-      <div className="p-4 sm:p-5 flex flex-col justify-between bg-white">
+      <div className="p-4 sm:p-6 lg:p-7 flex flex-col justify-between bg-white">
         {/* Header */}
-        <div className="text-center pb-3">
-          <h3 className="text-sm font-semibold text-gray-900 tracking-tight">
+        <div className="text-center pb-4">
+          <h3 className="text-sm sm:text-base font-semibold text-gray-900 tracking-tight">
             {timesHeader}
           </h3>
         </div>
 
         {/* Scrollable Slots Container */}
-        <div className="flex-1 max-h-[300px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+        <div className="flex-1 max-h-[380px] sm:max-h-[420px] overflow-y-auto space-y-2.5 pr-2 scrollbar-thin">
           {availableSlots.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center p-6 text-gray-400 space-y-1.5">
+            <div className="h-full min-h-[260px] flex flex-col items-center justify-center text-center p-6 text-gray-400 space-y-1.5">
               <Clock className="w-8 h-8 text-gray-300" />
               <p className="text-xs font-medium text-gray-500">No time slots available</p>
               <p className="text-[11px] text-gray-400">Please choose another date</p>
@@ -355,7 +355,7 @@ export function CalendarTimePicker({
                     }
                   }}
                   className={cn(
-                    "w-full py-2.5 px-4 rounded-xl text-xs sm:text-sm font-medium transition-all text-center flex items-center justify-center gap-1.5 relative",
+                    "w-full py-3 px-4 rounded-xl text-xs sm:text-sm font-medium transition-all text-center flex items-center justify-center gap-1.5 relative",
                     // Selected state: Solid black rounded button with white text (matches image exactly)
                     isSelected
                       ? "bg-neutral-900 text-white font-semibold border border-neutral-900 shadow-xs"
@@ -377,7 +377,7 @@ export function CalendarTimePicker({
         </div>
 
         {/* Bottom Helper Info */}
-        <div className="pt-2 text-center text-[11px] text-gray-400 border-t border-gray-100 mt-2">
+        <div className="pt-3 text-center text-xs text-gray-400 border-t border-gray-100 mt-3">
           {selectedDate && selectedTime ? (
             <span className="text-gray-700 font-medium">
               Selected: <strong className="text-neutral-900">{selectedDate}</strong> at{" "}
