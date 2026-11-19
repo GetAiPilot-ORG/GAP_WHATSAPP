@@ -32,7 +32,7 @@ export default function PublicBookingPage() {
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col justify-between py-6 sm:py-10 px-3 sm:px-6">
-            <div className="w-full max-w-3xl mx-auto space-y-6">
+            <div className="w-full max-w-5xl lg:max-w-6xl mx-auto space-y-6">
                 {/* Brand Header */}
                 <div className="flex items-center justify-between px-2">
                     <div className="flex items-center gap-2.5">

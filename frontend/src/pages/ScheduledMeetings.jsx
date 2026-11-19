@@ -34,6 +34,8 @@ import {
     Link2,
     Globe,
     CheckCircle,
+    Lock,
+    ShieldCheck,
 } from 'lucide-react'
 import QRCode from 'react-qr-code'
 import { useAuth } from '../context/AuthContext'
@@ -41,6 +43,9 @@ import { useDialog } from '../context/DialogContext'
 import { notify } from '../services/notificationService'
 import { BACKEND_URL as baseUrl } from '../config/api'
 import InteractiveBookingWidget, { getCalendarSyncLinks } from '../components/booking/InteractiveBookingWidget'
+import MeetingPlatformSelector, { PLATFORMS, validateMeetingUrl } from '../components/booking/MeetingPlatformSelector'
+import { getMeetingTimeStatus, getProtectedMeetingUrl } from '../utils/meetingTimeValidator'
+import { CalendarTimePicker } from '@/components/ui/calendar-time-picker'
 
 // Defensive QR Code resolver supporting both ESM & CJS
 const SafeQRCode = (() => {
@@ -61,7 +66,8 @@ const DEFAULT_CONFIG = {
     slug: 'meet',
     duration: 30,
     buffer: 10,
-    provider: 'jitsi', // 'jitsi' | 'google_meet' | 'custom'
+    provider: 'jitsi', // 'jitsi' | 'google_meet' | 'zoom' | 'teams' | 'custom'
+    customUrl: '',
     workingHours: { start: '09:30', end: '18:30' },
     workingDays: [1, 2, 3, 4, 5, 6], // Mon-Sat
 }
@@ -142,8 +148,74 @@ export default function ScheduledMeetings() {
         customUrl: '',
         notes: '',
     })
+    const [isCreateLinkVerified, setIsCreateLinkVerified] = useState(false)
+    const [isStudioLinkVerified, setIsStudioLinkVerified] = useState(true)
     const [isSubmittingMeeting, setIsSubmittingMeeting] = useState(false)
     const [createdMeetingResult, setCreatedMeetingResult] = useState(null)
+
+    // Schedule date/time validation & collision checks
+    const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), [])
+    const isModalDatePast = Boolean(createForm.date && createForm.date < todayStr)
+    const isModalTimePast = useMemo(() => {
+        if (!createForm.date || !createForm.time) return false
+        if (createForm.date !== todayStr) return false
+        const now = new Date()
+        const [h, m] = createForm.time.split(':').map(Number)
+        const total = (h || 0) * 60 + (m || 0)
+        const current = now.getHours() * 60 + now.getMinutes()
+        return total <= current + 5
+    }, [createForm.date, createForm.time, todayStr])
+
+    const modalClash = useMemo(() => {
+        if (!createForm.date || !createForm.time || !appointments?.length) return null
+        const formRaw = createForm.time.trim().slice(0, 5)
+        return appointments.find((app) => {
+            if (app.status === 'cancelled') return false
+            const aDate = app.appointment_date || app.date
+            if (aDate !== createForm.date) return false
+            const aTime = (app.appointment_time || app.time || '').trim().slice(0, 5)
+            const aDisp = (app.display_time || '').trim().toLowerCase()
+            return aTime === formRaw || aDisp === createForm.time.toLowerCase()
+        })
+    }, [createForm.date, createForm.time, appointments])
+
+    // Generate 30-minute business slots for CalendarTimePicker
+    const modalAvailableSlots = useMemo(() => {
+        const slots = []
+        const startHour = 9
+        const endHour = 18
+        const now = new Date()
+        const currentTotalMin = now.getHours() * 60 + now.getMinutes()
+
+        for (let h = startHour; h < endHour; h++) {
+            for (const m of [0, 30]) {
+                const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+                const period = h >= 12 ? 'PM' : 'AM'
+                const hour12 = h % 12 === 0 ? 12 : h % 12
+                const display = `${String(hour12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${period}`
+
+                const slotTotalMin = h * 60 + m
+                const isPastToday = createForm.date === todayStr && slotTotalMin <= currentTotalMin + 5
+
+                const isTaken = (appointments || []).some((app) => {
+                    if (app.status === 'cancelled') return false
+                    const aDate = (app.appointment_date || app.date || '').slice(0, 10)
+                    if (aDate !== createForm.date) return false
+                    const aTime = (app.appointment_time || app.time || '').trim().slice(0, 5)
+                    return aTime === timeStr
+                })
+
+                slots.push({
+                    time: timeStr,
+                    display,
+                    isTaken,
+                    isPast: isPastToday,
+                    disabled: isPastToday || isTaken,
+                })
+            }
+        }
+        return slots
+    }, [createForm.date, todayStr, appointments])
 
     // 300ms Debounce search input
     useEffect(() => {
@@ -334,15 +406,22 @@ export default function ScheduledMeetings() {
         setTimeout(() => setCopiedEmbed(false), 2200)
     }
 
-    // Copy individual meeting link
+    // Copy individual meeting link (protected gateway link)
     const handleCopyMeetingLink = (item) => {
-        const link =
+        const rawLink =
             item.meet_link ||
             item.html_link ||
             `https://meet.jit.si/GetAiPilot-${(item.flow_name || 'Meeting').replace(/[^a-zA-Z0-9]/g, '')}-${(item.id || '').slice(0, 8)}`
-        navigator.clipboard.writeText(link)
+        const protectedLink = getProtectedMeetingUrl(
+            rawLink,
+            item.appointment_date,
+            item.display_time || item.appointment_time,
+            item.flow_name || 'Meeting',
+            item.contact_name
+        )
+        navigator.clipboard.writeText(protectedLink)
         setCopiedMeetingId(item.id)
-        notify.success('Direct meeting link copied!')
+        notify.success('Protected meeting link copied! (Guards against early entry)')
         setTimeout(() => setCopiedMeetingId(null), 2000)
     }
 
@@ -354,13 +433,20 @@ export default function ScheduledMeetings() {
 
     // Send individual appointment meeting link directly to contact on WhatsApp
     const handleSendMeetingOnWhatsApp = (item) => {
-        const meetUrl =
+        const rawMeetUrl =
             item.meet_link ||
             item.html_link ||
             `https://meet.jit.si/GetAiPilot-${(item.flow_name || 'Meeting').replace(/[^a-zA-Z0-9]/g, '')}-${(item.id || '').slice(0, 8)}`
+        const protectedUrl = getProtectedMeetingUrl(
+            rawMeetUrl,
+            item.appointment_date,
+            item.display_time || item.appointment_time,
+            item.flow_name || 'Meeting',
+            item.contact_name
+        )
         const phone = (item.contact_phone || '').replace(/\D/g, '')
         const clientName = item.contact_name || 'there'
-        const text = `Hi ${clientName}! Here is the direct meeting link for our session on ${formatDateDisplay(item.appointment_date)} at ${item.display_time || item.appointment_time}:\n\n🔗 ${meetUrl}\n\nLooking forward to speaking with you!`
+        const text = `Hi ${clientName}! Here are our confirmed meeting details:\n📅 Date: ${formatDateDisplay(item.appointment_date)} at ${item.display_time || item.appointment_time}\n📌 Service: ${item.flow_name || 'WhatsApp Meeting'}\n🔗 Join Meeting: ${protectedUrl}\n\n🔒 Note: Video room is secured. Access link is disabled until 10 minutes before the scheduled time.\n\nLooking forward to speaking with you!`
         const waUrl = phone
             ? `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(text)}`
             : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`
@@ -416,14 +502,46 @@ export default function ScheduledMeetings() {
             return
         }
 
+        if (isModalDatePast) {
+            notify.error('Meeting date cannot be in the past. Please select today or a future date.')
+            return
+        }
+
+        if (isModalTimePast) {
+            notify.error('Meeting time has already passed for today. Please select an upcoming time slot.')
+            return
+        }
+
+        if (modalClash) {
+            notify.error(`This time slot (${createForm.time} on ${createForm.date}) is already booked for ${modalClash.contact_name || 'an existing client'}. Please select another time.`)
+            return
+        }
+
+        // Validate platform meeting URL if not auto Jitsi room
+        if (createForm.provider !== 'jitsi') {
+            const urlVal = validateMeetingUrl(createForm.customUrl)
+            if (!urlVal.isValid) {
+                notify.error(urlVal.error || 'Please provide a valid meeting link.')
+                return
+            }
+        }
+
+        // Enforce validation to open & test meeting link before scheduling
+        if (!isCreateLinkVerified) {
+            notify.warning('Validation required: Please click "Open & Test Link" to test and verify your meeting link before scheduling.')
+            return
+        }
+
         setIsSubmittingMeeting(true)
         try {
             const cleanTitle = (createForm.serviceName || 'Consultation').replace(/[^a-zA-Z0-9]/g, '').slice(0, 16)
             const shortId = Math.random().toString(36).slice(2, 8)
-            const finalMeetLink =
-                createForm.provider === 'custom' && createForm.customUrl.trim()
-                    ? createForm.customUrl.trim()
-                    : `https://meet.jit.si/GetAiPilot-${cleanTitle}-${shortId}`
+            let finalMeetLink = `https://meet.jit.si/GetAiPilot-${cleanTitle}-${shortId}`
+
+            if (createForm.provider !== 'jitsi' && createForm.customUrl?.trim()) {
+                const clean = createForm.customUrl.trim()
+                finalMeetLink = clean.startsWith('http://') || clean.startsWith('https://') ? clean : `https://${clean}`
+            }
 
             const payload = {
                 organization_id: organizationId,
@@ -1068,239 +1186,498 @@ export default function ScheduledMeetings() {
                                 </div>
                             </div>
                         ) : (
-                            <div className="overflow-x-auto w-full">
-                                <table className="w-full text-left border-collapse min-w-[760px]">
-                                    <thead>
-                                        <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-bold uppercase tracking-wider text-gray-500">
-                                            <th className="py-3 px-6">Contact / Service</th>
-                                            <th className="py-3 px-6">Date & Time</th>
-                                            <th className="py-3 px-6">Meeting Link</th>
-                                            <th className="py-3 px-6">Status</th>
-                                            <th className="py-3 px-6 text-right">Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100 text-sm">
-                                        {appointments.map((item, index) => {
-                                            const itemMeetUrl =
-                                                item.meet_link ||
-                                                item.html_link ||
-                                                `https://meet.jit.si/GetAiPilot-${(item.flow_name || 'Meeting').replace(/[^a-zA-Z0-9]/g, '')}-${(item.id || '').slice(0, 8)}`
+                            <>
+                                {/* Desktop Table View (hidden on mobile, visible on md and up) */}
+                                <div className="hidden md:block overflow-x-auto w-full">
+                                    <table className="w-full text-left border-collapse min-w-[880px]">
+                                        <thead>
+                                            <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                                                <th className="py-3 px-6">Contact / Service</th>
+                                                <th className="py-3 px-6">Date & Time</th>
+                                                <th className="py-3 px-6">Meeting Link</th>
+                                                <th className="py-3 px-6">Status</th>
+                                                <th className="py-3 px-6 text-right">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100 text-sm">
+                                            {appointments.map((item, index) => {
+                                                const itemMeetUrl =
+                                                    item.meet_link ||
+                                                    item.html_link ||
+                                                    `https://meet.jit.si/GetAiPilot-${(item.flow_name || 'Meeting').replace(/[^a-zA-Z0-9]/g, '')}-${(item.id || '').slice(0, 8)}`
+                                                const itemTimeStatus = getMeetingTimeStatus(
+                                                    item.appointment_date,
+                                                    item.display_time || item.appointment_time,
+                                                    30,
+                                                    10
+                                                )
+                                                const itemProtectedUrl = getProtectedMeetingUrl(
+                                                    itemMeetUrl,
+                                                    item.appointment_date,
+                                                    item.display_time || item.appointment_time,
+                                                    item.flow_name || 'Meeting',
+                                                    item.contact_name,
+                                                    item.id
+                                                )
 
-                                            return (
-                                                <tr key={item.id} className="hover:bg-blue-50/30 transition-colors group">
-                                                    {/* Contact Column */}
-                                                    <td className="py-3.5 px-6">
-                                                        <div className="flex items-center gap-3">
-                                                            {item.avatar_url ? (
-                                                                <img
-                                                                    src={item.avatar_url}
-                                                                    alt="Avatar"
-                                                                    className="w-9 h-9 rounded-full object-cover border border-gray-200"
-                                                                />
-                                                            ) : (
-                                                                <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs border border-blue-200">
-                                                                    {(item.contact_name || item.contact_phone || 'W')
-                                                                        .charAt(0)
-                                                                        .toUpperCase()}
-                                                                </div>
-                                                            )}
-                                                            <div>
-                                                                {item.contact_name ? (
-                                                                    <>
-                                                                        <p className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
-                                                                            {item.contact_name}
-                                                                        </p>
-                                                                        <p className="text-xs text-gray-500 font-mono">
+                                                return (
+                                                    <tr key={item.id} className="hover:bg-blue-50/30 transition-colors group">
+                                                        {/* Contact Column */}
+                                                        <td className="py-3.5 px-6">
+                                                            <div className="flex items-center gap-3">
+                                                                {item.avatar_url ? (
+                                                                    <img
+                                                                        src={item.avatar_url}
+                                                                        alt="Avatar"
+                                                                        className="w-9 h-9 rounded-full object-cover border border-gray-200 shrink-0"
+                                                                    />
+                                                                ) : (
+                                                                    <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs border border-blue-200 shrink-0">
+                                                                        {(item.contact_name || item.contact_phone || 'W')
+                                                                            .charAt(0)
+                                                                            .toUpperCase()}
+                                                                    </div>
+                                                                )}
+                                                                <div className="min-w-0 max-w-[240px]">
+                                                                    {item.contact_name ? (
+                                                                        <>
+                                                                            <p className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors truncate">
+                                                                                {item.contact_name}
+                                                                            </p>
+                                                                            <p className="text-xs text-gray-500 font-mono truncate">
+                                                                                {item.contact_phone}
+                                                                            </p>
+                                                                        </>
+                                                                    ) : (
+                                                                        <p className="font-mono font-semibold text-gray-900 group-hover:text-blue-600 transition-colors truncate">
                                                                             {item.contact_phone}
                                                                         </p>
-                                                                    </>
-                                                                ) : (
-                                                                    <p className="font-mono font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
-                                                                        {item.contact_phone}
+                                                                    )}
+                                                                    <p className="mt-1 inline-flex max-w-[220px] items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700">
+                                                                        <span className="font-medium shrink-0">Service:</span>{' '}
+                                                                        <span className="truncate">
+                                                                            {item.flow_name ||
+                                                                                (item.flow_id
+                                                                                    ? 'Flow Booking'
+                                                                                    : item.source === 'Google Calendar'
+                                                                                    ? 'Google Calendar'
+                                                                                    : 'Meeting Link')}
+                                                                        </span>
                                                                     </p>
-                                                                )}
-                                                                <p className="mt-1 inline-flex max-w-full items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700">
-                                                                    <span className="font-medium">Service:</span>{' '}
-                                                                    {item.flow_name ||
-                                                                        (item.flow_id
-                                                                            ? 'Flow Booking'
-                                                                            : item.source === 'Google Calendar'
-                                                                            ? 'Google Calendar'
-                                                                            : 'Meeting Link')}
+                                                                </div>
+                                                            </div>
+                                                        </td>
+
+                                                        {/* Date & Time Column */}
+                                                        <td className="py-3.5 px-6 whitespace-nowrap">
+                                                            <div className="flex flex-col gap-1">
+                                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 text-gray-800 rounded-md text-xs font-semibold border border-gray-200 w-fit shrink-0 whitespace-nowrap">
+                                                                    <Calendar className="w-3.5 h-3.5 text-gray-500" />
+                                                                    {formatDateDisplay(item.appointment_date)}
+                                                                </span>
+                                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-md text-xs font-semibold border border-blue-100 w-fit shrink-0 whitespace-nowrap">
+                                                                    <Clock className="w-3.5 h-3.5 text-blue-500" />
+                                                                    {item.display_time || item.appointment_time || '10:00 AM'}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+
+                                                        {/* Meeting Link Column */}
+                                                        <td className="py-3.5 px-6">
+                                                            <div className="space-y-1.5">
+                                                                <div className="flex items-center gap-1.5 flex-nowrap">
+                                                                    {itemTimeStatus.isJoinable ? (
+                                                                        <a
+                                                                            href={itemMeetUrl}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-md border border-purple-200 transition-colors shadow-2xs whitespace-nowrap shrink-0"
+                                                                            title="Join video meeting call"
+                                                                        >
+                                                                            <Video className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                                                                            <span>Join Call</span>
+                                                                            <ExternalLink className="w-3 h-3 text-purple-400 shrink-0" />
+                                                                        </a>
+                                                                    ) : (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() =>
+                                                                                notify.info(
+                                                                                    itemTimeStatus.status === 'ended'
+                                                                                        ? 'This meeting session has already ended.'
+                                                                                        : `Room locked before time. Access opens 10 mins before ${item.display_time || item.appointment_time}.`
+                                                                                )
+                                                                            }
+                                                                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-gray-500 bg-gray-100 rounded-md border border-gray-200 cursor-not-allowed whitespace-nowrap shrink-0"
+                                                                            title={itemTimeStatus.message}
+                                                                        >
+                                                                            <Lock className="w-3 h-3 text-gray-400 shrink-0" />
+                                                                            <span className="whitespace-nowrap font-medium">
+                                                                                {itemTimeStatus.status === 'ended' ? 'Ended' : itemTimeStatus.countdown || 'Locked'}
+                                                                            </span>
+                                                                        </button>
+                                                                    )}
+
+                                                                    <button
+                                                                        onClick={() => handleCopyMeetingLink(item)}
+                                                                        className="p-1 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors shrink-0"
+                                                                        title="Copy direct meeting link"
+                                                                    >
+                                                                        {copiedMeetingId === item.id ? (
+                                                                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                                                        ) : (
+                                                                            <Copy className="w-3.5 h-3.5" />
+                                                                        )}
+                                                                    </button>
+
+                                                                    <button
+                                                                        onClick={() => handleSendMeetingOnWhatsApp(item)}
+                                                                        className="p-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-md transition-colors shrink-0"
+                                                                        title="Send meeting link directly on WhatsApp"
+                                                                    >
+                                                                        <Send className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                </div>
+                                                                <p className="text-[10px] font-mono text-gray-400 truncate max-w-[160px] lg:max-w-[210px]" title={itemProtectedUrl}>
+                                                                    {itemProtectedUrl}
                                                                 </p>
                                                             </div>
-                                                        </div>
-                                                    </td>
+                                                        </td>
 
-                                                    {/* Date & Time Column */}
-                                                    <td className="py-3.5 px-6">
-                                                        <div className="flex flex-col gap-1">
-                                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 text-gray-800 rounded-md text-xs font-semibold border border-gray-200 w-fit">
-                                                                <Calendar className="w-3.5 h-3.5 text-gray-500" />
-                                                                {formatDateDisplay(item.appointment_date)}
-                                                            </span>
-                                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-md text-xs font-semibold border border-blue-100 w-fit">
-                                                                <Clock className="w-3.5 h-3.5 text-blue-500" />
-                                                                {item.display_time || item.appointment_time || '10:00 AM'}
-                                                            </span>
-                                                        </div>
-                                                    </td>
-
-                                                    {/* Meeting Link Column */}
-                                                    <td className="py-3.5 px-6">
-                                                        <div className="space-y-1.5">
-                                                            <div className="flex items-center gap-1.5">
-                                                                <a
-                                                                    href={itemMeetUrl}
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-md border border-purple-200 transition-colors shadow-2xs"
-                                                                    title="Join video meeting call"
-                                                                >
-                                                                    <Video className="w-3.5 h-3.5 text-purple-600" />
-                                                                    Join Call
-                                                                    <ExternalLink className="w-3 h-3 text-purple-400" />
-                                                                </a>
-
+                                                        {/* Status Column */}
+                                                        <td className="py-3.5 px-6 whitespace-nowrap">
+                                                            <div className="relative inline-block text-left">
                                                                 <button
-                                                                    onClick={() => handleCopyMeetingLink(item)}
-                                                                    className="p-1 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
-                                                                    title="Copy direct meeting link"
+                                                                    onClick={() =>
+                                                                        setActiveStatusMenuId(
+                                                                            activeStatusMenuId === item.id ? null : item.id
+                                                                        )
+                                                                    }
+                                                                    className="cursor-pointer text-xs font-semibold"
                                                                 >
-                                                                    {copiedMeetingId === item.id ? (
-                                                                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                                                    {item.status === 'confirmed' ? (
+                                                                        <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                                                                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                                                                            Confirmed
+                                                                            <ChevronDown className="w-3 h-3 text-emerald-500 ml-0.5" />
+                                                                        </span>
+                                                                    ) : item.status === 'completed' ? (
+                                                                        <span className="inline-flex items-center gap-1 text-gray-700 bg-gray-100 px-2.5 py-1 rounded-full border border-gray-200">
+                                                                            <UserCheck className="w-3.5 h-3.5 text-gray-500" />
+                                                                            Completed
+                                                                            <ChevronDown className="w-3 h-3 text-gray-500 ml-0.5" />
+                                                                        </span>
                                                                     ) : (
-                                                                        <Copy className="w-3.5 h-3.5" />
+                                                                        <span className="inline-flex items-center gap-1 text-red-700 bg-red-50 px-2.5 py-1 rounded-full border border-red-200">
+                                                                            <XCircle className="w-3.5 h-3.5 text-red-500" />
+                                                                            Cancelled
+                                                                            <ChevronDown className="w-3 h-3 text-red-500 ml-0.5" />
+                                                                        </span>
                                                                     )}
                                                                 </button>
 
+                                                                {/* Popup Dropdown */}
+                                                                {activeStatusMenuId === item.id && (
+                                                                    <>
+                                                                        <div
+                                                                            className="fixed inset-0 z-40"
+                                                                            onClick={() => setActiveStatusMenuId(null)}
+                                                                        />
+                                                                        <div
+                                                                            className={`absolute left-0 w-36 bg-white border border-gray-200 rounded-xl shadow-xl z-50 py-1.5 text-xs font-semibold space-y-0.5 animate-in fade-in zoom-in-95 duration-100 ${
+                                                                                index >= appointments.length - 2 &&
+                                                                                appointments.length > 2
+                                                                                    ? 'bottom-full mb-1.5'
+                                                                                    : 'top-full mt-1.5'
+                                                                            }`}
+                                                                        >
+                                                                            <button
+                                                                                onClick={() => handleUpdateStatus(item, 'confirmed')}
+                                                                                className={`w-full text-left px-3 py-1.5 flex items-center gap-2 hover:bg-emerald-50 hover:text-emerald-700 transition-colors ${
+                                                                                    item.status === 'confirmed'
+                                                                                        ? 'bg-emerald-50 text-emerald-700 font-bold'
+                                                                                        : 'text-gray-700'
+                                                                                }`}
+                                                                            >
+                                                                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                                                                                Confirmed
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => handleUpdateStatus(item, 'completed')}
+                                                                                className={`w-full text-left px-3 py-1.5 flex items-center gap-2 hover:bg-gray-100 hover:text-gray-900 transition-colors ${
+                                                                                    item.status === 'completed'
+                                                                                        ? 'bg-gray-100 text-gray-900 font-bold'
+                                                                                        : 'text-gray-700'
+                                                                                }`}
+                                                                            >
+                                                                                <UserCheck className="w-3.5 h-3.5 text-gray-500" />
+                                                                                Completed
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => handleUpdateStatus(item, 'cancelled')}
+                                                                                className={`w-full text-left px-3 py-1.5 flex items-center gap-2 hover:bg-red-50 hover:text-red-700 transition-colors ${
+                                                                                    item.status === 'cancelled'
+                                                                                        ? 'bg-red-50 text-red-700 font-bold'
+                                                                                        : 'text-gray-700'
+                                                                                }`}
+                                                                            >
+                                                                                <XCircle className="w-3.5 h-3.5 text-red-500" />
+                                                                                Cancelled
+                                                                            </button>
+                                                                        </div>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        </td>
+
+                                                        {/* Action Column: Open Chat & Delete */}
+                                                        <td className="py-3.5 px-6 text-right whitespace-nowrap">
+                                                            <div className="flex items-center justify-end gap-2">
                                                                 <button
-                                                                    onClick={() => handleSendMeetingOnWhatsApp(item)}
-                                                                    className="p-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-md transition-colors"
-                                                                    title="Send meeting link directly on WhatsApp"
+                                                                    onClick={() => handleOpenChat(item)}
+                                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50 rounded-lg border border-blue-200 transition-colors shadow-2xs cursor-pointer"
+                                                                    title="Open conversation in Live Chat"
                                                                 >
-                                                                    <Send className="w-3.5 h-3.5" />
+                                                                    <MessageSquareText className="w-3.5 h-3.5 text-blue-600" />
+                                                                    Chat
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleDeleteAppointment(item)}
+                                                                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 rounded-lg border border-red-200 transition-colors shadow-2xs cursor-pointer"
+                                                                    title="Delete meeting from app and Google Calendar"
+                                                                >
+                                                                    <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                                                                    Delete
                                                                 </button>
                                                             </div>
-                                                            <p className="text-[10px] font-mono text-gray-400 truncate max-w-[190px]">
-                                                                {itemMeetUrl}
+                                                        </td>
+                                                    </tr>
+                                                )
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                {/* Mobile Responsive Card View (visible on small/mobile screens, hidden on md+) */}
+                                <div className="md:hidden divide-y divide-gray-100">
+                                    {appointments.map((item, index) => {
+                                        const itemMeetUrl =
+                                            item.meet_link ||
+                                            item.html_link ||
+                                            `https://meet.jit.si/GetAiPilot-${(item.flow_name || 'Meeting').replace(/[^a-zA-Z0-9]/g, '')}-${(item.id || '').slice(0, 8)}`
+                                        const itemTimeStatus = getMeetingTimeStatus(
+                                            item.appointment_date,
+                                            item.display_time || item.appointment_time,
+                                            30,
+                                            10
+                                        )
+                                        const itemProtectedUrl = getProtectedMeetingUrl(
+                                            itemMeetUrl,
+                                            item.appointment_date,
+                                            item.display_time || item.appointment_time,
+                                            item.flow_name || 'Meeting',
+                                            item.contact_name,
+                                            item.id
+                                        )
+
+                                        return (
+                                            <div key={item.id} className="p-4 space-y-3 hover:bg-blue-50/20 transition-colors">
+                                                {/* Card Header: Avatar, Name, Phone & Status */}
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div className="flex items-center gap-2.5 min-w-0">
+                                                        {item.avatar_url ? (
+                                                            <img
+                                                                src={item.avatar_url}
+                                                                alt="Avatar"
+                                                                className="w-9 h-9 rounded-full object-cover border border-gray-200 shrink-0"
+                                                            />
+                                                        ) : (
+                                                            <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs border border-blue-200 shrink-0">
+                                                                {(item.contact_name || item.contact_phone || 'W')
+                                                                    .charAt(0)
+                                                                    .toUpperCase()}
+                                                            </div>
+                                                        )}
+                                                        <div className="min-w-0">
+                                                            <p className="font-semibold text-gray-900 text-sm truncate">
+                                                                {item.contact_name || item.contact_phone}
                                                             </p>
-                                                        </div>
-                                                    </td>
-
-                                                    {/* Status Column */}
-                                                    <td className="py-3.5 px-6">
-                                                        <div className="relative inline-block text-left">
-                                                            <button
-                                                                onClick={() =>
-                                                                    setActiveStatusMenuId(
-                                                                        activeStatusMenuId === item.id ? null : item.id
-                                                                    )
-                                                                }
-                                                                className="cursor-pointer text-xs font-semibold"
-                                                            >
-                                                                {item.status === 'confirmed' ? (
-                                                                    <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-                                                                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                                                                        Confirmed
-                                                                        <ChevronDown className="w-3 h-3 text-emerald-500 ml-0.5" />
-                                                                    </span>
-                                                                ) : item.status === 'completed' ? (
-                                                                    <span className="inline-flex items-center gap-1 text-gray-700 bg-gray-100 px-2.5 py-1 rounded-full border border-gray-200">
-                                                                        <UserCheck className="w-3.5 h-3.5 text-gray-500" />
-                                                                        Completed
-                                                                        <ChevronDown className="w-3 h-3 text-gray-500 ml-0.5" />
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="inline-flex items-center gap-1 text-red-700 bg-red-50 px-2.5 py-1 rounded-full border border-red-200">
-                                                                        <XCircle className="w-3.5 h-3.5 text-red-500" />
-                                                                        Cancelled
-                                                                        <ChevronDown className="w-3 h-3 text-red-500 ml-0.5" />
-                                                                    </span>
-                                                                )}
-                                                            </button>
-
-                                                            {/* Popup Dropdown */}
-                                                            {activeStatusMenuId === item.id && (
-                                                                <>
-                                                                    <div
-                                                                        className="fixed inset-0 z-40"
-                                                                        onClick={() => setActiveStatusMenuId(null)}
-                                                                    />
-                                                                    <div
-                                                                        className={`absolute left-0 w-36 bg-white border border-gray-200 rounded-xl shadow-xl z-50 py-1.5 text-xs font-semibold space-y-0.5 animate-in fade-in zoom-in-95 duration-100 ${
-                                                                            index >= appointments.length - 2 &&
-                                                                            appointments.length > 2
-                                                                                ? 'bottom-full mb-1.5'
-                                                                                : 'top-full mt-1.5'
-                                                                        }`}
-                                                                    >
-                                                                        <button
-                                                                            onClick={() => handleUpdateStatus(item, 'confirmed')}
-                                                                            className={`w-full text-left px-3 py-1.5 flex items-center gap-2 hover:bg-emerald-50 hover:text-emerald-700 transition-colors ${
-                                                                                item.status === 'confirmed'
-                                                                                    ? 'bg-emerald-50 text-emerald-700 font-bold'
-                                                                                    : 'text-gray-700'
-                                                                            }`}
-                                                                        >
-                                                                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                                                                            Confirmed
-                                                                        </button>
-                                                                        <button
-                                                                            onClick={() => handleUpdateStatus(item, 'completed')}
-                                                                            className={`w-full text-left px-3 py-1.5 flex items-center gap-2 hover:bg-gray-100 hover:text-gray-900 transition-colors ${
-                                                                                item.status === 'completed'
-                                                                                    ? 'bg-gray-100 text-gray-900 font-bold'
-                                                                                    : 'text-gray-700'
-                                                                            }`}
-                                                                        >
-                                                                            <UserCheck className="w-3.5 h-3.5 text-gray-500" />
-                                                                            Completed
-                                                                        </button>
-                                                                        <button
-                                                                            onClick={() => handleUpdateStatus(item, 'cancelled')}
-                                                                            className={`w-full text-left px-3 py-1.5 flex items-center gap-2 hover:bg-red-50 hover:text-red-700 transition-colors ${
-                                                                                item.status === 'cancelled'
-                                                                                    ? 'bg-red-50 text-red-700 font-bold'
-                                                                                    : 'text-gray-700'
-                                                                            }`}
-                                                                        >
-                                                                            <XCircle className="w-3.5 h-3.5 text-red-500" />
-                                                                            Cancelled
-                                                                        </button>
-                                                                    </div>
-                                                                </>
+                                                            {item.contact_name && (
+                                                                <p className="text-xs text-gray-500 font-mono truncate">
+                                                                    {item.contact_phone}
+                                                                </p>
                                                             )}
                                                         </div>
-                                                    </td>
+                                                    </div>
 
-                                                    {/* Action Column: Open Chat & Delete */}
-                                                    <td className="py-3.5 px-6 text-right">
-                                                        <div className="flex items-center justify-end gap-2">
-                                                            <button
-                                                                onClick={() => handleOpenChat(item)}
-                                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50 rounded-lg border border-blue-200 transition-colors shadow-2xs cursor-pointer"
-                                                                title="Open conversation in Live Chat"
+                                                    {/* Status Badge in mobile */}
+                                                    <div className="relative shrink-0">
+                                                        <button
+                                                            onClick={() =>
+                                                                setActiveStatusMenuId(
+                                                                    activeStatusMenuId === `m-${item.id}` ? null : `m-${item.id}`
+                                                                )
+                                                            }
+                                                            className="cursor-pointer text-xs font-semibold"
+                                                        >
+                                                            {item.status === 'confirmed' ? (
+                                                                <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                                                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                                                                    Confirmed
+                                                                </span>
+                                                            ) : item.status === 'completed' ? (
+                                                                <span className="inline-flex items-center gap-1 text-gray-700 bg-gray-100 px-2.5 py-1 rounded-full border border-gray-200">
+                                                                    <UserCheck className="w-3.5 h-3.5 text-gray-500" />
+                                                                    Completed
+                                                                </span>
+                                                            ) : (
+                                                                <span className="inline-flex items-center gap-1 text-red-700 bg-red-50 px-2.5 py-1 rounded-full border border-red-200">
+                                                                    <XCircle className="w-3.5 h-3.5 text-red-500" />
+                                                                    Cancelled
+                                                                </span>
+                                                            )}
+                                                        </button>
+
+                                                        {activeStatusMenuId === `m-${item.id}` && (
+                                                            <>
+                                                                <div
+                                                                    className="fixed inset-0 z-40"
+                                                                    onClick={() => setActiveStatusMenuId(null)}
+                                                                />
+                                                                <div className="absolute right-0 w-36 bg-white border border-gray-200 rounded-xl shadow-xl z-50 py-1.5 text-xs font-semibold space-y-0.5 mt-1 animate-in fade-in">
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            handleUpdateStatus(item, 'confirmed')
+                                                                            setActiveStatusMenuId(null)
+                                                                        }}
+                                                                        className="w-full text-left px-3 py-1.5 flex items-center gap-2 hover:bg-emerald-50 hover:text-emerald-700"
+                                                                    >
+                                                                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                                                                        Confirmed
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            handleUpdateStatus(item, 'completed')
+                                                                            setActiveStatusMenuId(null)
+                                                                        }}
+                                                                        className="w-full text-left px-3 py-1.5 flex items-center gap-2 hover:bg-gray-100 hover:text-gray-900"
+                                                                    >
+                                                                        <UserCheck className="w-3.5 h-3.5 text-gray-500" />
+                                                                        Completed
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            handleUpdateStatus(item, 'cancelled')
+                                                                            setActiveStatusMenuId(null)
+                                                                        }}
+                                                                        className="w-full text-left px-3 py-1.5 flex items-center gap-2 hover:bg-red-50 hover:text-red-700"
+                                                                    >
+                                                                        <XCircle className="w-3.5 h-3.5 text-red-500" />
+                                                                        Cancelled
+                                                                    </button>
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Service & Date/Time Pills */}
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 text-gray-800 rounded-md text-xs font-semibold border border-gray-200 shrink-0 whitespace-nowrap">
+                                                        <Calendar className="w-3.5 h-3.5 text-gray-500" />
+                                                        {formatDateDisplay(item.appointment_date)}
+                                                    </span>
+                                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-md text-xs font-semibold border border-blue-100 shrink-0 whitespace-nowrap">
+                                                        <Clock className="w-3.5 h-3.5 text-blue-500" />
+                                                        {item.display_time || item.appointment_time || '10:00 AM'}
+                                                    </span>
+                                                    <span className="inline-flex max-w-[200px] items-center gap-1 rounded-md bg-blue-50 px-2 py-1 text-[11px] text-blue-700 truncate">
+                                                        <span className="font-medium shrink-0">Service:</span>
+                                                        <span className="truncate">
+                                                            {item.flow_name || (item.flow_id ? 'Flow Booking' : 'Meeting Link')}
+                                                        </span>
+                                                    </span>
+                                                </div>
+
+                                                {/* Meeting Link & Quick Actions */}
+                                                <div className="p-2.5 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        {itemTimeStatus.isJoinable ? (
+                                                            <a
+                                                                href={itemMeetUrl}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-lg shadow-xs whitespace-nowrap"
                                                             >
-                                                                <MessageSquareText className="w-3.5 h-3.5 text-blue-600" />
-                                                                Chat
-                                                            </button>
+                                                                <Video className="w-3.5 h-3.5 shrink-0" />
+                                                                <span>Join Call</span>
+                                                                <ExternalLink className="w-3 h-3 shrink-0" />
+                                                            </a>
+                                                        ) : (
                                                             <button
-                                                                onClick={() => handleDeleteAppointment(item)}
-                                                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 rounded-lg border border-red-200 transition-colors shadow-2xs cursor-pointer"
-                                                                title="Delete meeting from app and Google Calendar"
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    notify.info(
+                                                                        itemTimeStatus.status === 'ended'
+                                                                            ? 'This meeting session has already ended.'
+                                                                            : `Room locked before time. Access opens 10 mins before ${item.display_time || item.appointment_time}.`
+                                                                    )
+                                                                }
+                                                                className="flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs font-medium text-gray-500 bg-gray-200/80 rounded-lg border border-gray-300 cursor-not-allowed whitespace-nowrap"
                                                             >
-                                                                <Trash2 className="w-3.5 h-3.5 text-red-600" />
-                                                                Delete
+                                                                <Lock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                                                <span className="whitespace-nowrap font-medium">{itemTimeStatus.status === 'ended' ? 'Ended' : itemTimeStatus.countdown || 'Locked'}</span>
                                                             </button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            )
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
+                                                        )}
+
+                                                        <button
+                                                            onClick={() => handleCopyMeetingLink(item)}
+                                                            className="p-1.5 text-gray-600 hover:text-gray-800 bg-white hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors shrink-0"
+                                                            title="Copy meeting link"
+                                                        >
+                                                            {copiedMeetingId === item.id ? (
+                                                                <Check className="w-4 h-4 text-emerald-600" />
+                                                            ) : (
+                                                                <Copy className="w-4 h-4" />
+                                                            )}
+                                                        </button>
+
+                                                        <button
+                                                            onClick={() => handleSendMeetingOnWhatsApp(item)}
+                                                            className="p-1.5 text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-emerald-200 transition-colors shrink-0"
+                                                            title="Send on WhatsApp"
+                                                        >
+                                                            <Send className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+
+                                                    <p className="text-[10px] font-mono text-gray-500 truncate" title={itemProtectedUrl}>
+                                                        {itemProtectedUrl}
+                                                    </p>
+                                                </div>
+
+                                                {/* Action Buttons: Chat & Delete */}
+                                                <div className="flex items-center justify-end gap-2 pt-1">
+                                                    <button
+                                                        onClick={() => handleOpenChat(item)}
+                                                        className="flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition-colors"
+                                                    >
+                                                        <MessageSquareText className="w-3.5 h-3.5 text-blue-600" />
+                                                        Chat
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteAppointment(item)}
+                                                        className="inline-flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 rounded-lg border border-red-200 transition-colors"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                                                        Delete
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            </>
                         )}
 
                         {/* Pagination Footer */}
@@ -1338,7 +1715,7 @@ export default function ScheduledMeetings() {
 
             {/* TAB CONTENT: LIVE CLIENT PREVIEW */}
             {activeTab === 'preview' && (
-                <div className="space-y-4 max-w-3xl mx-auto">
+                <div className="space-y-4 w-full">
                     <div className="p-4 bg-purple-50/80 border border-purple-200 rounded-xl flex items-center justify-between text-xs text-purple-900">
                         <div className="flex items-center gap-2">
                             <Sparkles className="w-4 h-4 text-purple-600" />
@@ -1359,6 +1736,7 @@ export default function ScheduledMeetings() {
                     <InteractiveBookingWidget
                         config={meetingConfig}
                         organizationId={organizationId}
+                        existingAppointments={appointments}
                         onBookingSuccess={() => {
                             fetchAppointments()
                         }}
@@ -1543,6 +1921,20 @@ export default function ScheduledMeetings() {
                             </div>
                         </div>
 
+                        {/* Default Meeting Platform & Room Link */}
+                        <div className="pt-2 border-t border-gray-100">
+                            <MeetingPlatformSelector
+                                provider={meetingConfig.provider || 'jitsi'}
+                                customUrl={meetingConfig.customUrl || ''}
+                                serviceName={meetingConfig.title || 'Consultation'}
+                                onProviderChange={(prov) => setMeetingConfig((prev) => ({ ...prev, provider: prov }))}
+                                onUrlChange={(url) => setMeetingConfig((prev) => ({ ...prev, customUrl: url }))}
+                                isLinkVerified={isStudioLinkVerified}
+                                setIsLinkVerified={setIsStudioLinkVerified}
+                                required={false}
+                            />
+                        </div>
+
                         {/* Save Button */}
                         <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
                             <button
@@ -1560,7 +1952,7 @@ export default function ScheduledMeetings() {
             {/* MODAL 1: CREATE MEETING LINK / INSTANT SCHEDULE */}
             {showCreateModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-xs animate-in fade-in duration-150">
-                    <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 space-y-5">
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl max-w-4xl w-full max-h-[92vh] overflow-y-auto p-6 space-y-5">
                         <div className="flex items-center justify-between pb-3 border-b border-gray-100">
                             <div className="flex items-center gap-2.5">
                                 <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
@@ -1589,78 +1981,132 @@ export default function ScheduledMeetings() {
                         </div>
 
                         {/* Success State view */}
-                        {createdMeetingResult ? (
-                            <div className="space-y-4 py-2">
-                                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2">
-                                    <div className="flex items-center gap-2 text-emerald-800 font-bold text-sm">
-                                        <CheckCircle className="w-4 h-4 text-emerald-600" />
-                                        Meeting Confirmed!
-                                    </div>
-                                    <p className="text-xs text-emerald-700">
-                                        Appointment with <span className="font-semibold">{createdMeetingResult.contact_name || createdMeetingResult.contact_phone || 'Client'}</span> scheduled for{' '}
-                                        <span className="font-semibold">{formatDateDisplay(createdMeetingResult.appointment_date)}</span> at{' '}
-                                        <span className="font-semibold">{createdMeetingResult.appointment_time}</span>.
-                                    </p>
-                                </div>
+                        {createdMeetingResult ? (() => {
+                            const maskedMeetingUrl = getProtectedMeetingUrl(
+                                createdMeetingResult.meet_link,
+                                createdMeetingResult.appointment_date,
+                                createdMeetingResult.appointment_time,
+                                createdMeetingResult.service_name || 'Consultation',
+                                createdMeetingResult.contact_name || createdMeetingResult.contact_phone,
+                                createdMeetingResult.id
+                            )
+                            const createdTimeStatus = getMeetingTimeStatus(
+                                createdMeetingResult.appointment_date,
+                                createdMeetingResult.appointment_time,
+                                30,
+                                10
+                            )
 
-                                <div>
-                                    <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                                        Dedicated Video Room Link
-                                    </label>
-                                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 font-mono text-xs text-gray-800 break-all select-all flex items-center justify-between gap-2">
-                                        <span>{createdMeetingResult.meet_link}</span>
+                            return (
+                                <div className="space-y-4 py-2">
+                                    <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2">
+                                        <div className="flex items-center gap-2 text-emerald-800 font-bold text-sm">
+                                            <CheckCircle className="w-4 h-4 text-emerald-600" />
+                                            Meeting Confirmed!
+                                        </div>
+                                        <p className="text-xs text-emerald-700">
+                                            Appointment with <span className="font-semibold">{createdMeetingResult.contact_name || createdMeetingResult.contact_phone || 'Client'}</span> scheduled for{' '}
+                                            <span className="font-semibold">{formatDateDisplay(createdMeetingResult.appointment_date)}</span> at{' '}
+                                            <span className="font-semibold">{createdMeetingResult.appointment_time}</span>.
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <div className="flex items-center justify-between mb-1.5">
+                                            <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                                Dedicated Video Room Link
+                                            </label>
+                                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                                                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                                Masked Link Active
+                                            </span>
+                                        </div>
+                                        <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 font-mono text-xs text-gray-800 break-all select-all flex items-center justify-between gap-2 shadow-xs">
+                                            <span className="truncate">{maskedMeetingUrl}</span>
+                                            <button
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(maskedMeetingUrl)
+                                                    notify.success('Masked meeting link copied!')
+                                                }}
+                                                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors shrink-0"
+                                                title="Copy Masked Link"
+                                            >
+                                                <Copy className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                        <p className="text-[11px] text-gray-500 mt-1">
+                                            Third-party platform room is masked behind this gateway link. Early entry is locked until 10 minutes prior to scheduled time.
+                                        </p>
+                                    </div>
+
+                                    {/* Room Lock Notice if Scheduled in the Future */}
+                                    {!createdTimeStatus.isJoinable && (
+                                        <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+                                            <Lock className="w-4 h-4 shrink-0 text-amber-600" />
+                                            <span>
+                                                <strong>Room Locked Before Time:</strong> To prevent joining before the scheduled meeting, the video room unlocks 10 minutes prior to {formatDateDisplay(createdMeetingResult.appointment_date)} at {createdMeetingResult.appointment_time}.
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    <div className="flex flex-col sm:flex-row gap-2 pt-2">
                                         <button
                                             onClick={() => {
-                                                navigator.clipboard.writeText(createdMeetingResult.meet_link)
-                                                notify.success('Meeting link copied!')
+                                                const phone = (createdMeetingResult.contact_phone || '').replace(/\D/g, '')
+                                                const name = createdMeetingResult.contact_name || 'there'
+                                                const msg = `Hi ${name}! Here are our confirmed meeting details:\n📅 Date: ${formatDateDisplay(createdMeetingResult.appointment_date)} at ${createdMeetingResult.appointment_time}\n📌 Service: ${createdMeetingResult.service_name || 'WhatsApp Meeting'}\n🔗 Join Meeting: ${maskedMeetingUrl}\n\n🔒 Note: Video room is secured. Access link is disabled until 10 minutes before the scheduled time.\n\nLooking forward to speaking with you!`
+                                                const wa = phone
+                                                    ? `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(msg)}`
+                                                    : `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`
+                                                window.open(wa, '_blank')
                                             }}
-                                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors shrink-0"
-                                            title="Copy Link"
+                                            className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors"
                                         >
-                                            <Copy className="w-4 h-4" />
+                                            <Send className="w-4 h-4" />
+                                            Send on WhatsApp
+                                        </button>
+
+                                        {createdTimeStatus.isJoinable ? (
+                                            <a
+                                                href={createdMeetingResult.meet_link}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center justify-center gap-1.5 py-2.5 px-4 bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 text-xs font-semibold rounded-xl transition-colors"
+                                            >
+                                                <Video className="w-4 h-4 text-purple-600" />
+                                                Join Room
+                                            </a>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    notify.warning(
+                                                        createdTimeStatus.status === 'ended'
+                                                            ? 'This meeting has ended.'
+                                                            : `Meeting room is locked before time. Access opens 10 minutes before the scheduled start (${formatDateDisplay(createdMeetingResult.appointment_date)} at ${createdMeetingResult.appointment_time}).`
+                                                    )
+                                                }}
+                                                className="inline-flex items-center justify-center gap-1.5 py-2.5 px-4 bg-gray-100 text-gray-500 border border-gray-200 text-xs font-semibold rounded-xl cursor-not-allowed transition-colors whitespace-nowrap"
+                                                title={createdTimeStatus.message}
+                                            >
+                                                <Lock className="w-4 h-4 text-gray-400 shrink-0" />
+                                                <span className="whitespace-nowrap font-medium">Join Room ({createdTimeStatus.status === 'ended' ? 'Ended' : createdTimeStatus.countdown || 'Locked'})</span>
+                                            </button>
+                                        )}
+
+                                        <button
+                                            onClick={() => {
+                                                setShowCreateModal(false)
+                                                setCreatedMeetingResult(null)
+                                            }}
+                                            className="py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-xl transition-colors"
+                                        >
+                                            Done
                                         </button>
                                     </div>
                                 </div>
-
-                                <div className="flex flex-col sm:flex-row gap-2 pt-2">
-                                    <button
-                                        onClick={() => {
-                                            const phone = (createdMeetingResult.contact_phone || '').replace(/\D/g, '')
-                                            const name = createdMeetingResult.contact_name || 'there'
-                                            const msg = `Hi ${name}! Here is the direct meeting link for our session on ${formatDateDisplay(createdMeetingResult.appointment_date)} at ${createdMeetingResult.appointment_time}:\n\n🔗 ${createdMeetingResult.meet_link}\n\nLooking forward to speaking with you!`
-                                            const wa = phone
-                                                ? `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(msg)}`
-                                                : `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`
-                                            window.open(wa, '_blank')
-                                        }}
-                                        className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors"
-                                    >
-                                        <Send className="w-4 h-4" />
-                                        Send on WhatsApp
-                                    </button>
-
-                                    <a
-                                        href={createdMeetingResult.meet_link}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center justify-center gap-1.5 py-2.5 px-4 bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 text-xs font-semibold rounded-xl transition-colors"
-                                    >
-                                        <Video className="w-4 h-4 text-purple-600" />
-                                        Join Room
-                                    </a>
-
-                                    <button
-                                        onClick={() => {
-                                            setShowCreateModal(false)
-                                            setCreatedMeetingResult(null)
-                                        }}
-                                        className="py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-xl transition-colors"
-                                    >
-                                        Done
-                                    </button>
-                                </div>
-                            </div>
-                        ) : (
+                            )
+                        })() : (
                             /* Form view */
                             <form onSubmit={handleCreateMeetingSubmit} className="space-y-4">
                                 <div>
@@ -1713,32 +2159,54 @@ export default function ScheduledMeetings() {
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                                            Meeting Date
+                                {/* Side-by-Side Calendar & Time Slot Selector */}
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                                            <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                                            <span>Schedule Date & Time *</span>
                                         </label>
-                                        <input
-                                            type="date"
-                                            value={createForm.date}
-                                            onChange={(e) => setCreateForm({ ...createForm, date: e.target.value })}
-                                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
-                                            required
-                                        />
+                                        <span className="text-[11px] font-semibold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100">
+                                            {createForm.date
+                                                ? new Date(`${createForm.date}T00:00:00`).toLocaleDateString('en-US', {
+                                                      weekday: 'short',
+                                                      month: 'short',
+                                                      day: 'numeric',
+                                                  })
+                                                : 'Select Date'}{' '}
+                                            • {createForm.time || 'Select Time'}
+                                        </span>
                                     </div>
 
-                                    <div>
-                                        <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                                            Time Slot
-                                        </label>
-                                        <input
-                                            type="time"
-                                            value={createForm.time}
-                                            onChange={(e) => setCreateForm({ ...createForm, time: e.target.value })}
-                                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
-                                            required
-                                        />
-                                    </div>
+                                    {/* Component Matching the Clean Side-by-Side UI */}
+                                    <CalendarTimePicker
+                                        selectedDate={createForm.date}
+                                        onDateChange={(dateStr) => setCreateForm((prev) => ({ ...prev, date: dateStr }))}
+                                        selectedTime={createForm.time}
+                                        onTimeChange={(timeStr) => setCreateForm((prev) => ({ ...prev, time: timeStr }))}
+                                        availableSlots={modalAvailableSlots}
+                                        workingDays={meetingConfig.workingDays || [1, 2, 3, 4, 5]}
+                                    />
+
+                                    {/* Inline Date & Time Validation Alerts */}
+                                    {isModalDatePast && (
+                                        <div className="p-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 font-medium flex items-center gap-1.5">
+                                            <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                                            <span>Meeting date cannot be in the past. Please choose today or a future date.</span>
+                                        </div>
+                                    )}
+                                    {isModalTimePast && (
+                                        <div className="p-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 font-medium flex items-center gap-1.5">
+                                            <Clock className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                                            <span>Selected time has already passed for today. Please pick an upcoming time slot.</span>
+                                        </div>
+                                    )}
+                                    {modalClash && (
+                                        <div className="p-2.5 bg-amber-50 border border-amber-300 rounded-lg text-xs text-amber-800 font-semibold flex items-center gap-1.5">
+                                            <AlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-600" />
+                                            <span>This time slot is already booked for "{modalClash.contact_name || 'an appointment'}" ({modalClash.display_time || modalClash.appointment_time}). Please choose another time.</span>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div>
@@ -1754,29 +2222,17 @@ export default function ScheduledMeetings() {
                                     />
                                 </div>
 
-                                <div>
-                                    <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                                        Video Provider
-                                    </label>
-                                    <select
-                                        value={createForm.provider}
-                                        onChange={(e) => setCreateForm({ ...createForm, provider: e.target.value })}
-                                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white"
-                                    >
-                                        <option value="jitsi">Auto Instant Room (meet.jit.si/GAP-...)</option>
-                                        <option value="custom">Custom Meeting Link (Zoom, Teams, Meet)</option>
-                                    </select>
-                                    {createForm.provider === 'custom' && (
-                                        <input
-                                            type="url"
-                                            value={createForm.customUrl}
-                                            onChange={(e) => setCreateForm({ ...createForm, customUrl: e.target.value })}
-                                            placeholder="https://meet.google.com/xyz-abc or Zoom URL"
-                                            className="w-full mt-2 px-3 py-2 text-sm border border-gray-300 rounded-lg"
-                                            required
-                                        />
-                                    )}
-                                </div>
+                                {/* Platform Selector with Official Logos & Open Link Validation */}
+                                <MeetingPlatformSelector
+                                    provider={createForm.provider}
+                                    customUrl={createForm.customUrl}
+                                    serviceName={createForm.serviceName}
+                                    onProviderChange={(prov) => setCreateForm((prev) => ({ ...prev, provider: prov }))}
+                                    onUrlChange={(url) => setCreateForm((prev) => ({ ...prev, customUrl: url }))}
+                                    isLinkVerified={isCreateLinkVerified}
+                                    setIsLinkVerified={setIsCreateLinkVerified}
+                                    required={true}
+                                />
 
                                 <div>
                                     <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
@@ -1791,31 +2247,66 @@ export default function ScheduledMeetings() {
                                     />
                                 </div>
 
-                                <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowCreateModal(false)}
-                                        className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        disabled={isSubmittingMeeting}
-                                        className="inline-flex items-center gap-2 px-5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors disabled:opacity-50"
-                                    >
-                                        {isSubmittingMeeting ? (
-                                            <>
-                                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                                Generating...
-                                            </>
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-3 border-t border-gray-100">
+                                    <div className="text-[11px]">
+                                        {isModalDatePast ? (
+                                            <span className="text-red-600 font-semibold flex items-center gap-1">
+                                                <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                                                Date cannot be in the past
+                                            </span>
+                                        ) : isModalTimePast ? (
+                                            <span className="text-red-600 font-semibold flex items-center gap-1">
+                                                <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                                                Time has already passed today
+                                            </span>
+                                        ) : modalClash ? (
+                                            <span className="text-amber-700 font-bold flex items-center gap-1">
+                                                <AlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-600" />
+                                                Time slot is already taken
+                                            </span>
+                                        ) : !isCreateLinkVerified ? (
+                                            <span className="text-amber-600 font-medium flex items-center gap-1">
+                                                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                                Please open & test meeting link before schedule
+                                            </span>
                                         ) : (
-                                            <>
-                                                <Video className="w-3.5 h-3.5" />
-                                                Create Meeting Link
-                                            </>
+                                            <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                                                <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-600" />
+                                                Slot available & link verified
+                                            </span>
                                         )}
-                                    </button>
+                                    </div>
+
+                                    <div className="flex items-center justify-end gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowCreateModal(false)}
+                                            className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            disabled={isSubmittingMeeting || Boolean(isModalDatePast || isModalTimePast || modalClash) || !isCreateLinkVerified}
+                                            className={`inline-flex items-center gap-2 px-5 py-2 text-xs font-semibold text-white rounded-lg shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                                                isCreateLinkVerified && !isModalDatePast && !isModalTimePast && !modalClash
+                                                    ? 'bg-blue-600 hover:bg-blue-700'
+                                                    : 'bg-blue-400'
+                                            }`}
+                                        >
+                                            {isSubmittingMeeting ? (
+                                                <>
+                                                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                                    Generating...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Video className="w-3.5 h-3.5" />
+                                                    Create Meeting Link
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
                                 </div>
                             </form>
                         )}
