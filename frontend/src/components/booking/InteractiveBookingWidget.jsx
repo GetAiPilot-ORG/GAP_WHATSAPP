@@ -72,21 +72,32 @@ export function getCalendarSyncLinks(booking) {
     const startTimeStr = formatIsoForCalendar(startDate)
     const endTimeStr = formatIsoForCalendar(endDate)
 
+    // Ensure calendar sync always uses the masked protected link
+    const maskedMeetingLink = getProtectedMeetingUrl(
+        booking.meetLink || booking.meet_link,
+        rawDate,
+        rawTime,
+        booking.serviceName || booking.flow_name,
+        booking.contactName || booking.contact_name,
+        booking.id
+    )
+
     const title = encodeURIComponent(`${booking.serviceName || 'Consultation'} with ${booking.hostName || 'GetAiPilot'}`)
     const description = encodeURIComponent(
         `Scheduled via GetAiPilot WhatsApp Meeting Studio.\n\n` +
         `👤 Client: ${booking.contactName || 'Guest'}\n` +
         `📞 Phone: ${booking.contactPhone || 'N/A'}\n` +
-        `📹 Video Call Link: ${booking.meetLink}\n\n` +
+        `📹 Video Call Link (Secured): ${maskedMeetingLink}\n\n` +
+        `🔒 Room Access: Video room is secured. Direct access link is disabled until 10 minutes before the scheduled time.\n\n` +
         (booking.notes ? `📝 Agenda: ${booking.notes}\n\n` : '') +
         `Powered by GetAiPilot.`
     )
-    const location = encodeURIComponent(booking.meetLink)
+    const location = encodeURIComponent(maskedMeetingLink)
 
     const google = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startTimeStr}/${endTimeStr}&details=${description}&location=${location}`
     const outlook = `https://outlook.live.com/calendar/0/action/compose?allday=false&subject=${title}&body=${description}&location=${location}&startdt=${startDate.toISOString()}&enddt=${endDate.toISOString()}`
 
-    return { google, outlook, startDate, endDate }
+    return { google, outlook, startDate, endDate, maskedMeetingLink }
 }
 
 export default function InteractiveBookingWidget({
