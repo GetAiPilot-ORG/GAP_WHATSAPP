@@ -1,7 +1,9 @@
 import { parseInteractiveReply } from './agentButtons.js';
 
 type Message = { role: string; content: string };
-const bookingIntent = /\b(book(?:ing)?|reserve|register|registration|join|enroll)\b|बुक|बुकिंग/i;
+const bookingIntent = /^(?:please\s+)?(?:book|reserve|register|enroll)\b|\b(?:want to|would like to|need to|can you|could you|please|help me)\s+(?:book|reserve|register|enroll|join)\b|\b(?:book|booking|register)\s+(?:karni|karna|karo|kro|karwa|chahiye)\b|बुक\s*(?:कर|करना)/i;
+const bookingPrompt = /^(?:Booking request review(?:\n|$)|Booking request ke liye aapka naam|Kitne participants ke liye booking request|Kya badalna hai)/;
+const bookingDetails = /^(?:(?:my name is|name|naam|participants?|people|for me|mere liye|make it|change (?:the |my )?(?:name|date|workshop|participants))\b|\d{1,3}(?:\s+(?:people|participants?|persons?|of us))?[.!]?$)/i;
 
 export function bookingAction(text: string): 'review' | 'confirm' | 'change' | 'cancel' | null {
   const value = text.trim().toLowerCase().replace(/[!?।.]+$/g, '').trim();
@@ -13,9 +15,31 @@ export function bookingAction(text: string): 'review' | 'confirm' | 'change' | '
   return null;
 }
 
-export function needsBookingReview(history: Message[], text: string) {
-  const users = [...history.filter(m => m.role === 'user').map(m => m.content), text];
-  return bookingAction(text) !== null || users.some(value => bookingIntent.test(value));
+export function bookingReviewContext(history: Message[], text: string): Message[] | null {
+  const action = bookingAction(text);
+  const value = text.trim();
+  if (!action && bookingIntent.test(value)) return [];
+
+  // Only an uninterrupted sequence of booking prompts belongs to the active request.
+  const detail = bookingDetails.test(value);
+  const possibleName = /^[\p{L}]+(?:[ -][\p{L}]+){0,2}$/u.test(value)
+    && !/\b(?:classes?|schedule|contact|payment|qr|workshops?|fees?|details|information|info|registration|link|please|hello|hi|thanks|timings?|address|location|weekend|saturday|sunday)\b/i.test(value);
+  if (!action && !detail && !possibleName) return null;
+  let start = history.length;
+  while (start >= 2) {
+    const prompt = history[start - 1];
+    const customer = history[start - 2];
+    if (prompt.role !== 'assistant' || customer.role !== 'user') break;
+    if (!bookingPrompt.test(parseInteractiveReply(prompt.content)?.text || prompt.content)) break;
+    start -= 2;
+    if (bookingIntent.test(customer.content.trim())) break;
+  }
+  const active = start < history.length;
+  const pendingName = /^Booking request ke liye aapka naam/.test(history.at(-1)?.content || '');
+  if (action === 'review' || (active && (action || detail || (pendingName && possibleName)))) {
+    return history.slice(start);
+  }
+  return null;
 }
 
 // The model extracts fields only. Code owns the stage, summary and buttons.
@@ -25,8 +49,8 @@ export function renderBookingReview(fields: any, events: any[], history: Message
   if (fields?.action === 'change') return 'Kya badalna hai—workshop/date, naam ya participants? Nayi details batayein; phir review buttons bhejunga.';
   if (fields?.kind === 'artist') return JSON.stringify({ text: 'Studio rental ya collaboration request ke liye apni preferred date, time, duration aur requirements batayein. Final approval studio team degi.', buttons: [{ id: 'Studio rental request', text: 'Studio Rental' }, { id: 'Studio collab request', text: 'Collaboration' }] });
   const event = events.find(e => String(e.id) === fields?.event_id);
-  if (!event || event.status === 'cancelled' || !event.start?.dateTime || !event.end?.dateTime || Date.parse(event.end.dateTime) <= now) {
-    return 'Booking request ke liye exact workshop aur date batayein. Session verify hone ke baad details review karenge.';
+  if (!event || event.status === 'cancelled' || !event.start?.dateTime || !event.end?.dateTime || !Number.isFinite(Date.parse(event.start.dateTime)) || !(Date.parse(event.end.dateTime) > now)) {
+    return '';
   }
   const name = typeof fields.name === 'string' ? fields.name.trim().slice(0, 100) : '';
   const count = Number(fields.participants);
