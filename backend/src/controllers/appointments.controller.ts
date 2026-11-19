@@ -614,6 +614,34 @@ export async function createAppointment(req: Request, res: Response) {
       }
     }
 
+    // Check if time slot is already taken before schedule finishes
+    try {
+      const { data: existingSessions } = await supabase
+        .from("w_flow_sessions")
+        .select("id, state_data")
+        .eq("organization_id", organizationId)
+        .eq("state_data->>appointment_date", appointment_date)
+        .limit(100);
+
+      if (existingSessions && existingSessions.length > 0) {
+        const clash = existingSessions.find((s: any) => {
+          const sd = s.state_data || {};
+          if (sd.appointment_status === "cancelled") return false;
+          const sRaw = String(sd.selected_time_raw || "").trim();
+          const sDisp = String(sd.appointment_time || "").trim();
+          return sRaw === rawTime || sDisp === displayTime || sDisp === rawTime;
+        });
+
+        if (clash) {
+          return res.status(409).json({
+            error: `This time slot (${displayTime} on ${appointment_date}) is already taken. Please choose another time.`,
+          });
+        }
+      }
+    } catch (checkErr) {
+      console.warn("Could not check appointment conflict in w_flow_sessions:", checkErr);
+    }
+
     // Branded Video Meeting link generator
     let finalMeetLink = meet_link;
     if (!finalMeetLink) {
