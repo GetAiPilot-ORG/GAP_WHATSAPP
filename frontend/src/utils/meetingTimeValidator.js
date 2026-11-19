@@ -122,6 +122,10 @@ export function getMeetingTimeStatus(dateStr, timeStr, durationMinutes = 30, ear
  */
 export function getProtectedMeetingUrl(rawUrl, date, time, serviceName, clientName, appointmentId) {
     if (!rawUrl) return ''
+    // Avoid double-masking if already a gateway masked link
+    if (typeof rawUrl === 'string' && (rawUrl.includes('/join-meeting') || rawUrl.includes('/api/appointments/') || rawUrl.includes('/join/'))) {
+        return rawUrl
+    }
     try {
         const origin = typeof window !== 'undefined' ? window.location.origin : ''
         const params = new URLSearchParams()
