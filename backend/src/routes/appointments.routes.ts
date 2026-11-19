@@ -1,10 +1,13 @@
 import { Router } from "express";
-import { getAppointments, updateAppointmentStatus, deleteAppointment, createAppointment } from "../controllers/appointments.controller.js";
+import { getAppointments, updateAppointmentStatus, deleteAppointment, createAppointment, getAppointmentJoin } from "../controllers/appointments.controller.js";
 
 const router = Router();
 
 // GET /api/appointments
 router.get("/", getAppointments);
+
+// GET /api/appointments/:id/join (Masked link gateway)
+router.get("/:id/join", getAppointmentJoin);
 
 // POST /api/appointments
 router.post("/", createAppointment);

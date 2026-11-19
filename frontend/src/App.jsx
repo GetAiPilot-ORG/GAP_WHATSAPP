@@ -40,6 +40,7 @@ const WhatsAppLinkGenerator = lazy(() => import('./pages/WhatsAppLinkGenerator')
 const ScheduledMeetings = lazy(() => import('./pages/ScheduledMeetings'))
 const PrivacyPolicy = lazy(() => import('./pages/LegalPrivacyNotice'))
 const PublicBookingPage = lazy(() => import('./pages/PublicBookingPage'))
+const MeetingWaitingRoom = lazy(() => import('./pages/MeetingWaitingRoom'))
 
 const PageFallback = () => (
   <div className="flex h-[60vh] w-full items-center justify-center">
@@ -94,6 +95,8 @@ export default function App() {
                       <Route path="/wa/:data" element={<WhatsAppRedirect />} />
                       <Route path="/book/:slug" element={<Suspense fallback={<PageFallback />}><PublicBookingPage /></Suspense>} />
                       <Route path="/book" element={<Suspense fallback={<PageFallback />}><PublicBookingPage /></Suspense>} />
+                      <Route path="/join-meeting" element={<Suspense fallback={<PageFallback />}><MeetingWaitingRoom /></Suspense>} />
+                      <Route path="/join/:id" element={<Suspense fallback={<PageFallback />}><MeetingWaitingRoom /></Suspense>} />
                       <Route element={<Layout />}>
                         <Route path="dashboard" element={<Dashboard />} />
                         <Route path="whatsapp-connect" element={<Suspense fallback={<PageFallback />}><WhatsAppConnect /></Suspense>} />

@@ -44,6 +44,14 @@ import { transcribeAudioBuffer } from './voice.service.js';
 
 const botDebounceMap = new Map<string, NodeJS.Timeout>();
 const botLockMap = new Map<string, Promise<void>>();
+const processedBaileysMessages = new Map<string, number>();
+
+setInterval(() => {
+    const cutoff = Date.now() - 15 * 60 * 1000;
+    for (const [id, ts] of processedBaileysMessages.entries()) {
+        if (ts < cutoff) processedBaileysMessages.delete(id);
+    }
+}, 5 * 60 * 1000).unref();
 
 async function ensureDefaultOrganizationId(): Promise<string | null> {
     return null;
@@ -446,6 +454,23 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                     const isOutbound = msg.key.fromMe;
                     const remoteJid = msg.key.remoteJid || "";
                     if (!remoteJid) continue;
+
+                    if (!isOutbound && msg.key?.id) {
+                        const mid = msg.key.id;
+                        if (processedBaileysMessages.has(mid)) continue;
+                        if (!isHistorySync) {
+                            const { data: existingBaileysMsg } = await supabase
+                                .from('w_messages')
+                                .select('id')
+                                .eq('wa_message_id', mid)
+                                .maybeSingle();
+                            if (existingBaileysMsg?.id) {
+                                processedBaileysMessages.set(mid, Date.now());
+                                continue;
+                            }
+                        }
+                        processedBaileysMessages.set(mid, Date.now());
+                    }
 
                     if (!isHistorySync) {
                         console.log(`   â†³ jid=${remoteJid} fromMe=${isOutbound} id=${msg.key.id || ''}`);

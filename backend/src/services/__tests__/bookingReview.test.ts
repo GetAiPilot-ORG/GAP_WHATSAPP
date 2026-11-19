@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { bookingAction, needsBookingReview, renderBookingReview } from '../bookingReview.js';
+import { bookingAction, bookingReviewContext, renderBookingReview } from '../bookingReview.js';
 const events = [{ id: 'workshop-1', title: 'Nova', start: { dateTime: '2099-11-13T12:00:00+05:30' }, end: { dateTime: '2099-11-13T13:00:00+05:30' } }];
 const fields = { kind: 'student', action: 'review', event_id: 'workshop-1', name: 'Tanishk', participants: 1 };
 test('complete details always produce review buttons', () => {
@@ -10,7 +10,7 @@ test('complete details always produce review buttons', () => {
 test('missing fields and invented events cannot advance', () => {
   assert.match(renderBookingReview({ ...fields, name: null }, events, [], 'Asia/Kolkata'), /naam/);
   assert.match(renderBookingReview({ ...fields, participants: null }, events, [], 'Asia/Kolkata'), /Kitne participants/);
-  assert.match(renderBookingReview({ ...fields, event_id: 'invented' }, events, [], 'Asia/Kolkata'), /exact workshop/);
+  assert.equal(renderBookingReview({ ...fields, event_id: 'invented' }, events, [], 'Asia/Kolkata'), '');
 });
 test('confirmation requires matching review and never claims a saved booking', () => {
   const first = renderBookingReview({ ...fields, action: 'confirm' }, events, [], 'Asia/Kolkata');
@@ -18,10 +18,18 @@ test('confirmation requires matching review and never claims a saved booking', (
   assert.match(renderBookingReview({ ...fields, action: 'confirm' }, events, [{ role: 'assistant', content: first }], 'Asia/Kolkata'), /Final booking abhi pending/);
   assert.match(renderBookingReview({ ...fields, action: 'change' }, events, [], 'Asia/Kolkata'), /Nayi details/);
 });
-test('followups retain booking intent', () => {
-  assert.equal(needsBookingReview([], 'Slot book kro'), true);
-  assert.equal(needsBookingReview([{ role: 'user', content: 'booking karni hai' }], 'Name Tanishk'), true);
-  assert.equal(needsBookingReview([], 'What is the address?'), false);
+test('only relevant followups continue an active booking', () => {
+  const history = [
+    { role: 'user', content: 'Slot book kro' },
+    { role: 'assistant', content: renderBookingReview({ ...fields, name: null }, events, [], 'Asia/Kolkata') },
+  ];
+  assert.deepEqual(bookingReviewContext([], 'Slot book kro'), []);
+  assert.deepEqual(bookingReviewContext(history, 'Name Tanishk'), history);
+  assert.deepEqual(bookingReviewContext(history, 'Tanishk'), history);
+  for (const message of ['Regular classes information', 'Contact details', 'I want qr for payment', 'What about Saturday and Sunday Are there fixed schedules ?', 'Registration link please']) {
+    assert.equal(bookingReviewContext(history, message), null, message);
+  }
+  assert.equal(bookingReviewContext([...history, { role: 'user', content: 'Contact details' }, { role: 'assistant', content: 'Call the studio.' }], 'Confirm booking request'), null);
 });
 
 test('confirmation questions route to review rather than payment or consent', () => {
@@ -34,5 +42,5 @@ test('confirmation questions route to review rather than payment or consent', ()
   assert.equal(bookingAction('Change Details'), 'change');
   assert.equal(bookingAction('Payment link do'), null);
   assert.equal(bookingAction('Contact?'), null);
-  assert.equal(needsBookingReview([], 'Confirmation ??'), true);
+  assert.deepEqual(bookingReviewContext([], 'Confirmation ??'), []);
 });
