@@ -10,6 +10,7 @@ import {
     insertFlowVersionWithSchemaFallback
 } from '../services/flows.service.js';
 import { invalidateFlowsCache } from '../services/ai.service.js';
+import { normalizeMediaUrl } from '../services/messages.sender.js';
 
 export async function getFlows(req: any, res: Response) {
     const orgId = req.organization_id;
@@ -66,6 +67,23 @@ export async function createFlow(req: any, res: Response) {
             updated_by_user_id: req.user?.id || null,
         };
         if (!payload.name) return res.status(400).json({ error: 'Flow name is required' });
+
+        // Idempotency / Duplicate creation debounce guard:
+        // If a flow with the exact same name was created within the last 5 seconds for this organization, return it
+        const recentWindow = new Date(Date.now() - 5000).toISOString();
+        const { data: recentDuplicate } = await supabase
+            .from('w_flows')
+            .select('*')
+            .eq('organization_id', orgId)
+            .eq('name', payload.name)
+            .gt('created_at', recentWindow)
+            .maybeSingle();
+
+        if (recentDuplicate) {
+            console.log(`[Flow] Debounced duplicate creation for flow "${payload.name}" in org ${orgId}`);
+            return res.status(200).json(recentDuplicate);
+        }
+
         await enforcePlanResourceLimit({
             organization_id: orgId,
             resource: 'flows',
@@ -301,30 +319,30 @@ export async function testFlow(req: any, res: Response) {
         const nodes = flow.nodes || [];
         const edges = flow.edges || [];
         
-        let activeNode;
+        let activeNode: any;
         if (!currentNodeId) {
             // Start of flow: find trigger node
-            activeNode = nodes.find(n => n.type === 'startBotFlow');
+            activeNode = nodes.find((n: any) => n.type === 'startBotFlow');
             if (!activeNode) return res.json({ output: "Error: No starting node (Keyword Trigger) found." });
             
             // Validate keyword match if it's a real start, but since it's a test, we can just proceed.
             // Move to next node immediately
-            const outEdges = edges.filter(e => e.source === activeNode.id);
+            const outEdges = edges.filter((e: any) => e.source === activeNode.id);
             if (outEdges.length > 0) {
-                activeNode = nodes.find(n => n.id === outEdges[0].target);
+                activeNode = nodes.find((n: any) => n.id === outEdges[0].target);
             } else {
                 return res.json({ output: "Flow ends immediately after start." });
             }
         } else {
             // Process user input for the current waiting node
-            activeNode = nodes.find(n => n.id === currentNodeId);
+            activeNode = nodes.find((n: any) => n.id === currentNodeId);
             if (!activeNode) return res.json({ output: "Error: Current node not found." });
             
             const nodeType = activeNode.type;
             const config = activeNode.data?.config || {};
             let conditionMet = false;
             let matchEdge = null;
-            const outEdges = edges.filter(e => e.source === activeNode.id);
+            const outEdges = edges.filter((e: any) => e.source === activeNode.id);
             
             if (nodeType === 'userInput') {
                 const saveToField = config.saveToField;
@@ -334,22 +352,42 @@ export async function testFlow(req: any, res: Response) {
                 matchEdge = outEdges[0];
             } else if (nodeType === 'button' || nodeType === 'interactive') {
                 const actualValue = String(text || "").toLowerCase().trim();
-                let matchedValue = null;
-                
-                // Find matching branch
-                const branches = outEdges.map(e => e.sourceHandle);
-                for (const branch of branches) {
-                    if (actualValue === String(branch).toLowerCase().trim()) {
-                        matchedValue = branch;
-                        break;
-                    }
+                const rawButtons = Array.isArray(config.buttons) ? config.buttons : [];
+                const matchedIndex = rawButtons.findIndex((b: any, idx: number) => {
+                    const btnText = String(typeof b === 'string' ? b : b?.text || '').toLowerCase().trim();
+                    const btnId = String(typeof b === 'object' ? b?.id || '' : '').toLowerCase().trim();
+                    return btnText === actualValue || btnId === actualValue || actualValue === String(idx + 1);
+                });
+
+                if (matchedIndex >= 0) {
+                    matchEdge = outEdges.find((e: any) => e.sourceHandle === `button-${matchedIndex}`)
+                        || outEdges.find((e: any) => String(e.label || '').toLowerCase().trim() === actualValue);
                 }
-                
-                if (matchedValue) {
-                    matchEdge = outEdges.find(e => e.sourceHandle === matchedValue);
-                } else if (outEdges.length > 0) {
-                    // Fallback to default
-                    matchEdge = outEdges.find(e => !e.sourceHandle || e.sourceHandle === 'default') || outEdges[0];
+
+                if (!matchEdge) {
+                    // Try direct sourceHandle or label match
+                    matchEdge = outEdges.find((e: any) => {
+                        const h = String(e.sourceHandle || '').toLowerCase().trim();
+                        const l = String(e.label || '').toLowerCase().trim();
+                        return h === actualValue || l === actualValue;
+                    });
+                }
+
+                // If input still didn't match any configured button, DO NOT ADVANCE!
+                // Re-prompt the user and keep them pinned at the Button node.
+                if (!matchEdge && (rawButtons.length > 0 || outEdges.length > 0)) {
+                    const originalBody = config.text || config.headerText || "Please choose an option:";
+                    const promptMessage = "⚠️ Please select one of the options from above to continue.";
+                    const configuredButtons = rawButtons.length > 0
+                        ? rawButtons.slice(0, 3).map((b: any, idx: number) => (typeof b === 'string' ? b : b?.text || `Option ${idx + 1}`))
+                        : outEdges.map((e: any) => e.label || e.sourceHandle).filter(Boolean);
+
+                    return res.json({
+                        output: `${promptMessage}\n\n${originalBody}`,
+                        currentNodeId: activeNode.id, // Pinned at current node!
+                        buttons: configuredButtons,
+                        flowState
+                    });
                 }
             } else if (nodeType === 'condition') {
                  // Condition evaluating logic
@@ -359,17 +397,17 @@ export async function testFlow(req: any, res: Response) {
             }
             
             if (matchEdge) {
-                activeNode = nodes.find(n => n.id === matchEdge.target);
+                activeNode = nodes.find((n: any) => n.id === matchEdge.target);
             } else {
                 activeNode = null;
             }
         }
         
         // Now execute until we hit a waiting node (userInput, button, interactive) or end
-        let outputText = [];
-        let mediaOutput = [];
-        let interactiveOptions = [];
-        let buttons = [];
+        let outputText: string[] = [];
+        let mediaOutput: any[] = [];
+        let interactiveOptions: any[] = [];
+        let buttons: any[] = [];
         let steps = 0;
         
         while (activeNode && steps < 15) {
@@ -382,12 +420,14 @@ export async function testFlow(req: any, res: Response) {
             } else if (['image', 'video', 'audio', 'file'].includes(nodeType)) {
                 mediaOutput.push({
                     type: nodeType,
-                    url: config.url || config.mediaUrl,
-                    caption: config.caption || ''
+                    url: normalizeMediaUrl(config.url || config.mediaUrl, nodeType as any),
+                    caption: config.caption || '',
+                    buttonText: config.buttonText,
+                    buttonUrl: config.buttonUrl
                 });
             } else if (nodeType === 'goto') {
                 if (config.targetNodeId) {
-                    activeNode = nodes.find(n => n.id === config.targetNodeId);
+                    activeNode = nodes.find((n: any) => n.id === config.targetNodeId);
                     continue;
                 }
             } else if (nodeType === 'end') {
@@ -403,36 +443,44 @@ export async function testFlow(req: any, res: Response) {
                 break; // Stop and wait for input
             } else if (nodeType === 'button') {
                 const header = config.headerText || config.text || "Choose an option:";
-                // Generate button texts from edges
-                const btnEdges = edges.filter(e => e.source === activeNode.id);
-                buttons = btnEdges.map(e => e.sourceHandle).filter(Boolean);
+                const rawButtons = Array.isArray(config.buttons) ? config.buttons : [];
+                const configuredButtons = rawButtons
+                    .map((b: any) => (typeof b === 'string' ? b : b?.text))
+                    .filter((t: any) => String(t || '').trim());
+
+                if (configuredButtons.length > 0) {
+                    buttons = configuredButtons;
+                } else {
+                    const btnEdges = edges.filter((e: any) => e.source === activeNode.id);
+                    buttons = btnEdges.map((e: any) => e.label || e.sourceHandle).filter(Boolean);
+                }
                 outputText.push(`${header}`);
                 break; // Stop and wait for input
             } else if (nodeType === 'interactive') {
                 const header = config.headerText || config.text || "Choose an option:";
                 const optsList = config.items || config.options || [];
-                interactiveOptions = optsList.map(o => ({ id: o.id || o.title, title: o.title || o.id, description: o.description }));
+                interactiveOptions = optsList.map((o: any) => ({ id: o.id || o.title, title: o.title || o.id, description: o.description }));
                 outputText.push(`${header}`);
                 break; // Stop and wait for input
             } else if (nodeType === 'ai') {
                 outputText.push(`[AI Agent Reply simulated]`);
             } else if (nodeType === 'condition') {
-                const outEdges = edges.filter(e => e.source === activeNode.id);
+                const outEdges = edges.filter((e: any) => e.source === activeNode.id);
                 // For test, just take the first path always if condition logic is complex
                 const matchEdge = outEdges[0];
                 if (matchEdge) {
-                    activeNode = nodes.find(n => n.id === matchEdge.target);
+                    activeNode = nodes.find((n: any) => n.id === matchEdge.target);
                     continue;
                 } else {
                     break;
                 }
             } else if (nodeType === 'abTest') {
-                const outEdges = edges.filter(e => e.source === activeNode.id);
+                const outEdges = edges.filter((e: any) => e.source === activeNode.id);
                 const chosenPath = Math.random() < 0.5 ? 'pathA' : 'pathB';
-                const matchEdge = outEdges.find(e => e.sourceHandle === chosenPath) || outEdges[0];
+                const matchEdge = outEdges.find((e: any) => e.sourceHandle === chosenPath) || outEdges[0];
                 outputText.push(`[A/B Test Simulation: Routed to ${chosenPath === 'pathA' ? 'Path A' : 'Path B'}]`);
                 if (matchEdge) {
-                    activeNode = nodes.find(n => n.id === matchEdge.target);
+                    activeNode = nodes.find((n: any) => n.id === matchEdge.target);
                     continue;
                 } else {
                     break;
@@ -440,9 +488,9 @@ export async function testFlow(req: any, res: Response) {
             }
             
             // Advance to next node
-            const nextEdge = edges.find(e => e.source === activeNode.id);
+            const nextEdge = edges.find((e: any) => e.source === activeNode.id);
             if (nextEdge) {
-                activeNode = nodes.find(n => n.id === nextEdge.target);
+                activeNode = nodes.find((n: any) => n.id === nextEdge.target);
             } else {
                 activeNode = null;
             }

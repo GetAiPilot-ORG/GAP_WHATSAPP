@@ -360,7 +360,11 @@ export async function ingestInboundMessage(
 
       // 8c. Outbound Media Nodes from Flow
       if (Array.isArray(flowResult.media) && flowResult.media.length > 0) {
-        for (const m of flowResult.media) {
+        const hasMediaInteractiveHeader = flowResult.interactive?.header?.type === 'image' || flowResult.interactive?.header?.type === 'video';
+        const mediaToSend = hasMediaInteractiveHeader
+          ? flowResult.media.filter((m: any) => !((m.type === 'image' || m.type === 'video') && m.buttonUrl))
+          : flowResult.media;
+        for (const m of mediaToSend) {
           try {
             await sendOutboundMessage({
               organizationId,

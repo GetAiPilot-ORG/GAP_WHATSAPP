@@ -260,7 +260,7 @@ export async function generateConversationSummaryDirect(
 
   // 4. Format transcript
   const customerName = contact?.custom_name || contact?.name || contact?.phone || 'Customer';
-  const transcriptLines = messages.map(m => {
+  const transcriptLines = messages.map((m: any) => {
     const isClient = m.direction === 'inbound';
     const role = isClient ? `${customerName} (Customer)` : 'Agent/AI Assistant';
     let text = '';
@@ -271,7 +271,7 @@ export async function generateConversationSummaryDirect(
     else if (typeof m.content === 'string') text = m.content;
     else text = `[${m.type || 'message'}]`;
     return `${role}: ${text.trim()}`;
-  }).filter(line => line.length > 0);
+  }).filter((line: any) => line.length > 0);
 
   const transcript = transcriptLines.join('\n');
 

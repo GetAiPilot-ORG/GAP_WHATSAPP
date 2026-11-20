@@ -318,6 +318,8 @@ ${hasCalendar ? `- CALENDAR & SCHEDULE EXEMPTION: Sessions calendar access is EN
 - Rules for buttons:
   - Maximum of 3 buttons.
   - Button text/label ("text") must be extremely short and concise (under 20 characters) due to Meta WhatsApp limits.
+  - STRICTLY UNIQUE BUTTON TITLES: Every button text/label MUST be unique. Meta WhatsApp immediately rejects any message with duplicate button titles with error 131009 (e.g. NEVER give multiple buttons the same title like "Register Here"; instead use distinct, descriptive titles like "Register Salsa", "Register Bachata", "Class Info", or "Book Session").
+  - Message body "text" must not exceed 1024 characters.
   - Button ID ("id") must be a unique identifier under 256 characters.
   - CRITICAL FOR ROUTING: If the button is designed to trigger one of the AVAILABLE SYSTEM FLOWS listed below, you MUST set the button "id" to one of that flow's Trigger Keywords EXACTLY (e.g., if keywords are ["CRM", "GAP CRM"], set the "id" to "CRM"). Do NOT make up generic button IDs like "btn_1" or "btn_crm" for system flows, or else the system cannot match it.
   - Do not mix URL/phone buttons with quick reply buttons. (Generate standard quick reply buttons with "id" and "text" only).`;
@@ -393,7 +395,7 @@ You represent "${targetAgent.name}" as a professional, helpful customer represen
 ${hasCalendar ? `- SCHEDULE & CLASSES: You have calendar schedule access. For any question about today's schedule, upcoming classes/events, dates, timings, fees, trainers, or locations, call get_upcoming_sessions and answer accurately with exact date and time in ${tz}. NEVER prefix schedule questions with "[FALLBACK]".\n` : ""}- BUSINESS/ORGANIZATION QUESTIONS: Try your best to answer questions related to the organization or its domain.
 - FALLBACKS & OFF-TOPIC: Only use "[FALLBACK]" prefix if you have no clues to answer a specific factual query (not in Knowledge Base, Saved Schedule Database, or calendar results) or if the query is completely off-topic (e.g. recipes, general knowledge, coding, etc.).
 - RECOVERY FROM PAST FALLBACKS: If the user greets you again after a fallback, break out of the fallback state, acknowledge the greeting warmly, and do NOT repeat the decline response.
-- DYNAMIC INTERACTIVE BUTTONS: Default to plain text (use plain text for schedule answers). Only return a raw JSON object (keys: text, buttons, footer) if buttons are needed for choices, bookings, or confirmations. No markdown formatting around JSON. Max 3 buttons, labels under 20 characters. For triggering system flows, you MUST set the button "id" to one of that flow's Trigger Keywords EXACTLY (do not use generic IDs like "btn_1" or "btn_crm").`,
+- DYNAMIC INTERACTIVE BUTTONS: Default to plain text (use plain text for schedule answers). Only return a raw JSON object (keys: text, buttons, footer) if buttons are needed for choices, bookings, or confirmations. No markdown formatting around JSON. Max 3 buttons, labels under 20 characters and strictly unique (never duplicate titles like 'Register Here'). Body text under 1024 chars. For triggering system flows, you MUST set the button "id" to one of that flow's Trigger Keywords EXACTLY (do not use generic IDs like "btn_1" or "btn_crm").`,
   });
 
   messages.push({ role: "system", content: `BOOKING AND APPOINTMENT ASSISTANCE:
