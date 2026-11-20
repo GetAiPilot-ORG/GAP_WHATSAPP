@@ -5,6 +5,7 @@ import { getBotAgentReply } from './ai.service.js';
 import { encryptFormToken } from '../utils/crypto.js';
 import { fetchGoogleBusySlots, createGoogleCalendarEvent, deleteGoogleCalendarEvent, getValidAccessToken } from './googleCalendar.service.js';
 import crypto from 'crypto';
+import { normalizeMediaUrl } from './messages.sender.js';
 
 function extractFormSlug(urlStr: string): string {
   if (!urlStr) return '';
@@ -167,11 +168,14 @@ export type FlowEngineResult = {
     caption?: string | null;
     mimeType?: string | null;
     fileName?: string | null;
+    buttonText?: string | null;
+    buttonUrl?: string | null;
   }>;
   interactive?: {
     type: 'button' | 'cta_url' | 'list';
     body: string;
     footer?: string;
+    header?: any;
     buttons?: Array<{ id: string; text: string; type?: 'reply' | 'url' | 'phone'; url?: string; phone?: string }>;
     buttonText?: string;
     sections?: any[];
@@ -206,6 +210,7 @@ export const SUPPORTED_FLOW_NODE_TYPES = new Set([
   'product',
   'handoff',
   'end',
+  'goto',
 ]);
 
 export function parseFlowKeywords(value: any): string[] {
@@ -974,6 +979,7 @@ export async function processFlowEngine(
   let activeNode = nodes.find((n: any) => n.id === currentNodeId);
   const outputText: string[] = [];
   const mediaOutput: NonNullable<FlowEngineResult["media"]> = [];
+  let interactiveOutput: FlowEngineResult["interactive"] = undefined;
   let steps = 0;
 
   if (isResuming) {
@@ -1292,80 +1298,113 @@ export async function processFlowEngine(
         }
         return { consumed: true, output: null, ...flowMeta };
       }
-    } else if (currentNode?.type === "button") {
-      // User ka response match karo outgoing edges se
+    } else if (currentNode?.type === "button" || currentNode?.type === "interactive") {
       const outEdges = edges.filter((e: any) => e.source === currentNodeId);
-      let nextEdge: any = null;
+      let configuredButtons = (currentNode?.data?.config?.buttons || []).filter(
+        (b: any) => String(b?.text || "").trim()
+      );
+      if (configuredButtons.length === 0 && outEdges.length > 0) {
+        configuredButtons = outEdges
+          .map((e: any, idx: number) => ({ text: e.label || e.sourceHandle || `Option ${idx + 1}`, id: e.sourceHandle || `button-${idx}` }))
+          .filter((b: any) => String(b.text || "").trim());
+      }
+      const rawItems = currentNode?.data?.config?.items || currentNode?.data?.config?.options || [];
+      if (configuredButtons.length === 0 && rawItems.length > 0) {
+        configuredButtons = rawItems
+          .map((item: any, idx: number) => ({ text: item.title || item.name || `Option ${idx + 1}`, id: item.id || `item-${idx}` }))
+          .filter((b: any) => String(b.text || "").trim());
+      }
 
-      if (outEdges.length === 1) {
-        nextEdge = outEdges[0];
-      } else if (outEdges.length > 1) {
-        const buttons = currentNode?.data?.config?.buttons || [];
-        const matchedButtonIndex = buttons.findIndex(
-          (b: any) =>
-            String(b?.text || "")
-              .trim()
-              .toLowerCase() === normalized,
+      // Check if WhatsApp sent an interactive button click payload
+      let buttonReplyId = "";
+      let buttonReplyTitle = "";
+      if (triggerMessageId) {
+        try {
+          const { data: triggerMsg } = await supabase
+            .from("w_messages")
+            .select("content")
+            .eq("id", triggerMessageId)
+            .maybeSingle();
+          buttonReplyId = String(triggerMsg?.content?.raw?.interactive?.button_reply?.id || "").toLowerCase().trim();
+          buttonReplyTitle = String(triggerMsg?.content?.raw?.interactive?.button_reply?.title || "").toLowerCase().trim();
+        } catch (e: any) {
+          // ignore
+        }
+      }
+
+      // Check if the user's input matches ANY configured button (via button click, exact title, button id, or 1/2/3 index)
+      let matchedButtonIndex = -1;
+      for (let i = 0; i < configuredButtons.length; i++) {
+        const btn = configuredButtons[i];
+        const btnText = String(btn?.text || "").toLowerCase().trim();
+        const btnId = String(btn?.id || "").toLowerCase().trim();
+
+        if (
+          (buttonReplyId && (buttonReplyId === btnId || buttonReplyId === `button-${i}`)) ||
+          (buttonReplyTitle && buttonReplyTitle === btnText) ||
+          (btnText && normalized === btnText) ||
+          (btnId && normalized === btnId) ||
+          normalized === String(i + 1)
+        ) {
+          matchedButtonIndex = i;
+          break;
+        }
+      }
+
+      // IF USER ENTERED ANYTHING ELSE (Did not select a valid button):
+      // Do NOT advance! Ask user to select a button or service from above.
+      if (matchedButtonIndex === -1 && configuredButtons.length > 0) {
+        console.log(`[Flow] Resumed at button node but input "${text}" did not match any buttons. Prompting user to select a button.`);
+        const originalBody = renderFlowTemplate(
+          currentNode.data?.config?.text || currentNode.data?.config?.headerText || "Please choose an option:",
+          flowState,
         );
-        if (matchedButtonIndex >= 0) {
+        const promptMessage = "⚠️ Please select a button or service from above to continue.";
+        const footer = renderFlowTemplate(currentNode.data?.config?.footerText || "", flowState);
+
+        return {
+          consumed: true,
+          output: promptMessage,
+          ...flowMeta,
+          flow_node_id: currentNode.id,
+          interactive: {
+            type: "button",
+            body: `${promptMessage}\n\n${originalBody}`,
+            footer,
+            buttons: configuredButtons.slice(0, 3).map((b: any) =>
+              processButtonConfig(b, session_id, conversation_id, contact_id, organization_id, assigned_bot_id)
+            ),
+          },
+        };
+      }
+
+      // If matched a button: determine which outgoing edge to advance to
+      let nextEdge: any = null;
+      if (matchedButtonIndex >= 0) {
+        // Save selected button in state
+        const selectedBtn = configuredButtons[matchedButtonIndex];
+        const nextState = {
+          ...flowState,
+          selected_button: selectedBtn.text,
+          selected_button_index: matchedButtonIndex,
+        };
+        await supabase
+          .from("w_flow_sessions")
+          .update({ state_data: nextState })
+          .eq("id", session_id);
+        flowState = nextState;
+
+        if (outEdges.length === 1) {
+          nextEdge = outEdges[0];
+        } else if (outEdges.length > 1) {
           nextEdge = outEdges.find(
             (e: any) => e.sourceHandle === `button-${matchedButtonIndex}`,
-          );
+          ) || outEdges.find(
+            (e: any) => e.sourceHandle && e.sourceHandle === selectedBtn.id,
+          ) || outEdges[0];
         }
-        // Button ID, title, ya label se match karo
-        nextEdge =
-          nextEdge ||
-          outEdges.find((e: any) => {
-            const handle = (e.sourceHandle || "").toLowerCase();
-            const label = (e.label || "").toLowerCase();
-            return (
-              handle === normalized ||
-              label === normalized ||
-              normalized.includes(handle)
-            );
-          }) ||
-          outEdges.find((e: any) => {
-            // Fallback to sourceHandle comparison if label fails
-            return (
-              e.sourceHandle &&
-              normalized.includes(e.sourceHandle.toLowerCase())
-            );
-          });
-
-        if (!nextEdge) {
-          // User input didn't match any button option.
-          // ALWAYS consume the message when a flow session is active — never let AI bot take over.
-          // Re-send the button question so the user picks a valid option.
-          console.log(`[Flow] Resumed at button node but input "${text}" did not match any buttons. Re-asking button question.`);
-          const body = renderFlowTemplate(
-            currentNode.data?.config?.text || currentNode.data?.config?.headerText || "Please choose an option:",
-            flowState,
-          );
-          const footer = renderFlowTemplate(currentNode.data?.config?.footerText || "", flowState);
-          const buttons = (currentNode.data?.config?.buttons || []).filter((b: any) => b.text).slice(0, 3);
-          if (buttons.length > 0) {
-            return {
-              consumed: true,
-              output: null,
-              ...flowMeta,
-              flow_node_id: currentNode.id,
-              interactive: {
-                type: "button",
-                body,
-                footer,
-                buttons: buttons.map((b: any) => processButtonConfig(b, session_id, conversation_id, contact_id, organization_id, assigned_bot_id)),
-
-              },
-            };
-          }
-          // No buttons configured — re-ask as plain text
-          return {
-            consumed: true,
-            output: body || "Please reply with a valid option.",
-            ...flowMeta,
-            flow_node_id: currentNode.id,
-          };
-        }
+      } else if (outEdges.length > 0) {
+        nextEdge = outEdges[0];
       }
 
       if (nextEdge) {
@@ -1559,14 +1598,53 @@ export async function processFlowEngine(
         config.caption || config.message || "",
         flowState,
       );
+      const rawButtonUrl = config.buttonUrl ? renderFlowTemplate(config.buttonUrl, flowState).trim() : "";
+      const buttonUrl = rawButtonUrl ? (/^https?:\/\//i.test(rawButtonUrl) ? rawButtonUrl : `https://${rawButtonUrl}`) : "";
+      const rawButtonText = config.buttonText ? renderFlowTemplate(config.buttonText, flowState).trim() : "";
+      const buttonText = rawButtonText.slice(0, 20);
+
       if (url) {
+        const resolvedUrl = normalizeMediaUrl(renderFlowTemplate(url, flowState), nodeType === "file" ? "document" : (nodeType as any));
+
+        // If an image or video has a redirect URL button:
+        // 1. In caption: add clean link line so all WA clients (web, desktop, android) can click even if interactive CTA is skipped
+        let effectiveCaption = caption;
+        if ((nodeType === "image" || nodeType === "video") && buttonUrl) {
+          const btnLabel = buttonText || (nodeType === "video" ? "Watch Video" : "Visit Website");
+          effectiveCaption = effectiveCaption 
+            ? `${effectiveCaption}\n\n👉 [${btnLabel}]: ${buttonUrl}` 
+            : `👉 [${btnLabel}]: ${buttonUrl}`;
+        }
+
         mediaOutput.push({
           type: nodeType === "file" ? "document" : nodeType,
-          url: renderFlowTemplate(url, flowState),
-          caption: caption || undefined,
+          url: resolvedUrl,
+          caption: effectiveCaption || undefined,
           fileName: config.fileName || config.displayName || undefined,
           mimeType: config.mimeType || undefined,
+          buttonText: buttonText || undefined,
+          buttonUrl: buttonUrl || undefined,
         });
+
+        // 2. Also attach interactive CTA button with media (image/video) header if supported
+        if ((nodeType === "image" || nodeType === "video") && buttonUrl) {
+          interactiveOutput = {
+            type: "cta_url",
+            header: {
+              type: nodeType,
+              [nodeType]: { link: resolvedUrl },
+            },
+            body: caption || (nodeType === "video" ? "Please click the link below to watch/register:" : "Please click the link below:"),
+            buttons: [
+              {
+                id: `${nodeType}_cta_btn`,
+                text: buttonText || (nodeType === "video" ? "Watch Video" : "Visit Website"),
+                type: "url",
+                url: buttonUrl,
+              },
+            ],
+          };
+        }
       }
     }
 
@@ -1584,9 +1662,67 @@ export async function processFlowEngine(
     else if (nodeType === "template") {
       const source = config.templateSource || "whatsapp";
       if (source === "flow") {
-        const flowName =
-          config.template || config.flowTemplateId || "Flow template";
-        if (flowName) outputText.push(`[Flow Template: ${flowName}]`);
+        const targetFlowId = config.targetFlowId || config.flowTemplateId;
+        const flowName = config.template || config.targetFlowName || "Flow template";
+        let effectiveKeyword = String(config.triggerKeyword || "").trim();
+
+        // Optional intro message
+        if (config.message || config.text) {
+          outputText.push(renderFlowTemplate(config.message || config.text, flowState));
+        }
+
+        // If triggerKeyword was not set directly, look up target flow in database to extract its keyword
+        if (!effectiveKeyword && targetFlowId) {
+          try {
+            const { data: targetFlowRow } = await supabase
+              .from("w_flows")
+              .select("triggers, trigger_keywords")
+              .eq("id", targetFlowId)
+              .maybeSingle();
+
+            if (targetFlowRow) {
+              const rawTriggers = targetFlowRow.triggers || targetFlowRow.trigger_keywords;
+              if (Array.isArray(rawTriggers) && rawTriggers.length > 0) {
+                effectiveKeyword = String(rawTriggers[0] || "").trim();
+              } else if (typeof rawTriggers === "string" && rawTriggers.trim()) {
+                effectiveKeyword = rawTriggers.split(",")[0].trim();
+              }
+            }
+          } catch (e: any) {
+            console.warn("[Flow] Failed to fetch target flow triggers:", e?.message);
+          }
+        }
+
+        // Trigger the target sub-flow if keyword is available
+        if (effectiveKeyword) {
+          try {
+            console.log(`[Flow] Triggering sub-flow via keyword "${effectiveKeyword}" (Target flow: ${flowName})`);
+            const subFlowResult = await processFlowEngine(
+              organization_id,
+              contact_id,
+              conversation_id,
+              effectiveKeyword,
+              triggerMessageId,
+              incomingWaAccountId,
+            );
+
+            if (subFlowResult?.consumed) {
+              const combinedText = [
+                ...outputText,
+                ...(subFlowResult.output ? [subFlowResult.output] : []),
+              ].filter(Boolean).join("\n\n");
+
+              return {
+                ...subFlowResult,
+                output: combinedText || subFlowResult.output || null,
+              };
+            }
+          } catch (err: any) {
+            console.error(`[Flow] Error executing sub-flow with keyword "${effectiveKeyword}":`, err?.message);
+          }
+        } else if (flowName) {
+          outputText.push(`Starting ${flowName}...`);
+        }
       } else {
         const tplName = config.templateName || config.template;
         if (tplName) outputText.push(`[Template: ${tplName}]`);
@@ -1800,6 +1936,7 @@ export async function processFlowEngine(
     consumed: true,
     output: outputText.length > 0 ? outputText.join("\n\n") : null,
     media: mediaOutput.length > 0 ? mediaOutput : undefined,
+    interactive: interactiveOutput,
     ...flowMeta,
   };
 }

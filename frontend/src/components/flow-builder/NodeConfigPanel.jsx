@@ -1,10 +1,11 @@
 import { QuickReplyTriggerPicker } from "./QuickReplyTriggers";
-import { X, Save } from 'lucide-react';
+import { X, Save, Image, Video, Trash2, CheckCircle2, AlertTriangle, ExternalLink } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { FLOW_TEMPLATES } from './flowTemplates';
 import { notify } from '../../services/notificationService';
 import { BACKEND_URL as API_URL } from '../../config/api';
+import { normalizeMediaUrl } from '../../utils/mediaUrlHelper';
 
 export default function NodeConfigPanel({ node, nodes, onClose, onSave, flowContext }) {
     const [config, setConfig] = useState(node?.data?.config || {});
@@ -291,6 +292,17 @@ function EndConfig({ config, updateConfig }) {
 }
 
 function MediaConfig({ config, updateConfig, nodeType }) {
+    const [previewStatus, setPreviewStatus] = useState('idle');
+    const previewUrl = normalizeMediaUrl(config.url || '', nodeType);
+
+    useEffect(() => {
+        if (!config.url) {
+            setPreviewStatus('idle');
+        } else {
+            setPreviewStatus('loading');
+        }
+    }, [config.url, nodeType]);
+
     return (
         <div className="space-y-4">
             <div>
@@ -343,9 +355,102 @@ function MediaConfig({ config, updateConfig, nodeType }) {
                         type="url"
                         value={config.url || ''}
                         onChange={(e) => updateConfig('url', e.target.value)}
-                        placeholder="https://example.com/media.jpg"
+                        onBlur={() => {
+                            if (config.url) {
+                                const normalized = normalizeMediaUrl(config.url, nodeType);
+                                if (normalized !== config.url) {
+                                    updateConfig('url', normalized);
+                                }
+                            }
+                        }}
+                        placeholder={nodeType === 'video' ? "https://example.com/video.mp4" : "https://example.com/media.jpg"}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                     />
+
+                    {/* Image Live Preview */}
+                    {nodeType === 'image' && config.url && (
+                        <div className="mt-2.5 p-2 bg-gray-50 rounded-lg border border-gray-200">
+                            <div className="flex items-center justify-between text-xs text-gray-500 mb-1.5">
+                                <span className="font-medium text-gray-700 flex items-center gap-1.5">
+                                    <Image className="h-3.5 w-3.5 text-purple-600" />
+                                    Live Preview
+                                </span>
+                                {previewStatus === 'loaded' ? (
+                                    <span className="text-emerald-700 font-semibold flex items-center gap-1 text-[11px] bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                                        <CheckCircle2 className="h-3 w-3 text-emerald-600" /> Image Verified
+                                    </span>
+                                ) : previewStatus === 'error' ? (
+                                    <span className="text-amber-700 font-semibold flex items-center gap-1 text-[11px] bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                        <AlertTriangle className="h-3 w-3 text-amber-600" /> Cannot load preview
+                                    </span>
+                                ) : (
+                                    <span className="text-gray-400 text-[11px]">Loading preview...</span>
+                                )}
+                            </div>
+                            <div className="relative w-full h-36 bg-gray-100 rounded overflow-hidden flex items-center justify-center border border-gray-200">
+                                <img
+                                    src={previewUrl}
+                                    alt="Config Preview"
+                                    referrerPolicy="no-referrer"
+                                    loading="lazy"
+                                    className="w-full h-full object-contain"
+                                    onLoad={() => setPreviewStatus('loaded')}
+                                    onError={() => setPreviewStatus('error')}
+                                />
+                                {previewStatus === 'error' && (
+                                    <div className="absolute inset-0 bg-gray-50 flex flex-col items-center justify-center p-3 text-center text-xs text-gray-500">
+                                        <AlertTriangle className="h-5 w-5 text-amber-500 mb-1" />
+                                        <p className="font-medium text-gray-700">Preview not available</p>
+                                        <p className="text-[11px] text-gray-400 mt-0.5">
+                                            Verify the URL is a direct public image link (.jpg, .png, .webp).
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Video Live Preview */}
+                    {nodeType === 'video' && config.url && (
+                        <div className="mt-2.5 p-2 bg-gray-50 rounded-lg border border-gray-200">
+                            <div className="flex items-center justify-between text-xs text-gray-500 mb-1.5">
+                                <span className="font-medium text-gray-700 flex items-center gap-1.5">
+                                    <Video className="h-3.5 w-3.5 text-pink-600" />
+                                    Live Video Preview
+                                </span>
+                                {previewStatus === 'loaded' ? (
+                                    <span className="text-emerald-700 font-semibold flex items-center gap-1 text-[11px] bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                                        <CheckCircle2 className="h-3 w-3 text-emerald-600" /> Video Verified
+                                    </span>
+                                ) : previewStatus === 'error' ? (
+                                    <span className="text-amber-700 font-semibold flex items-center gap-1 text-[11px] bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                        <AlertTriangle className="h-3 w-3 text-amber-600" /> Cannot load preview
+                                    </span>
+                                ) : (
+                                    <span className="text-gray-400 text-[11px]">Loading video...</span>
+                                )}
+                            </div>
+                            <div className="relative w-full h-44 bg-black rounded overflow-hidden flex items-center justify-center border border-gray-200">
+                                <video
+                                    src={previewUrl}
+                                    controls
+                                    preload="metadata"
+                                    className="w-full h-full object-contain"
+                                    onLoadedData={() => setPreviewStatus('loaded')}
+                                    onError={() => setPreviewStatus('error')}
+                                />
+                                {previewStatus === 'error' && (
+                                    <div className="absolute inset-0 bg-gray-900/90 flex flex-col items-center justify-center p-3 text-center text-xs text-gray-300">
+                                        <AlertTriangle className="h-5 w-5 text-amber-500 mb-1" />
+                                        <p className="font-medium text-white">Preview not available</p>
+                                        <p className="text-[11px] text-gray-400 mt-0.5">
+                                            Verify the URL is a direct public video link (.mp4, .3gp, .mov) or accessible CDN stream.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -362,6 +467,36 @@ function MediaConfig({ config, updateConfig, nodeType }) {
                         rows={3}
                     />
                 </div>
+            )}
+
+            {(nodeType === 'image' || nodeType === 'video') && (
+                <>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Button Label (Optional)
+                        </label>
+                        <input
+                            type="text"
+                            value={config.buttonText || ''}
+                            onChange={(e) => updateConfig('buttonText', e.target.value)}
+                            placeholder={nodeType === 'video' ? "e.g. Watch Video" : "e.g. Visit Website"}
+                            maxLength={20}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Redirect URL (Optional)
+                        </label>
+                        <input
+                            type="url"
+                            value={config.buttonUrl || ''}
+                            onChange={(e) => updateConfig('buttonUrl', e.target.value)}
+                            placeholder="https://example.com/page"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        />
+                    </div>
+                </>
             )}
 
             <SmartDelayConfig config={config} updateConfig={updateConfig} />
@@ -450,7 +585,7 @@ function UserInputConfig({ config, updateConfig }) {
                 />
                 <p className="mt-1 text-xs text-gray-500">Use a simple key like <span className="font-mono">name</span>. Later messages can use <span className="font-mono">{'{{name}}'}</span>.</p>
             </div>
-            
+
             <FollowUpConfig config={config} updateConfig={updateConfig} />
         </div>
     );
@@ -618,7 +753,7 @@ function ButtonConfig({ config, updateConfig }) {
                     </button>
                 )}
             </div>
-            
+
             <FollowUpConfig config={config} updateConfig={updateConfig} />
         </div>
     );
@@ -627,23 +762,24 @@ function ButtonConfig({ config, updateConfig }) {
 function TemplateConfig({ config, updateConfig }) {
     const { apiCall, session } = useAuth();
     const [templates, setTemplates] = useState([]);
+    const [flows, setFlows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const selectedSource = config.templateSource || 'whatsapp';
-    const selectedFlowTemplate = FLOW_TEMPLATES.find((template) => template.id === config.flowTemplateId) || null;
+    const selectedFlow = flows.find((f) => f.id === config.flowTemplateId || f.id === config.targetFlowId) || null;
 
     const setSource = (source) => {
         updateConfig('templateSource', source);
 
         if (source === 'flow') {
             updateConfig('templateName', '');
-            updateConfig('template', selectedFlowTemplate?.name || FLOW_TEMPLATES[0]?.name || '');
-            updateConfig('flowTemplateId', selectedFlowTemplate?.id || FLOW_TEMPLATES[0]?.id || '');
             updateConfig('language', 'Flow Template');
             return;
         }
 
         updateConfig('flowTemplateId', '');
+        updateConfig('targetFlowId', '');
+        updateConfig('triggerKeyword', '');
         updateConfig('template', config.templateName || '');
         updateConfig('language', config.language || 'en_US');
     };
@@ -683,7 +819,16 @@ function TemplateConfig({ config, updateConfig }) {
                     setLoading(false);
                 }
             });
-
+        apiCall(`${API_URL}/api/flows`)
+            .then(async (response) => {
+                const data = await response.json().catch(() => []);
+                if (!isMounted) return;
+                setFlows(Array.isArray(data) ? data : []);
+            })
+            .catch(() => {
+                if (!isMounted) return;
+                setFlows([]);
+            });
         return () => {
             isMounted = false;
         };
@@ -745,37 +890,58 @@ function TemplateConfig({ config, updateConfig }) {
                     <select
                         value={config.flowTemplateId || ''}
                         onChange={(e) => {
-                            const selected = FLOW_TEMPLATES.find((template) => template.id === e.target.value);
+                            const selected = flows.find((f) => f.id === e.target.value);
+                            const kw = Array.isArray(selected?.triggers)
+                                ? selected.triggers[0]
+                                : (Array.isArray(selected?.trigger_keywords) ? selected.trigger_keywords[0] : (selected?.triggers || ''));
                             updateConfig('flowTemplateId', e.target.value);
                             updateConfig('template', selected?.name || '');
-                            updateConfig('templateName', '');
+                            updateConfig('targetFlowId', selected?.id || '');
+                            updateConfig('triggerKeyword', kw || config.triggerKeyword || '');
                             updateConfig('language', 'Flow Template');
                         }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                     >
-                        <option value="">-- Flow template choose karo --</option>
-                        {FLOW_TEMPLATES.map((template) => (
-                            <option key={template.id} value={template.id}>
-                                {template.name} · {template.category}
+                        <option value="">-- Choose a Flow to Trigger --</option>
+                        {flows.map((flow) => (
+                            <option key={flow.id} value={flow.id}>
+                                {flow.name} {flow.status ? `(${flow.status})` : ''}
                             </option>
                         ))}
                     </select>
-                    {selectedFlowTemplate && (
+                    <div className="mt-3">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Trigger Keyword (To start this flow)</label>
+                        <input
+                            type="text"
+                            value={config.triggerKeyword || ''}
+                            onChange={(e) => updateConfig('triggerKeyword', e.target.value)}
+                            placeholder="e.g. gym, book, start"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        />
+                        <p className="mt-1 text-[11px] text-gray-500">When this template runs, it will trigger the flow mapped to this keyword.</p>
+                    </div>
+                    {selectedFlow && (
                         <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-                            <div className="font-semibold">{selectedFlowTemplate.name}</div>
-                            <div className="mt-1 text-xs text-emerald-800">{selectedFlowTemplate.description}</div>
+                            <div className="font-semibold flex items-center justify-between">
+                                <span>{selectedFlow.name}</span>
+                                <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-emerald-200 text-emerald-800">{selectedFlow.status}</span>
+                            </div>
+                            {selectedFlow.description && <div className="mt-1 text-xs text-emerald-800">{selectedFlow.description}</div>}
                             <div className="mt-2 text-[11px] text-emerald-700">
-                                {selectedFlowTemplate.preview.nodes.length} nodes · {selectedFlowTemplate.minutes} min
+                                Target Trigger: <code className="font-mono bg-white/70 px-1 py-0.5 rounded">{config.triggerKeyword || 'None'}</code>
                             </div>
                         </div>
                     )}
                 </div>
             )}
 
-            {(selectedSource === 'whatsapp' ? config.templateName : selectedFlowTemplate?.name) && (
+            {(selectedSource === 'whatsapp' ? config.templateName : (selectedFlow?.name || config.template)) && (
                 <div className="p-3 bg-indigo-50 rounded-lg">
-                    <p className="text-xs text-indigo-600 font-medium">Selected: {selectedSource === 'whatsapp' ? config.templateName : selectedFlowTemplate?.name}</p>
+                    <p className="text-xs text-indigo-600 font-medium">Selected: {selectedSource === 'whatsapp' ? config.templateName : (selectedFlow?.name || config.template)}</p>
                     <p className="text-xs text-gray-500">Type: {selectedSource === 'whatsapp' ? 'WhatsApp Template' : 'Flow Template'}</p>
+                    {selectedSource === 'flow' && config.triggerKeyword && (
+                        <p className="text-xs text-gray-500">Trigger Keyword: <span className="font-mono font-semibold text-indigo-600">{config.triggerKeyword}</span></p>
+                    )}
                     <p className="text-xs text-gray-500">Language: {config.language || (selectedSource === 'flow' ? 'Flow Template' : 'en_US')}</p>
                 </div>
             )}
@@ -804,28 +970,116 @@ function InteractiveListConfig({ config, updateConfig }) {
         updateConfig('items', newItems);
     };
 
+    const addItem = () => {
+        if (items.length < 10) {
+            updateConfig('items', [
+                ...items,
+                { id: `item${items.length + 1}`, title: '', description: '' }
+            ]);
+        }
+    };
+
+    const removeItem = (index) => {
+        if (items.length > 1) {
+            updateConfig('items', items.filter((_, i) => i !== index));
+        } else {
+            // Keep at least 1 item placeholder
+            updateConfig('items', [{ id: 'item1', title: '', description: '' }]);
+        }
+    };
+
     return (
         <div className="space-y-4">
             <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Header Text</label>
-                <input type="text" value={config.headerText || ''} onChange={(e) => updateConfig('headerText', e.target.value)} placeholder="Choose an option:" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                <input
+                    type="text"
+                    value={config.headerText || ''}
+                    onChange={(e) => updateConfig('headerText', e.target.value)}
+                    placeholder="Choose an option:"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                />
             </div>
             <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Button Label</label>
-                <input type="text" value={config.buttonLabel || ''} onChange={(e) => updateConfig('buttonLabel', e.target.value)} placeholder="View Options" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                <input
+                    type="text"
+                    value={config.buttonLabel || ''}
+                    onChange={(e) => updateConfig('buttonLabel', e.target.value)}
+                    placeholder="View Options"
+                    maxLength={20}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                />
             </div>
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">List Items</label>
+            <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                    <label className="block text-sm font-medium text-gray-700">
+                        Menu Items ({items.length}/10)
+                    </label>
+                </div>
                 {items.map((item, idx) => (
-                    <div key={idx} className="p-3 bg-gray-50 rounded-lg space-y-2 mb-2">
-                        <input type="text" value={item.id} onChange={(e) => updateItem(idx, 'id', e.target.value)} placeholder="ID (e.g. opt1)" className="w-full px-2 py-1 border rounded text-xs font-mono" />
-                        <input type="text" value={item.title} onChange={(e) => updateItem(idx, 'title', e.target.value)} placeholder="Title" className="w-full px-2 py-1 border rounded text-sm" />
-                        <input type="text" value={item.description} onChange={(e) => updateItem(idx, 'description', e.target.value)} placeholder="Description (optional)" className="w-full px-2 py-1 border rounded text-sm" />
+                    <div key={idx} className="p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-2 relative group">
+                        <div className="flex items-center justify-between pb-1 border-b border-gray-200/60">
+                            <span className="text-xs font-semibold text-gray-700">Option {idx + 1}</span>
+                            {items.length > 1 && (
+                                <button
+                                    type="button"
+                                    onClick={() => removeItem(idx)}
+                                    className="text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-0.5 rounded text-xs flex items-center gap-1 transition-colors"
+                                    title="Delete menu item"
+                                >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    <span>Delete</span>
+                                </button>
+                            )}
+                        </div>
+                        <div>
+                            <label className="block text-[11px] font-medium text-gray-500 mb-0.5">Option ID</label>
+                            <input
+                                type="text"
+                                value={item.id}
+                                onChange={(e) => updateItem(idx, 'id', e.target.value)}
+                                placeholder="e.g. opt1"
+                                className="w-full px-2.5 py-1.5 border border-gray-300 rounded text-xs font-mono focus:ring-1 focus:ring-teal-500"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-[11px] font-medium text-gray-500 mb-0.5">Title</label>
+                            <input
+                                type="text"
+                                value={item.title}
+                                onChange={(e) => updateItem(idx, 'title', e.target.value)}
+                                placeholder="Menu Title (e.g. Book Service)"
+                                maxLength={24}
+                                className="w-full px-2.5 py-1.5 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-teal-500"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-[11px] font-medium text-gray-500 mb-0.5">Description (Optional)</label>
+                            <input
+                                type="text"
+                                value={item.description}
+                                onChange={(e) => updateItem(idx, 'description', e.target.value)}
+                                placeholder="Brief explanation..."
+                                maxLength={72}
+                                className="w-full px-2.5 py-1.5 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-teal-500"
+                            />
+                        </div>
                     </div>
                 ))}
-                <button onClick={() => updateConfig('items', [...items, { id: `item${items.length + 1}`, title: '', description: '' }])} className="w-full py-1.5 border-dashed border-2 border-gray-300 rounded text-sm text-gray-400 hover:text-teal-600">
-                    + Add Item
-                </button>
+                {items.length < 10 ? (
+                    <button
+                        type="button"
+                        onClick={addItem}
+                        className="w-full py-2 border-dashed border-2 border-gray-300 hover:border-teal-500 rounded-lg text-sm text-gray-500 hover:text-teal-600 font-medium transition-colors flex items-center justify-center gap-1.5"
+                    >
+                        <span>+ Add Menu Item</span>
+                    </button>
+                ) : (
+                    <div className="text-center text-xs text-amber-600 bg-amber-50 py-1.5 rounded border border-amber-200">
+                        Maximum 10 menu items reached (WhatsApp limit)
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -1480,7 +1734,7 @@ function GoToConfig({ config, updateConfig, nodes, currentNodeId }) {
     const getNodePreviewText = (node) => {
         const c = node.data?.config || {};
         let text = '';
-        
+
         switch (node.type) {
             case 'startBotFlow': { const keywords = [c.keywords, ...(c.quickReplyKeywords || [])].filter(Boolean).join(', '); text = keywords ? `Keywords: ${keywords}` : 'No keywords'; break; }
             case 'textMessage': text = c.message || c.text || 'Empty text'; break;
@@ -1497,7 +1751,7 @@ function GoToConfig({ config, updateConfig, nodes, currentNodeId }) {
             case 'whatsappFlow': text = c.message || 'Flow message'; break;
             default: text = ''; break;
         }
-        
+
         if (text.length > 45) text = text.substring(0, 45) + '...';
         return text ? ` — "${text}"` : '';
     };

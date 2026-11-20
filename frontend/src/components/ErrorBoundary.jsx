@@ -14,6 +14,14 @@ export class ErrorBoundary extends React.Component {
   componentDidCatch(error, errorInfo) {
     console.error('[ErrorBoundary caught an error]:', error, errorInfo)
     this.setState({ errorInfo })
+    // Auto-recover from stale dynamic module chunk errors caused by background builds or deploys
+    if (error?.message?.includes('Failed to fetch dynamically imported module')) {
+      const retryKey = `err_retry_${window.location.pathname}`;
+      if (!sessionStorage.getItem(retryKey)) {
+        sessionStorage.setItem(retryKey, 'true');
+        window.location.reload();
+      }
+    }
   }
 
   handleReload = () => {
