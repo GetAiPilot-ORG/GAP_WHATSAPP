@@ -636,17 +636,28 @@ export default function ScheduledMeetings() {
             'Source',
         ]
 
-        const rows = appointments.map((a) => [
-            a.id,
-            `"${(a.flow_name || 'Meeting').replace(/"/g, '""')}"`,
-            a.appointment_date,
-            `"${a.display_time || a.appointment_time || ''}"`,
-            a.status,
-            `"${(a.contact_name || '').replace(/"/g, '""')}"`,
-            `"${a.contact_phone || ''}"`,
-            `"${a.meet_link || a.html_link || ''}"`,
-            `"${a.source || ''}"`,
-        ])
+        const rows = appointments.map((a) => {
+            const raw = a.meet_link || a.html_link || ''
+            const masked = getProtectedMeetingUrl(
+                raw,
+                a.appointment_date,
+                a.display_time || a.appointment_time,
+                a.flow_name,
+                a.contact_name,
+                a.id
+            )
+            return [
+                a.id,
+                `"${(a.flow_name || 'Meeting').replace(/"/g, '""')}"`,
+                a.appointment_date,
+                `"${a.display_time || a.appointment_time || ''}"`,
+                a.status,
+                `"${(a.contact_name || '').replace(/"/g, '""')}"`,
+                `"${a.contact_phone || ''}"`,
+                `"${masked || raw}"`,
+                `"${a.source || ''}"`,
+            ]
+        })
 
         const csvContent =
             'data:text/csv;charset=utf-8,' +
