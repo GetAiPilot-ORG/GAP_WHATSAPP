@@ -1,3 +1,4 @@
+import { assertWhatsAppSendingAllowed } from '../services/whatsappOffboarding.service.js';
 import { Request, Response } from 'express';
 import { supabase } from '../config/supabase.js';
 import { decryptToken } from '../utils/crypto.js';
@@ -212,6 +213,7 @@ export const sendWhatsAppAction = async (req: Request, res: Response) => {
 
         console.log(`[ECOSYSTEM] Sending Meta WhatsApp message to ${cleanPhone} with template ${templateName}:`, JSON.stringify(payload));
 
+        await assertWhatsAppSendingAllowed(waPhoneId);
         const metaRes = await fetch(`https://graph.facebook.com/v17.0/${waPhoneId}/messages`, {
             method: 'POST',
             headers: {

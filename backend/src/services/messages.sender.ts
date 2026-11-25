@@ -1,6 +1,6 @@
+import { assertWhatsAppSendingAllowed } from './whatsappOffboarding.service.js';
 import { supabase } from '../config/supabase.js';
 import { decryptToken } from '../utils/crypto.js';
-import { fetchWithMetaBackoff } from './meta.service.js';
 import { FlowEngineResult } from './flows.service.js';
 import dotenv from "dotenv";
 dotenv.config({ path: "./.env" });
@@ -38,6 +38,7 @@ export async function sendMediaMessageMeta(params: {
     if (params.type === 'document') payload.document = { id: upJson.id, filename: params.fileName, ...(params.caption ? { caption: params.caption } : {}) };
 
     const sendUrl = `https://graph.facebook.com/v21.0/${params.phone_number_id}/messages`;
+    await assertWhatsAppSendingAllowed(params.phone_number_id);
     const sendRes = await fetch(sendUrl, {
         method: 'POST',
         headers: { Authorization: `Bearer ${params.token}`, 'Content-Type': 'application/json' },
@@ -208,6 +209,7 @@ export async function sendTextMessage(to: string, body: string, phone_number_id:
         payload.context = { message_id: contextMessageId };
     }
 
+    await assertWhatsAppSendingAllowed(phone_number_id || fromId);
     const r = await fetch(url, {
         method: "POST",
         headers: {
@@ -256,6 +258,7 @@ export async function sendReactionMessage(to: string, targetMessageId: string, e
         },
     };
 
+    await assertWhatsAppSendingAllowed(phone_number_id || fromId);
     const r = await fetch(url, {
         method: "POST",
         headers: {
@@ -468,6 +471,7 @@ export async function sendInteractiveButtons(
     interactive: interactivePayload,
   };
 
+  await assertWhatsAppSendingAllowed(fromId);
   const r = await fetch(url, {
     method: "POST",
     headers: {
@@ -531,6 +535,7 @@ export async function sendInteractiveList(
     }
   };
 
+  await assertWhatsAppSendingAllowed(fromId);
   const r = await fetch(url, {
     method: "POST",
     headers: {
@@ -593,7 +598,9 @@ export async function sendTypingIndicator(params: {
       payload.to = to;
     }
 
-    const res = await fetchWithMetaBackoff(url, {
+    await assertWhatsAppSendingAllowed(phone_number_id);
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(10_000),
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,

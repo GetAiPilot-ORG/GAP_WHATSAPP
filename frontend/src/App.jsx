@@ -55,6 +55,7 @@ const TeamMembers = lazyWithRetry(() => import('./pages/TeamMembers'))
 const HelpCenter = lazyWithRetry(() => import('./pages/HelpCenter'))
 const BillingPage = lazyWithRetry(() => import('./pages/BillingPage'))
 const WhatsAppConnect = lazyWithRetry(() => import('./pages/WhatsAppConnect'))
+const WhatsAppOffboarding = lazyWithRetry(() => import('./pages/WhatsAppOffboarding'))
 const WhatsAppNumberPage = lazyWithRetry(() => import('./pages/WhatsAppNumberPage'))
 const WhatsAppLinkGenerator = lazyWithRetry(() => import('./pages/WhatsAppLinkGenerator'))
 const ScheduledMeetings = lazyWithRetry(() => import('./pages/ScheduledMeetings'))
@@ -117,6 +118,7 @@ export default function App() {
                       <Route path="/book" element={<Suspense fallback={<PageFallback />}><PublicBookingPage /></Suspense>} />
                       <Route path="/join-meeting" element={<Suspense fallback={<PageFallback />}><MeetingWaitingRoom /></Suspense>} />
                       <Route path="/join/:id" element={<Suspense fallback={<PageFallback />}><MeetingWaitingRoom /></Suspense>} />
+                      <Route path="/whatsapp-offboarding" element={<Suspense fallback={<PageFallback />}><WhatsAppOffboarding /></Suspense>} />
                       <Route element={<Layout />}>
                         <Route path="dashboard" element={<Dashboard />} />
                         <Route path="whatsapp-connect" element={<Suspense fallback={<PageFallback />}><WhatsAppConnect /></Suspense>} />

@@ -1,3 +1,4 @@
+import { assertWhatsAppSendingAllowed, WhatsAppOffboardedError } from './whatsappOffboarding.service.js';
 import { supabase } from '../config/supabase.js';
 import { io } from '../socket.js';
 import { sessions } from './whatsapp.service.js';
@@ -246,6 +247,7 @@ export async function sendOutboundMessage(
 
       usedTransport = 'meta';
     } catch (cloudErr: any) {
+      if (cloudErr instanceof WhatsAppOffboardedError) throw cloudErr;
       console.warn(
         `[OutboundDispatch] Meta Cloud API failed for ${accountPhoneOrId} (${cloudErr.message}). Initiating Baileys fallback.`
       );
@@ -255,6 +257,7 @@ export async function sendOutboundMessage(
 
   // 3. Fallback or direct send via Baileys Socket
   if (!hasEncryptedToken || isFallback) {
+    if (accountPhoneOrId) await assertWhatsAppSendingAllowed(accountPhoneOrId);
     const sock = resolveBaileysSocket({
       sessionId,
       phoneOrId: accountPhoneOrId,

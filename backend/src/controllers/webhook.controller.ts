@@ -795,18 +795,28 @@ export async function handleWebhook(req: any, res: Response) {
         requestId,
         phone_number_id,
       });
-      const { data: acc, error: accountLookupError } = await supabase
+      let { data: acc, error: accountLookupError } = await supabase
         .from("w_wa_accounts")
-        .select("id, organization_id")
+        .select("id, organization_id, offboarding_started_at")
         .eq("phone_number_id", phone_number_id)
         .maybeSingle();
+
+      if (accountLookupError?.code === '42703') {
+        const legacy = await supabase.from("w_wa_accounts").select("id, organization_id")
+          .eq("phone_number_id", phone_number_id).maybeSingle();
+        acc = legacy.data;
+        accountLookupError = legacy.error;
+      }
 
       if (accountLookupError) {
         webhookError("account.lookup.failed", accountLookupError, {
           requestId,
           phone_number_id,
         });
+        continue;
       }
+
+      if (acc?.offboarding_started_at) continue;
 
       if (acc) {
         organization_id = acc.organization_id;
