@@ -11,11 +11,12 @@ function resolvePlanName(plan) {
     if (!plan) return 'Free Plan'
     const p = String(plan).toLowerCase()
     if (p === 'free' || p === 'whatsapp_free' || p === '' || p === 'free plan' || p === 'no active plan') return 'Free Plan'
+    if (p.includes('enterprise') || p.includes('enterprice') || p.includes('scale')) return 'GAP Enterprise'
     if (p.includes('max')) return 'GAP Max'
-    if (p.includes('all_in_one') || p.includes('bundle')) return 'GAP Max'
+    if (p.includes('core')) return 'GAP Core'
+    if (p.includes('all_in_one') || p.includes('bundle')) return 'GAP Core'
     if (p.includes('pro')) return 'GAP Pro'
     if (p.includes('growth')) return 'GAP Growth'
-    if (p.includes('core')) return 'GAP Core'
     if (p.includes('starter')) return 'GAP Starter'
     return String(plan || 'Free Plan')
 }

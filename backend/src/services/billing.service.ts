@@ -10,10 +10,10 @@ const PLAN_RANKS: Record<string, number> = {
 
 export function normalizeWhatsappPlanId(planId: any): string | null {
     const value = String(planId || '').toLowerCase();
-    if (value.includes('enterprise') || value.includes('all_in_one') || value.includes('ultimate') || value.includes('max')) return 'enterprise';
+    if (value.includes('enterprise') || value.includes('enterprice') || value.includes('scale') || value.includes('ultimate') || value.includes('max')) return 'enterprise';
     if (value.includes('pro') || value.includes('premium')) return 'pro';
-    if (value.includes('growth')) return 'growth';
-    if (value.includes('starter') || value.includes('core')) return 'starter';
+    if (value.includes('growth') || value.includes('core') || value.includes('all_in_one') || value.includes('bundle')) return 'growth';
+    if (value.includes('starter')) return 'starter';
     if (value === 'free' || value.includes('trial')) return 'free';
     return null;
 }
