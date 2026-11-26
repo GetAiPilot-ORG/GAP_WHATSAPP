@@ -1,3 +1,4 @@
+import { assertWhatsAppSendingAllowed, WhatsAppOffboardedError } from './whatsappOffboarding.service.js';
 import { getBroadcastSendQueue, getBroadcastRedis } from '../config/broadcastQueue.js';
 import { supabase } from '../config/supabase.js';
 import { decryptToken } from '../utils/crypto.js';
@@ -108,9 +109,11 @@ export async function prepareCampaignForQueue(campaignId: string) {
     if (['cancelled', 'cancelling', 'completed'].includes(campaign.status)) return;
     if (campaign.schema_version >= 2 && ['queued', 'processing', 'paused'].includes(campaign.status)) return;
 
-    await supabase.from('w_campaigns').update({
+    const { data: preparing, error: preparingError } = await supabase.from('w_campaigns').update({
         status: 'preparing', schema_version: 2, queue_error: null, last_progress_at: new Date().toISOString(),
-    }).eq('id', campaign.id);
+    }).eq('id', campaign.id).not('status', 'in', '(cancelled,cancelling)').select('id').maybeSingle();
+    if (preparingError) throw preparingError;
+    if (!preparing) return;
 
     const audience = await loadAudience(campaign);
     if (audience.length > MAX_CAMPAIGN_RECIPIENTS) throw new Error(`Campaign exceeds ${MAX_CAMPAIGN_RECIPIENTS} recipients`);
@@ -177,7 +180,7 @@ export async function prepareCampaignForQueue(campaignId: string) {
         csv_data: null,
         results: null,
         last_progress_at: new Date().toISOString(),
-    }).eq('id', campaign.id);
+    }).eq('id', campaign.id).eq('status', 'preparing');
 
     await dispatchCampaignWindow(campaign.id);
 }
@@ -302,6 +305,11 @@ export async function sendQueuedRecipient(recipientId: string) {
     const { _preview_text: previewText, ...metaPayload } = recipient.rendered_payload || {};
     let response: Response;
     try {
+        await assertWhatsAppSendingAllowed(account.phone_number_id);
+        const { data: currentCampaign, error: campaignError } = await supabase.from('w_campaigns')
+            .select('status').eq('id', recipient.campaign_id).single();
+        if (campaignError) throw campaignError;
+        if (['cancelling', 'cancelled'].includes(currentCampaign.status)) throw new WhatsAppOffboardedError();
         response = await fetch(`https://graph.facebook.com/v21.0/${account.phone_number_id}/messages`, {
             method: 'POST',
             headers: {
@@ -311,6 +319,14 @@ export async function sendQueuedRecipient(recipientId: string) {
             body: JSON.stringify(metaPayload),
         });
     } catch (networkError: any) {
+        if (networkError instanceof WhatsAppOffboardedError) {
+            const { error: releaseError } = await supabase.rpc('release_broadcast_recipient', {
+                p_recipient_id: recipient.id,
+                p_status: 'cancelled',
+            });
+            if (releaseError) throw releaseError;
+            return;
+        }
         await supabase.rpc('retry_broadcast_recipient', {
             p_recipient_id: recipient.id,
             p_error_class: 'network',
@@ -441,12 +457,14 @@ export async function finalizeCampaignIfComplete(campaignId: string) {
 
 export async function cancelCampaignRecipients(campaignId: string) {
     while (true) {
-        const { data: rows } = await supabase.from('w_campaign_recipients')
+        const { data: rows, error } = await supabase.from('w_campaign_recipients')
             .select('id').eq('campaign_id', campaignId)
             .in('status', ['prepared', 'queued', 'retrying']).limit(PREPARE_BATCH_SIZE);
+        if (error) throw error;
         if (!rows?.length) break;
         for (const row of rows) {
-            await supabase.rpc('release_broadcast_recipient', { p_recipient_id: row.id, p_status: 'cancelled' });
+            const { error: releaseError } = await supabase.rpc('release_broadcast_recipient', { p_recipient_id: row.id, p_status: 'cancelled' });
+            if (releaseError) throw releaseError;
         }
     }
     await finalizeCampaignIfComplete(campaignId);

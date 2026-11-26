@@ -48,7 +48,8 @@ function SafeIcon({ icon, className = "h-4 w-4", fallback: Fallback = HelpCircle
 }
 
 function WhatsAppConnectContent() {
-    const { session, apiCall } = useAuth()
+    const { session, apiCall, userRole } = useAuth()
+    const canOffboard = ['owner', 'admin'].includes(userRole)
     const { alertDialog, confirmDialog } = useDialog()
     const { accounts, numberCapacity, refreshNumberPlan, isLoading: loadingAccounts, error: accountsLoadError, refetchAccounts: fetchAccounts, mergeConnectedAccounts } = useWhatsAppAccounts()
     const [recentCampaigns, setRecentCampaigns] = useState(null)
@@ -423,6 +424,7 @@ function WhatsAppConnectContent() {
                 <div className="text-right text-sm text-gray-700"><p className="font-semibold">{numberCapacity?.planName}</p>
                     <p>{numberCapacity?.limit === null ? 'Checking number allowance…' : `${numberCapacity.used} / ${numberCapacity.limit < 0 ? 'Unlimited' : numberCapacity.limit} numbers connected`}</p></div>
             </header>
+            {canOffboard && <Link to="/whatsapp-offboarding" className="inline-flex rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50">Switch or disconnect WhatsApp</Link>}
             {!loadingAccounts && !accountsLoadError && numberCapacity?.canConnect && accounts.length > 0 && <button type="button" aria-expanded={connectionSetupOpen} onClick={() => setConnectionSetupOpen(open => !open)} className="rounded-lg bg-[#0b74c9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#095da1]">{connectionSetupOpen ? 'Hide connection setup' : 'Connect another number'}</button>}
             {!loadingAccounts && !accountsLoadError && numberCapacity?.limit !== null && !numberCapacity?.canConnect && <p className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-600">Your plan’s number allowance is in use. Manage or reconnect your existing number below. <Link to="/billing" className="font-medium text-[#0b74c9] hover:underline">View plans</Link></p>}
             {accountsLoadError && <p role="alert" className="rounded-lg border border-red-200 p-4 text-sm text-red-700">{accountsLoadError} <button onClick={fetchAccounts} className="underline">Retry</button></p>}
@@ -603,7 +605,8 @@ function WhatsAppConnectContent() {
                                 disconnecting={disconnectingId === account.id}
                                 onCheck={() => runAccountDiagnostics(account.id)}
                                 onReconnect={handleEmbeddedSignup}
-                                onDisconnect={() => handleDeleteAccount(account.id)}
+                                onDisconnect={canOffboard ? () => handleDeleteAccount(account.id) : null}
+                                canOffboard={canOffboard}
                             />
                         ))}
                     </div>
@@ -1046,7 +1049,7 @@ function getAccountStatus(account, diagnostics) {
     return 'connected';
 }
 
-function AccountCard({ account, campaigns, diagnostics, loading, disconnecting, onCheck, onReconnect, onDisconnect }) {
+function AccountCard({ account, campaigns, diagnostics, loading, disconnecting, onCheck, onReconnect, onDisconnect, canOffboard }) {
     const isMeta = account.connection_type !== 'qr_session';
     const hasToken = Boolean(account.has_access_token || account.access_token_encrypted || diagnostics?.has_access_token);
     const issueCodes = diagnostics?.issue_codes || [];
@@ -1168,7 +1171,7 @@ function AccountCard({ account, campaigns, diagnostics, loading, disconnecting, 
                 </div>
             </div>
 
-            <div className="mt-5 flex items-center justify-end gap-2 pt-5 border-t border-gray-100">
+            <div className="mt-5 flex flex-wrap items-center justify-end gap-2 pt-5 border-t border-gray-100">
                 {reconnectRequired ? (
                     <button
                         type="button"
@@ -1197,6 +1200,7 @@ function AccountCard({ account, campaigns, diagnostics, loading, disconnecting, 
                         Templates
                     </Link>
                 )}
+                {canOffboard && (account.connection_type === 'qr_session' ? (
                 <button
                     type="button"
                     onClick={onDisconnect}
@@ -1206,6 +1210,11 @@ function AccountCard({ account, campaigns, diagnostics, loading, disconnecting, 
                     {disconnecting ? <Loader2 className="h-3.5 w-3.5 animate-spin text-red-500" /> : null}
                     {disconnecting ? 'Disconnecting...' : 'Disconnect'}
                 </button>
+                ) : (
+                    <Link to={`/whatsapp-offboarding?account=${encodeURIComponent(account.id)}`} className="inline-flex h-9 items-center justify-center rounded-lg border border-gray-200 px-4 text-xs font-semibold text-gray-700 hover:bg-gray-50 w-full sm:w-auto">
+                        Switch or disconnect
+                    </Link>
+                ))}
             </div>
         </div>
     )
