@@ -32,27 +32,56 @@ export function startCronJobs() {
             if (error || !campaigns) return;
 
             for (const camp of campaigns) {
-                processCampaign(camp).catch(err => console.error('Cron processCampaign error:', err));
+                // Atomic claim: only the instance that successfully updates status executes the campaign
+                const { data: claimed, error: claimErr } = await supabase
+                    .from('w_campaigns')
+                    .update({
+                        status: 'processing',
+                        processing_started_at: new Date().toISOString(),
+                        last_progress_at: new Date().toISOString(),
+                    })
+                    .eq('id', camp.id)
+                    .eq('status', 'scheduled')
+                    .select()
+                    .maybeSingle();
+
+                if (!claimed || claimErr) continue;
+                processCampaign(claimed).catch(err => console.error('Cron processCampaign error:', err));
             }
         } catch (e) {
             console.error('Campaign cron error:', e);
         }
     });
 
-    // Also pick up any stuck "processing" campaigns periodically (every 5 mins)
+    // Pick up truly stuck "processing" campaigns periodically (no progress for at least 15 mins)
     cron.schedule('*/5 * * * *', async () => {
         try {
+            const staleThreshold = new Date(Date.now() - 15 * 60000).toISOString();
             const { data: stuckCampaigns, error } = await supabase
                 .from('w_campaigns')
                 .select('*')
                 .eq('status', 'processing')
-                // Wait at least 5 minutes before considering it stuck
-                .lte('created_at', new Date(Date.now() - 5 * 60000).toISOString());
+                .or(`last_progress_at.lte.${staleThreshold},and(last_progress_at.is.null,created_at.lte.${staleThreshold})`);
 
             if (error || !stuckCampaigns) return;
 
             for (const camp of stuckCampaigns) {
-                processCampaign(camp).catch(err => console.error('Stuck campaign recovery error:', err));
+                // Atomic claim recovery to prevent multiple backend instances from re-running simultaneously
+                const { data: claimed, error: claimErr } = await supabase
+                    .from('w_campaigns')
+                    .update({
+                        last_progress_at: new Date().toISOString(),
+                    })
+                    .eq('id', camp.id)
+                    .eq('status', 'processing')
+                    .or(`last_progress_at.lte.${staleThreshold},and(last_progress_at.is.null,created_at.lte.${staleThreshold})`)
+                    .select()
+                    .maybeSingle();
+
+                if (!claimed || claimErr) continue;
+
+                console.warn(`[broadcast-watchdog] Recovering stale campaign ${camp.id} (no progress for >15m)`);
+                processCampaign(claimed).catch(err => console.error('Stuck campaign recovery error:', err));
             }
         } catch (e) {
             console.error('Stuck campaign cron error:', e);
