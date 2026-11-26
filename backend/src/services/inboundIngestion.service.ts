@@ -493,7 +493,7 @@ export async function ingestInboundMessage(
 
             botLockMap.set(debounceKey, nextPromise);
             await nextPromise;
-          }, 500)
+          }, 1500)
         );
       }
     }

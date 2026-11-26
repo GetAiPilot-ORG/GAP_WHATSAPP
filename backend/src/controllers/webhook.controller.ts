@@ -493,7 +493,7 @@ export function queueBotAgentReply(params: {
       });
 
       botLockMap.set(conv.id, currentPromise);
-    }, 750)
+    }, 1500)
   );
 }
 
