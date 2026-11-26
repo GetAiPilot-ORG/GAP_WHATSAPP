@@ -1,4 +1,4 @@
-import { Outlet, Navigate, useNavigate, useLocation } from 'react-router-dom'
+import { Outlet, Navigate, Link, useNavigate, useLocation } from 'react-router-dom'
 import { useEffect, useMemo, useState, useRef } from 'react'
 import Sidebar from './Sidebar'
 import Modal from './Modal'
@@ -698,6 +698,11 @@ export default function Layout() {
                     </div>
 
                     <div className="flex flex-col gap-3 w-full">
+                        {['owner', 'admin'].includes(userRole) && (
+                            <Link to="/whatsapp-offboarding" className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                                Switch or disconnect WhatsApp
+                            </Link>
+                        )}
                         <a
                             href="https://getaipilot.in/pricing"
                             className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3.5 text-sm font-bold text-white hover:bg-indigo-700 active:scale-[0.98] transition-all shadow-md shadow-indigo-100"

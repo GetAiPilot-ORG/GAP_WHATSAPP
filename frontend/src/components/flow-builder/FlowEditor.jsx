@@ -15,7 +15,7 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import './flow-editor.css';
-import { Save, ArrowLeft, Play, Zap, Handshake, Square, Plus, MoreHorizontal, X, ChevronDown, Undo2, Redo2, Workflow } from 'lucide-react';
+import { Save, ArrowLeft, Play, Zap, Handshake, Square, Plus, MoreHorizontal, X, ChevronDown, Undo2, Redo2, Workflow, AlertTriangle } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import { useDialog } from '../../context/DialogContext';
@@ -174,6 +174,55 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
     const [mobileNodesOpen, setMobileNodesOpen] = useState(false);
     const [mobileConfigOpen, setMobileConfigOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
+    const [showExitModal, setShowExitModal] = useState(false);
+    const [isDirty, setIsDirty] = useState(false);
+
+    const getCleanSnapshot = useCallback((nds, eds, scope, ids) => {
+        try {
+            return JSON.stringify({
+                nodes: (nds || []).map((n) => ({
+                    id: n.id,
+                    type: n.type,
+                    x: Math.round(n.position?.x || 0),
+                    y: Math.round(n.position?.y || 0),
+                    data: n.data || {}
+                })),
+                edges: (eds || []).map((e) => ({
+                    id: e.id,
+                    source: e.source,
+                    target: e.target,
+                    sourceHandle: e.sourceHandle || null,
+                    targetHandle: e.targetHandle || null
+                })),
+                scope: scope || 'all',
+                ids: [...(ids || [])].sort()
+            });
+        } catch {
+            return '';
+        }
+    }, []);
+
+    const initialSnapshotRef = useRef(
+        getCleanSnapshot(flow?.nodes, flow?.edges, flow?.wa_account_scope, flow?.wa_account_ids)
+    );
+
+    const hasUnsavedChanges = useCallback(() => {
+        if (isDirty) return true;
+        const currentSnapshot = getCleanSnapshot(nodes, edges, accountScope, accountIds);
+        return currentSnapshot !== initialSnapshotRef.current;
+    }, [isDirty, nodes, edges, accountScope, accountIds, getCleanSnapshot]);
+
+    const handleNodesChange = useCallback((changes) => {
+        onNodesChange(changes);
+        const hasRealMod = changes.some(c => c.type === 'position' || c.type === 'remove' || c.type === 'add' || c.type === 'dimensions');
+        if (hasRealMod) setIsDirty(true);
+    }, [onNodesChange]);
+
+    const handleEdgesChange = useCallback((changes) => {
+        onEdgesChange(changes);
+        const hasRealMod = changes.some(c => c.type === 'remove' || c.type === 'add');
+        if (hasRealMod) setIsDirty(true);
+    }, [onEdgesChange]);
 
     const { undo, redo, canUndo, canRedo } = useUndoRedo(nodes, setNodes, edges, setEdges);
     const autoLayout = useAutoLayout();
@@ -184,6 +233,33 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
         window.addEventListener('resize', check);
         return () => window.removeEventListener('resize', check);
     }, []);
+
+    // Intercept browser back button (history popstate)
+    useEffect(() => {
+        window.history.pushState({ inFlowEditor: true }, '');
+        const onPopState = () => {
+            if (hasUnsavedChanges()) {
+                window.history.pushState({ inFlowEditor: true }, '');
+                setShowExitModal(true);
+            } else {
+                localStorage.removeItem(`flowDraft_${flow?.id}`);
+                onClose();
+            }
+        };
+        window.addEventListener('popstate', onPopState);
+        return () => window.removeEventListener('popstate', onPopState);
+    }, [hasUnsavedChanges, flow?.id, onClose]);
+
+    useEffect(() => {
+        const handleBeforeUnload = (e) => {
+            if (hasUnsavedChanges()) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [hasUnsavedChanges]);
 
     // Autosave draft locally to prevent data loss on refresh
     useEffect(() => {
@@ -200,13 +276,16 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
     const getId = () => `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     const onConnect = useCallback(
-        (params) => setEdges((eds) => addEdge({
-            ...params,
-            type: 'deletable',
-            animated: false,
-            style: { stroke: '#9aa4b2', strokeWidth: 1.8 },
-            markerEnd: { type: MarkerType.ArrowClosed, color: '#9aa4b2' }
-        }, eds)),
+        (params) => {
+            setIsDirty(true);
+            setEdges((eds) => addEdge({
+                ...params,
+                type: 'deletable',
+                animated: false,
+                style: { stroke: '#9aa4b2', strokeWidth: 1.8 },
+                markerEnd: { type: MarkerType.ArrowClosed, color: '#9aa4b2' }
+            }, eds));
+        },
         []
     );
 
@@ -243,6 +322,7 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
                 },
             };
 
+            setIsDirty(true);
             setNodes((nds) => nds.concat(newNode));
         },
         [reactFlowInstance]
@@ -281,6 +361,7 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
             },
         };
 
+        setIsDirty(true);
         setNodes((nds) => nds.concat(newNode));
         setMobileNodesOpen(false);
         setSelectedNodeId(newNode.id);
@@ -289,6 +370,7 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
     }, [reactFlowInstance, nodes.length, isMobile]);
 
     const handleDeleteNode = (nodeId) => {
+        setIsDirty(true);
         setNodes((nds) => nds.filter((n) => n.id !== nodeId));
         setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
         setSelectedEdgeId(null);
@@ -300,6 +382,7 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
     };
 
     const handleDuplicateNode = useCallback((nodeId) => {
+        setIsDirty(true);
         setNodes((nds) => {
             const nodeToDuplicate = nds.find((n) => n.id === nodeId);
             if (!nodeToDuplicate) return nds;
@@ -326,11 +409,13 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
     }, []);
 
     const handleDeleteEdge = useCallback((edgeId) => {
+        setIsDirty(true);
         setEdges((eds) => eds.filter((edge) => edge.id !== edgeId));
         setSelectedEdgeId(null);
     }, [setEdges]);
 
     const handleUpdateNode = (nodeId, newData) => {
+        setIsDirty(true);
         setNodes((nds) =>
             nds.map((node) => (node.id === nodeId ? { ...node, data: { ...node.data, ...newData } } : node))
         );
@@ -377,6 +462,7 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
     }, [handleDeleteEdge, selectedEdgeId]);
 
     const handleSaveConfig = (nodeId, config) => {
+        setIsDirty(true);
         setNodes((nds) =>
             nds.map((node) =>
                 node.id === nodeId
@@ -386,8 +472,8 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
         );
     };
 
-    const handleSave = async () => {
-        if (isSaving || isPublishing) return;
+    const handleSave = async (silent = false) => {
+        if (isSaving || isPublishing) return false;
         setIsSaving(true);
         try {
             await axios.put(`${API_URL}/api/flows/${flow.id}`, {
@@ -399,10 +485,20 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
                 headers: { Authorization: `Bearer ${session?.access_token}` }
             });
             localStorage.removeItem(`flowDraft_${flow.id}`);
-            await alertDialog('Draft saved. Click Publish to make this flow live on WhatsApp.', { title: 'Draft saved', tone: 'success' });
+            initialSnapshotRef.current = getCleanSnapshot(nodes, edges, accountScope, accountIds);
+            setIsDirty(false);
+            setIsSaving(false);
+            if (!silent) {
+                await alertDialog('Draft saved. Click Publish to make this flow live on WhatsApp.', { title: 'Draft saved', tone: 'success' });
+            }
+            return true;
         } catch (error) {
             console.error('Error saving flow:', error);
-            alertDialog('Failed to save flow.', { title: 'Save failed', tone: 'danger' });
+            setIsSaving(false);
+            if (!silent) {
+                alertDialog('Failed to save flow.', { title: 'Save failed', tone: 'danger' });
+            }
+            return false;
         } finally { setIsSaving(false); }
     };
 
@@ -422,11 +518,43 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
                 headers: { Authorization: `Bearer ${session?.access_token}` }
             });
             localStorage.removeItem(`flowDraft_${flow.id}`);
+            initialSnapshotRef.current = getCleanSnapshot(nodes, edges, accountScope, accountIds);
+            setIsDirty(false);
             onClose();
         } catch (error) {
             const details = error?.response?.data?.validation?.errors || [error?.response?.data?.error || 'Failed to publish flow'];
             alertDialog(details.join('\n'), { title: 'Publish failed', tone: 'danger' });
         } finally { setIsPublishing(false); }
+    };
+
+    const handleSafeExit = () => {
+        if (hasUnsavedChanges()) {
+            setShowExitModal(true);
+        } else {
+            localStorage.removeItem(`flowDraft_${flow?.id}`);
+            onClose();
+        }
+    };
+
+    const handleSaveAndExit = async () => {
+        const success = await handleSave(true);
+        if (success) {
+            setIsDirty(false);
+            setShowExitModal(false);
+            localStorage.removeItem(`flowDraft_${flow?.id}`);
+            onClose();
+        }
+    };
+
+    const handleDiscardAndExit = () => {
+        setIsDirty(false);
+        localStorage.removeItem(`flowDraft_${flow?.id}`);
+        setShowExitModal(false);
+        onClose();
+    };
+
+    const handleCancelExit = () => {
+        setShowExitModal(false);
     };
 
     const handleTest = async () => {
@@ -461,7 +589,7 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
                 {/* Left: Back + Name */}
                 <div className="flex items-center gap-2 min-w-0 flex-1">
                     <button
-                        onClick={onClose}
+                        onClick={handleSafeExit}
                         className="h-8 w-8 shrink-0 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors inline-flex items-center justify-center"
                         aria-label="Back to flows" title="Back"
                     >
@@ -524,7 +652,7 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
             <div className="hidden min-h-16 min-w-0 items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3 md:flex">
                 <div className="flex flex-1 min-w-0 items-center gap-3 mr-4">
                     <button
-                        onClick={onClose}
+                        onClick={handleSafeExit}
                         className="shrink-0 h-8 w-8 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors inline-flex items-center justify-center"
                         aria-label="Back to flows" title="Back"
                     >
@@ -636,8 +764,8 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
                             },
                             markerEnd: edge.markerEnd || { type: MarkerType.ArrowClosed, color: '#9aa4b2' },
                         }))}
-                        onNodesChange={onNodesChange}
-                        onEdgesChange={onEdgesChange}
+                        onNodesChange={handleNodesChange}
+                        onEdgesChange={handleEdgesChange}
                         onConnect={onConnect}
                         onInit={setReactFlowInstance}
                         onDrop={onDrop}
@@ -857,6 +985,64 @@ function FlowEditorContent({ flow, waAccounts = [], onClose }) {
                     isOpen={isTesterOpen} 
                     onClose={() => setIsTesterOpen(false)} 
                 />
+            )}
+
+            {/* Unsaved Changes Confirmation Modal */}
+            {showExitModal && (
+                <div className="fixed inset-0 z-[100000] flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs animate-in fade-in duration-200">
+                    <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-150">
+                        <div className="flex items-start gap-4">
+                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                                <AlertTriangle className="h-6 w-6" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <h3 className="text-base font-semibold text-gray-900">
+                                    Unsaved Changes
+                                </h3>
+                                <p className="mt-1.5 text-sm text-gray-500 leading-relaxed">
+                                    You have unsaved changes in this flow. Would you like to save your draft before exiting, or discard your changes?
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+                            <button
+                                type="button"
+                                onClick={handleCancelExit}
+                                disabled={isSaving}
+                                className="w-full sm:w-auto px-4 py-2.5 rounded-lg border border-gray-300 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                            >
+                                Keep Editing
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleDiscardAndExit}
+                                disabled={isSaving}
+                                className="w-full sm:w-auto px-4 py-2.5 rounded-lg border border-red-200 bg-red-50 text-xs font-semibold text-red-600 hover:bg-red-100 transition-colors disabled:opacity-50"
+                            >
+                                Discard Changes
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSaveAndExit}
+                                disabled={isSaving}
+                                className="w-full sm:w-auto px-4 py-2.5 rounded-lg bg-[#008069] text-xs font-semibold text-white hover:bg-[#006e5a] shadow-sm transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+                            >
+                                {isSaving ? (
+                                    <>
+                                        <span className="inline-block animate-spin">⏳</span>
+                                        <span>Saving…</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Save className="h-3.5 w-3.5" />
+                                        <span>Save & Exit</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

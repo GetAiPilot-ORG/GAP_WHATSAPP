@@ -1,6 +1,6 @@
+import { assertWhatsAppSendingAllowed } from './whatsappOffboarding.service.js';
 import { supabase } from '../config/supabase.js';
 import { decryptToken } from '../utils/crypto.js';
-import { fetchWithMetaBackoff } from './meta.service.js';
 import { FlowEngineResult } from './flows.service.js';
 import dotenv from "dotenv";
 dotenv.config({ path: "./.env" });
@@ -38,6 +38,7 @@ export async function sendMediaMessageMeta(params: {
     if (params.type === 'document') payload.document = { id: upJson.id, filename: params.fileName, ...(params.caption ? { caption: params.caption } : {}) };
 
     const sendUrl = `https://graph.facebook.com/v21.0/${params.phone_number_id}/messages`;
+    await assertWhatsAppSendingAllowed(params.phone_number_id);
     const sendRes = await fetch(sendUrl, {
         method: 'POST',
         headers: { Authorization: `Bearer ${params.token}`, 'Content-Type': 'application/json' },
@@ -48,19 +49,63 @@ export async function sendMediaMessageMeta(params: {
     return { wa_message_id: sendJson?.messages?.[0]?.id || null, raw: sendJson };
 }
 
-export async function downloadPublicMediaForSend(url: string, fallbackType: 'image' | 'video' | 'audio' | 'document') {
+export function normalizeMediaUrl(url: string, mediaType: 'image' | 'video' | 'audio' | 'document' = 'image'): string {
+    if (!url || typeof url !== 'string') return '';
+    let trimmed = url.trim();
+    if (!trimmed) return '';
+
+    if (trimmed.startsWith('//')) {
+        trimmed = 'https:' + trimmed;
+    } else if (!/^https?:\/\//i.test(trimmed) && !trimmed.startsWith('data:') && !trimmed.startsWith('blob:')) {
+        trimmed = 'https://' + trimmed;
+    }
+
+    const driveMatch = trimmed.match(/drive\.google\.com\/(?:file\/d\/|open\?id=)([a-zA-Z0-9_-]+)/i);
+    if (driveMatch && driveMatch[1]) {
+        if (mediaType === 'video' || mediaType === 'audio' || mediaType === 'document') {
+            return `https://drive.google.com/uc?export=download&id=${driveMatch[1]}`;
+        }
+        return `https://lh3.googleusercontent.com/d/${driveMatch[1]}`;
+    }
+
+    if (/dropbox\.com/i.test(trimmed)) {
+        if (trimmed.includes('dl=0')) {
+            return trimmed.replace('dl=0', 'raw=1');
+        }
+        if (!trimmed.includes('raw=1')) {
+            const separator = trimmed.includes('?') ? '&' : '?';
+            return `${trimmed}${separator}raw=1`;
+        }
+    }
+
+    return trimmed;
+}
+
+export async function downloadPublicMediaForSend(rawUrl: string, fallbackType: 'image' | 'video' | 'audio' | 'document') {
+    const url = normalizeMediaUrl(rawUrl, fallbackType);
     const response = await fetch(url);
     if (!response.ok) throw new Error(`Could not download media URL: HTTP ${response.status}`);
 
     const arrayBuffer = await response.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     const contentType = response.headers.get('content-type') || '';
-    const mimeType = contentType.split(';')[0] || (
-        fallbackType === 'image' ? 'image/jpeg' :
-            fallbackType === 'video' ? 'video/mp4' :
-                fallbackType === 'audio' ? 'audio/mpeg' :
-                    'application/octet-stream'
-    );
+    let mimeType = contentType.split(';')[0].trim().toLowerCase();
+
+    // If server responded with HTML (e.g. login gate or 404 page), throw descriptive error so sender queue doesn't submit corrupted payload to Meta
+    if (mimeType.includes('text/html') || mimeType.includes('text/plain')) {
+        if (fallbackType === 'image' || fallbackType === 'video') {
+            throw new Error(`The provided ${fallbackType} URL did not return ${fallbackType} data (received ${mimeType}). Please provide a direct public ${fallbackType} link.`);
+        }
+    }
+
+    if (!mimeType || mimeType === 'application/octet-stream') {
+        mimeType = (
+            fallbackType === 'image' ? 'image/jpeg' :
+                fallbackType === 'video' ? 'video/mp4' :
+                    fallbackType === 'audio' ? 'audio/mpeg' :
+                        'application/octet-stream'
+        );
+    }
 
     let fileName = 'flow-media';
     try {
@@ -164,6 +209,7 @@ export async function sendTextMessage(to: string, body: string, phone_number_id:
         payload.context = { message_id: contextMessageId };
     }
 
+    await assertWhatsAppSendingAllowed(phone_number_id || fromId);
     const r = await fetch(url, {
         method: "POST",
         headers: {
@@ -212,6 +258,7 @@ export async function sendReactionMessage(to: string, targetMessageId: string, e
         },
     };
 
+    await assertWhatsAppSendingAllowed(phone_number_id || fromId);
     const r = await fetch(url, {
         method: "POST",
         headers: {
@@ -290,6 +337,7 @@ export async function sendInteractiveButtons(
   buttons: any[],
   footer: string = "",
   phone_number_id: string | null = null,
+  header?: any,
 ) {
   let token: string | undefined = ACCESS_TOKEN;
   let fromId: string | null | undefined = PHONE_NUMBER_ID;
@@ -325,15 +373,18 @@ export async function sendInteractiveButtons(
     // WhatsApp cta_url type — supports a single URL CTA button
     // If there are also reply buttons, we prioritize the URL button
     const urlBtn = urlButtons[0];
+    const rawUrl = String(urlBtn.url || "").trim();
+    const cleanUrl = rawUrl ? (/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`) : "";
     interactivePayload = {
       type: "cta_url",
+      ...(header ? { header } : {}),
       body: { text: body },
       ...(footer ? { footer: { text: footer } } : {}),
       action: {
         name: "cta_url",
         parameters: {
           display_text: String(urlBtn.text || "Open Link").slice(0, 20),
-          url: urlBtn.url,
+          url: cleanUrl,
         },
       },
     };
@@ -345,6 +396,7 @@ export async function sendInteractiveButtons(
     if (cleanDigits) {
       interactivePayload = {
         type: "cta_url",
+        ...(header ? { header } : {}),
         body: { text: body },
         ...(footer ? { footer: { text: footer } } : {}),
         action: {
@@ -358,6 +410,7 @@ export async function sendInteractiveButtons(
     } else {
       interactivePayload = {
         type: "button",
+        ...(header ? { header } : {}),
         body: { text: body },
         ...(footer ? { footer: { text: footer } } : {}),
         action: {
@@ -373,18 +426,39 @@ export async function sendInteractiveButtons(
     }
   } else {
     // Standard quick-reply buttons
+    const seenReplyTitles = new Set<string>();
+    const sanitizedReplyButtons: any[] = [];
+    const slicedReplies = replyButtons.slice(0, 3);
+    for (let idx = 0; idx < slicedReplies.length; idx++) {
+      const b = slicedReplies[idx];
+      let rawTitle = String(b.text || b.title || b.id || `Option ${idx + 1}`).trim().slice(0, 20);
+      if (!rawTitle) rawTitle = `Option ${idx + 1}`;
+      let finalTitle = rawTitle;
+      if (seenReplyTitles.has(finalTitle.toLowerCase())) {
+        const suffix = ` (${idx + 1})`;
+        const maxLen = 20 - suffix.length;
+        finalTitle = rawTitle.slice(0, maxLen).trim() + suffix;
+        if (seenReplyTitles.has(finalTitle.toLowerCase())) {
+          finalTitle = `Option ${idx + 1}`.slice(0, 20);
+        }
+      }
+      seenReplyTitles.add(finalTitle.toLowerCase());
+      sanitizedReplyButtons.push({
+        type: "reply",
+        reply: {
+          id: String(b.id || b.text || `btn_${idx + 1}`).slice(0, 256),
+          title: finalTitle,
+        },
+      });
+    }
+
     interactivePayload = {
       type: "button",
+      ...(header ? { header } : {}),
       body: { text: body },
       ...(footer ? { footer: { text: footer } } : {}),
       action: {
-        buttons: replyButtons.slice(0, 3).map((b) => ({
-          type: "reply",
-          reply: {
-            id: String(b.id || b.text || "").slice(0, 256),
-            title: String(b.text || b.title || b.id || "Option").slice(0, 20),
-          },
-        })),
+        buttons: sanitizedReplyButtons,
       },
     };
   }
@@ -397,6 +471,7 @@ export async function sendInteractiveButtons(
     interactive: interactivePayload,
   };
 
+  await assertWhatsAppSendingAllowed(fromId);
   const r = await fetch(url, {
     method: "POST",
     headers: {
@@ -460,6 +535,7 @@ export async function sendInteractiveList(
     }
   };
 
+  await assertWhatsAppSendingAllowed(fromId);
   const r = await fetch(url, {
     method: "POST",
     headers: {
@@ -522,7 +598,9 @@ export async function sendTypingIndicator(params: {
       payload.to = to;
     }
 
-    const res = await fetchWithMetaBackoff(url, {
+    await assertWhatsAppSendingAllowed(phone_number_id);
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(10_000),
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,

@@ -24,12 +24,14 @@ workers.push(new Worker(BROADCAST_PREPARE_QUEUE, async (job: any) => {
     try {
         await prepareCampaignForQueue(job.data.campaignId);
     } catch (error: any) {
-        await supabase.from('w_campaigns').update({
+        const { data: failingCampaign, error: updateError } = await supabase.from('w_campaigns').update({
             status: 'cancelling',
             queue_error: error.message || 'Campaign preparation failed',
             last_progress_at: new Date().toISOString(),
-        }).eq('id', job.data.campaignId);
+        }).eq('id', job.data.campaignId).not('status', 'in', '(cancelled,cancelling)').select('id').maybeSingle();
+        if (updateError) throw updateError;
         await cancelCampaignRecipients(job.data.campaignId);
+        if (!failingCampaign) return;
         await supabase.from('w_campaigns').update({
             status: 'failed',
             queue_error: error.message || 'Campaign preparation failed',
@@ -93,6 +95,13 @@ workers.push(new Worker(BROADCAST_RECONCILE_QUEUE, async () => {
             status: 'retrying', retry_after: new Date().toISOString(), error_class: 'stale_worker',
         }).eq('id', row.id).eq('status', 'processing');
         await dispatchCampaignWindow(row.campaign_id);
+    }
+
+    const { data: cancelling, error } = await supabase.from('w_campaigns')
+        .select('id').eq('status', 'cancelling').gte('schema_version', 2).limit(50);
+    if (error) throw error;
+    for (const campaign of cancelling || []) {
+        await cancelCampaignRecipients(campaign.id);
     }
 }, { connection, concurrency: 1 }));
 

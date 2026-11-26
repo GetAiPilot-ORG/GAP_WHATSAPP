@@ -6,8 +6,6 @@ import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { motion as Motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
-
-gsap.registerPlugin(useGSAP);
 import FlowEditor from '../components/flow-builder/FlowEditor';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
@@ -15,6 +13,8 @@ import { useWhatsAppAccounts } from '../context/WhatsAppAccountContext';
 import { notify } from '../services/notificationService';
 import { FLOW_TEMPLATE_CATEGORIES, FLOW_TEMPLATES, buildFlowFromTemplate } from '../components/flow-builder/flowTemplates';
 import { BACKEND_URL as API_URL } from '../config/api';
+
+gsap.registerPlugin(useGSAP);
 
 
 function FlowBuilderLoading() {
@@ -54,6 +54,7 @@ export default function FlowBuilder() {
     const [newFlowDescription, setNewFlowDescription] = useState('');
     const [newFlowAccountScope, setNewFlowAccountScope] = useState('all');
     const [newFlowAccountIds, setNewFlowAccountIds] = useState([]);
+    const [isSubmittingFlow, setIsSubmittingFlow] = useState(false);
     const [loading, setLoading] = useState(true);
     const [flowsError, setFlowsError] = useState('');
     const [runsModalFlow, setRunsModalFlow] = useState(null);
@@ -162,7 +163,8 @@ export default function FlowBuilder() {
     };
 
     const handleCreateFlow = async () => {
-        if (!newFlowName.trim()) return;
+        if (isSubmittingFlow || !newFlowName.trim()) return;
+        setIsSubmittingFlow(true);
 
         const newFlow = {
             name: newFlowName,
@@ -179,7 +181,10 @@ export default function FlowBuilder() {
             const res = await axios.post(`${API_URL}/api/flows`, newFlow, {
                 headers: { 'Authorization': `Bearer ${session?.access_token}` }
             });
-            setFlows([res.data, ...flows]);
+            setFlows((prev) => {
+                const exists = prev.some(f => f.id === res.data.id);
+                return exists ? prev : [res.data, ...prev];
+            });
             setShowCreateModal(false);
             setNewFlowName('');
             setNewFlowQuickReply(null);
@@ -190,6 +195,8 @@ export default function FlowBuilder() {
         } catch (error) {
             console.error('Failed to create flow', error);
             alertDialog('Error creating flow', { title: 'Create flow failed', tone: 'danger' });
+        } finally {
+            setIsSubmittingFlow(false);
         }
     };
 
@@ -214,6 +221,15 @@ export default function FlowBuilder() {
     };
 
     const handleDuplicateFlow = async (flow) => {
+        if (isSubmittingFlow) return;
+        const confirmed = await confirmDialog(`Do you want to duplicate "${flow.name}"?`, {
+            title: 'Duplicate flow',
+            tone: 'info',
+            confirmLabel: 'Duplicate',
+        });
+        if (!confirmed) return;
+
+        setIsSubmittingFlow(true);
         const duplicate = {
             name: `${flow.name} (Copy)`,
             description: flow.description,
@@ -228,9 +244,12 @@ export default function FlowBuilder() {
             const res = await axios.post(`${API_URL}/api/flows`, duplicate, {
                 headers: { 'Authorization': `Bearer ${session?.access_token}` }
             });
-            setFlows([res.data, ...flows]);
+            setFlows((prev) => [res.data, ...prev]);
         } catch (error) {
             console.error('Failed to duplicate flow', error);
+            alertDialog('Failed to duplicate flow', { title: 'Duplicate failed', tone: 'danger' });
+        } finally {
+            setIsSubmittingFlow(false);
         }
     };
 
@@ -261,19 +280,25 @@ export default function FlowBuilder() {
     const qrAccounts = waAccounts.filter(account => !account.whatsapp_business_account_id);
 
     const handleCreateFromTemplate = async () => {
-        if (!selectedTemplate) return;
+        if (isSubmittingFlow || !selectedTemplate) return;
+        setIsSubmittingFlow(true);
         const newFlow = buildFlowFromTemplate(selectedTemplate, templateDraft);
 
         try {
             const res = await axios.post(`${API_URL}/api/flows`, newFlow, {
                 headers: { 'Authorization': `Bearer ${session?.access_token}` }
             });
-            setFlows([res.data, ...flows]);
+            setFlows((prev) => {
+                const exists = prev.some(f => f.id === res.data.id);
+                return exists ? prev : [res.data, ...prev];
+            });
             setShowTemplatesModal(false);
             setEditingFlow(res.data);
         } catch (error) {
             console.error('Failed to create flow from template', error);
             alertDialog('Error creating template flow', { title: 'Template flow failed', tone: 'danger' });
+        } finally {
+            setIsSubmittingFlow(false);
         }
     };
 
@@ -800,11 +825,11 @@ export default function FlowBuilder() {
                                     <Motion.button
                                         whileTap={{ scale: 0.97 }}
                                         onClick={handleCreateFlow}
-                                        disabled={!newFlowName.trim() || (newFlowAccountScope === 'selected' && newFlowAccountIds.length === 0)}
+                                        disabled={isSubmittingFlow || !newFlowName.trim() || (newFlowAccountScope === 'selected' && newFlowAccountIds.length === 0)}
                                         className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
                                     >
                                         <Plus className="h-4 w-4" />
-                                        Create Flow
+                                        {isSubmittingFlow ? 'Creating...' : 'Create Flow'}
                                     </Motion.button>
                                 </div>
                             </Motion.div>

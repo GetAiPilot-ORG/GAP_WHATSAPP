@@ -6,7 +6,7 @@ import clsx from 'clsx'
 export default function Modal({ isOpen, onClose, title, children, maxWidth = 'max-w-md', panelClassName = '' }) {
     return (
         <Transition show={isOpen} as={Fragment}>
-            <Dialog as="div" className="relative z-50" onClose={onClose}>
+            <Dialog as="div" className="relative z-[100000]" onClose={onClose}>
                 <Transition.Child
                     as={Fragment}
                     enter="ease-out duration-300"

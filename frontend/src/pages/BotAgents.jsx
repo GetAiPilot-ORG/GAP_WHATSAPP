@@ -3,8 +3,6 @@ import InfoHelp from '../components/InfoHelp'
 import { useEffect, useMemo, useRef, useState, Fragment } from 'react'
 import { gsap } from 'gsap'
 import { useGSAP } from '@gsap/react'
-
-gsap.registerPlugin(useGSAP);
 import { Dialog as HeadlessDialog, Transition as HeadlessTransition } from '@headlessui/react'
 import {
     AlertCircle,
@@ -36,6 +34,8 @@ import { useAuth } from '../context/AuthContext'
 import { useDialog } from '../context/DialogContext'
 import { FALLBACK_PLANS } from '../config/whatsappPricing'
 import { BACKEND_URL as BACKEND_BASE, API_BASE } from '../config/api'
+
+gsap.registerPlugin(useGSAP);
 
 const MODELS = [
     { value: 'gpt-4o-mini', label: 'GPT-4o Mini', helper: 'Fast support replies' },

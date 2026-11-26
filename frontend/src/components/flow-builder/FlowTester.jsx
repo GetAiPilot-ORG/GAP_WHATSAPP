@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { X, Send, User, Bot, RefreshCw, List } from 'lucide-react';
+import { X, Send, User, Bot, RefreshCw, List, ExternalLink } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
+import { normalizeMediaUrl } from '../../utils/mediaUrlHelper';
 
 export default function FlowTester({ flow, isOpen, onClose }) {
     const { session } = useAuth();
@@ -64,9 +65,11 @@ export default function FlowTester({ flow, isOpen, onClose }) {
                 data.media.forEach((m, idx) => {
                     setMessages(prev => [...prev, {
                         id: Date.now().toString() + 'media' + idx,
-                        text: m.caption || `[Media: ${m.type}]`,
-                        mediaUrl: m.url,
+                        text: m.caption || '',
+                        mediaUrl: normalizeMediaUrl(m.url, m.type),
                         mediaType: m.type,
+                        buttonUrl: m.buttonUrl,
+                        buttonText: m.buttonText,
                         sender: 'bot',
                         time: new Date()
                     }]);
@@ -85,7 +88,7 @@ export default function FlowTester({ flow, isOpen, onClose }) {
 
             setTestState({
                 currentNodeId: data.currentNodeId,
-                flowState: data.flowState || {}
+                flowState: data.flowState || data.state || {}
             });
 
         } catch (error) {
@@ -150,25 +153,58 @@ export default function FlowTester({ flow, isOpen, onClose }) {
                                 <div className={`min-w-[75px] max-w-[85%] rounded-2xl px-3.5 py-2 shadow-sm text-[14px] relative ${msg.sender === 'user' ? 'bg-[#dcf8c6] rounded-tr-sm' : msg.isError ? 'bg-red-50 text-red-800 border border-red-200 rounded-tl-sm' : 'bg-white rounded-tl-sm'}`}>
                                     {msg.mediaUrl && (
                                         <div className="mb-2 rounded overflow-hidden">
-                                            {msg.mediaType === 'image' ? <img src={msg.mediaUrl} alt="media" className="w-full h-auto" /> : 
+                                            {msg.mediaType === 'image' ? (
+                                                <img
+                                                    src={msg.mediaUrl}
+                                                    alt="media"
+                                                    referrerPolicy="no-referrer"
+                                                    loading="lazy"
+                                                    className="w-full h-auto object-cover"
+                                                    onError={(e) => {
+                                                        e.target.style.display = 'none';
+                                                        if (e.target.nextSibling) e.target.nextSibling.style.display = 'block';
+                                                    }}
+                                                />
+                                            ) : 
                                              msg.mediaType === 'video' ? <video src={msg.mediaUrl} controls className="w-full" /> :
                                              <a href={msg.mediaUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline">View {msg.mediaType}</a>}
+                                            <div className="hidden p-3 text-xs text-gray-400 italic bg-gray-50 text-center">
+                                                [Image unavailable]
+                                            </div>
                                         </div>
                                     )}
-                                    <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+                                    {msg.text ? <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p> : null}
                                     
+                                    {/* Render Media CTA Button */}
+                                    {msg.buttonUrl && (
+                                        <div className="mt-2.5 pt-2 border-t border-gray-100">
+                                            <a 
+                                                href={msg.buttonUrl} 
+                                                target="_blank" 
+                                                rel="noreferrer"
+                                                className="flex items-center justify-center gap-1.5 w-full py-2 px-3 bg-[#e7f3fa] text-[#008069] font-medium rounded-lg border border-[#c4e1f3] shadow-xs hover:bg-[#d4e9f7] transition-colors text-sm text-center"
+                                            >
+                                                <ExternalLink className="h-3.5 w-3.5" />
+                                                <span>{msg.buttonText || 'Visit Website'}</span>
+                                            </a>
+                                        </div>
+                                    )}
+
                                     {/* Render Buttons */}
                                     {msg.buttons && msg.buttons.length > 0 && (
                                         <div className="mt-3 flex flex-col gap-2">
-                                            {msg.buttons.map((btn, i) => (
-                                                <button 
-                                                    key={i} 
-                                                    onClick={() => handleSend(null, btn)}
-                                                    className="w-full py-2 px-3 bg-[#e7f3fa] text-[#008069] font-medium rounded-lg border border-[#c4e1f3] shadow-sm hover:bg-[#d4e9f7] transition-colors text-sm text-center"
-                                                >
-                                                    {btn}
-                                                </button>
-                                            ))}
+                                            {msg.buttons.map((btn, i) => {
+                                                const btnLabel = typeof btn === 'string' ? btn : (btn?.text || `Option ${i + 1}`);
+                                                return (
+                                                    <button 
+                                                        key={i} 
+                                                        onClick={() => handleSend(null, btnLabel)}
+                                                        className="w-full py-2 px-3 bg-[#e7f3fa] text-[#008069] font-medium rounded-lg border border-[#c4e1f3] shadow-sm hover:bg-[#d4e9f7] transition-colors text-sm text-center"
+                                                    >
+                                                        {btnLabel}
+                                                    </button>
+                                                );
+                                            })}
                                         </div>
                                     )}
 

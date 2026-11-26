@@ -1,3 +1,4 @@
+import { assertWhatsAppSendingAllowed } from './whatsappOffboarding.service.js';
 import { supabase, MEDIA_BUCKET } from '../config/supabase.js';
 import { getOrganizationPlanLimits } from './billing.service.js';
 import { getActiveWhatsappRate, normalizeWhatsappBillingCategory } from './messages.service.js';
@@ -270,7 +271,11 @@ export async function processCampaign(campaign: any) {
             }
         }
 
-        await supabase.from('w_campaigns').update({ status: 'processing' }).eq('id', campaign.id);
+        const { data: processing, error: processingError } = await supabase.from('w_campaigns')
+            .update({ status: 'processing' }).eq('id', campaign.id)
+            .not('status', 'in', '(cancelled,cancelling)').select('id').maybeSingle();
+        if (processingError) throw processingError;
+        if (!processing) return;
 
         const orgId = campaign.organization_id;
         const wa_account_id = campaign.wa_account_id;
@@ -350,9 +355,9 @@ export async function processCampaign(campaign: any) {
 
         for (const contact of contactsToProcess) {
             processed++;
-            if (processed % 10 === 0) {
+            if (processed % 10 === 0 || processed === 1) {
                 const { data: checkCamp } = await supabase.from('w_campaigns').select('status').eq('id', campaign.id).maybeSingle();
-                if (checkCamp && (checkCamp.status === 'cancelled' || checkCamp.status === 'paused')) {
+                if (checkCamp && (['cancelled', 'cancelling', 'paused'].includes(checkCamp.status))) {
                     isCancelled = true;
                     console.log(`[processCampaign] Campaign ${campaign.id} was cancelled/paused. Stopping.`);
                     break;
@@ -471,6 +476,7 @@ export async function processCampaign(campaign: any) {
                     components_count: components.length,
                 });
 
+                await assertWhatsAppSendingAllowed(phone_number_id);
                 const response = await fetch(`https://graph.facebook.com/v21.0/${phone_number_id}/messages`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -634,7 +640,7 @@ export async function processCampaign(campaign: any) {
             sent_count: sent,
             failed_count: failed,
             results: results
-        }).eq('id', campaign.id);
+        }).eq('id', campaign.id).not('status', 'in', '(cancelled,cancelling)');
 
         await supabase.from('w_campaigns').update({
             actual_cost_paise: sent * Number(campaignRate.rate_paise || 0),
@@ -671,7 +677,7 @@ export async function processCampaign(campaign: any) {
 
     } catch (err) {
         console.error('Error processing campaign:', campaign.id, err);
-        await supabase.from('w_campaigns').update({ status: 'failed' }).eq('id', campaign.id);
+        await supabase.from('w_campaigns').update({ status: 'failed' }).eq('id', campaign.id).not('status', 'in', '(cancelled,cancelling)');
         
         try {
             const { sendTransactionalEmail } = await import('./supermailbox.service.js');

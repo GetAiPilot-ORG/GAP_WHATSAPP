@@ -86,12 +86,14 @@ export default function MeetingWaitingRoom() {
         return { days, hours, minutes, seconds }
     }, [timeStatus])
 
-    // Platform logo detection
+    // Platform brand detection for all meeting types
     const platform = useMemo(() => {
         const lower = rawLink.toLowerCase()
         if (lower.includes('meet.google.com')) return { name: 'Google Meet', color: 'text-emerald-700 bg-emerald-50 border-emerald-200' }
         if (lower.includes('zoom.us')) return { name: 'Zoom', color: 'text-blue-700 bg-blue-50 border-blue-200' }
-        if (lower.includes('teams.microsoft.com')) return { name: 'MS Teams', color: 'text-indigo-700 bg-indigo-50 border-indigo-200' }
+        if (lower.includes('teams.microsoft.com') || lower.includes('teams.live.com')) return { name: 'MS Teams', color: 'text-indigo-700 bg-indigo-50 border-indigo-200' }
+        if (lower.includes('meet.jit.si') || lower.includes('jitsi')) return { name: 'Jitsi Meet', color: 'text-cyan-700 bg-cyan-50 border-cyan-200' }
+        if (lower.includes('webex.com')) return { name: 'Webex', color: 'text-sky-700 bg-sky-50 border-sky-200' }
         return { name: 'Dedicated Video Room', color: 'text-purple-700 bg-purple-50 border-purple-200' }
     }, [rawLink])
 
