@@ -363,8 +363,20 @@ export async function storeMessage(params: {
         ? supabase.from('w_messages').upsert(payload, { onConflict: 'wa_message_id' })
         : supabase.from('w_messages').insert(payload);
 
-    const { data, error } = await op.select('id, wa_message_id, created_at').maybeSingle();
-    if (error) console.error("Store Message Error:", error);
+    let { data, error } = await op.select('id, wa_message_id, created_at').maybeSingle();
+    if (error) {
+        console.error("Store Message Error on upsert:", error);
+        // Fallback: if ON CONFLICT failed (e.g. missing constraint or conflict syntax), try plain insert
+        if (params.wa_message_id) {
+            const fallback = await supabase.from('w_messages').insert(payload).select('id, wa_message_id, created_at').maybeSingle();
+            if (!fallback.error) {
+                data = fallback.data;
+                error = null;
+            } else {
+                console.error("Store Message Fallback Insert Error:", fallback.error);
+            }
+        }
+    }
     return data;
 }
 

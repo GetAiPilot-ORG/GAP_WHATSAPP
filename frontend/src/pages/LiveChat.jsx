@@ -876,6 +876,7 @@ export default function LiveChat() {
         return {
             id: m.id,
             wa_message_id: m.wa_message_id,
+            clientMessageId: m.clientMessageId || m.client_message_id || m.content?.client_message_id || m.metadata?.client_message_id || null,
             createdAt,
             text: typeof captionOrText === 'string' ? captionOrText : String(captionOrText || ''),
             mediaUrl,
@@ -930,23 +931,66 @@ export default function LiveChat() {
                 if (key) seen.add(key)
                 next.push(msg)
             }
+
+            // Preserve active in-flight optimistic messages (< 60s old) that haven't been reconciled yet
+            const now = Date.now()
+            for (const cur of current) {
+                if (cur.optimistic && (cur.status === 'sending' || cur.status === 'sent')) {
+                    const age = now - (cur.createdAt?.getTime?.() || now)
+                    if (age < 60000) {
+                        const alreadyInNext = next.some(n => 
+                            (cur.clientMessageId && n.clientMessageId && cur.clientMessageId === n.clientMessageId) ||
+                            (cur.wa_message_id && n.wa_message_id && cur.wa_message_id === n.wa_message_id) ||
+                            (cur.text && n.text && cur.text.trim() === n.text.trim() && Math.abs((cur.createdAt?.getTime?.() || 0) - (n.createdAt?.getTime?.() || 0)) < 30000)
+                        )
+                        if (!alreadyInNext) {
+                            next.push(cur)
+                        }
+                    }
+                }
+            }
+
             return next.sort((a, b) => (a.createdAt?.getTime?.() || 0) - (b.createdAt?.getTime?.() || 0))
         }
 
         const merged = [...current]
         for (const msg of list) {
-            const key = getMessageKey(msg)
             const idx = merged.findIndex(item => {
+                // 1. Exact clientMessageId match
+                if (msg.clientMessageId && item.clientMessageId && msg.clientMessageId === item.clientMessageId) return true
+
+                // 2. Exact wa_message_id match
+                if (msg.wa_message_id && item.wa_message_id && msg.wa_message_id === item.wa_message_id) return true
+
+                // 3. Exact database ID match
+                if (msg.id && item.id && String(msg.id) === String(item.id)) return true
+
+                // 4. Unified message key match
+                const key = getMessageKey(msg)
                 const itemKey = getMessageKey(item)
                 if (key && itemKey && itemKey === key) return true
-                const sameClientId = msg.clientMessageId && item.clientMessageId && msg.clientMessageId === item.clientMessageId
-                if (sameClientId) return true
-                const bothOutboundText = item.sender === 'agent' && msg.sender === 'agent' && item.text && item.text === msg.text
+
+                // 5. Match outbound text (optimistic bubble reconciling with incoming socket or DB confirm)
+                const bothOutbound = (item.sender === 'agent' || item.direction === 'outbound') && 
+                                     (msg.sender === 'agent' || msg.direction === 'outbound')
+                const textMatch = item.text && msg.text && item.text.trim() === msg.text.trim()
                 const timeDelta = Math.abs((item.createdAt?.getTime?.() || 0) - (msg.createdAt?.getTime?.() || 0))
-                return bothOutboundText && item.optimistic && timeDelta < 15000
+                
+                return bothOutbound && textMatch && timeDelta < 30000
             })
-            if (idx >= 0) merged[idx] = { ...merged[idx], ...msg, optimistic: false }
-            else merged.push(msg)
+
+            if (idx >= 0) {
+                merged[idx] = { 
+                    ...merged[idx], 
+                    ...msg, 
+                    optimistic: false, 
+                    clientMessageId: merged[idx].clientMessageId || msg.clientMessageId || null,
+                    wa_message_id: msg.wa_message_id || merged[idx].wa_message_id || null,
+                    id: (msg.id && !String(msg.id).startsWith('socket-') && !String(msg.id).startsWith('client-')) ? msg.id : merged[idx].id
+                }
+            } else {
+                merged.push(msg)
+            }
         }
 
         merged.sort((a, b) => (a.createdAt?.getTime?.() || 0) - (b.createdAt?.getTime?.() || 0))
@@ -958,7 +1002,7 @@ export default function LiveChat() {
         return {
             id: msg.message_id || msg.id || msg.wa_message_id || `socket-${createdAt.getTime()}`,
             wa_message_id: msg.wa_message_id || null,
-            clientMessageId: msg.client_message_id || msg.content?.client_message_id || msg.metadata?.client_message_id || null,
+            clientMessageId: msg.client_message_id || msg.clientMessageId || msg.content?.client_message_id || msg.metadata?.client_message_id || null,
             createdAt,
             text: msg.text || msg.content?.text || msg.content?.caption || '',
             sender: msg.sender || 'user',

@@ -400,7 +400,9 @@ export async function sendOutboundMessage(
       conversation_id: conversationId,
       contact_id: contactId,
       message_id: storedMessageId,
+      id: storedMessageId,
       wa_message_id: waMessageId,
+      client_message_id: clientMessageId || null,
       created_at: stored?.created_at || new Date().toISOString(),
       connectedAccount: accountRow?.display_phone_number || accountPhoneOrId,
       type,
@@ -408,6 +410,7 @@ export async function sendOutboundMessage(
       mime_type: media?.mimeType || null,
       file_name: media?.fileName || null,
       is_bot_reply: isBotReply,
+      content: contentPayload,
       metadata: stored?.metadata || metadata,
     });
   }
