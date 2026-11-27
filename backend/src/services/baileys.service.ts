@@ -41,9 +41,8 @@ import { shouldRunBaileysBotAutomation } from '../utils/format.js';
 import { performAutoAssignment } from './assignment.service.js';
 import { sendPushNotificationToOrg } from './push.service.js';
 import { transcribeAudioBuffer } from './voice.service.js';
+import { setBotDebounce, clearBotDebounce, getBotLock, setBotLock } from './botDebounce.service.js';
 
-const botDebounceMap = new Map<string, NodeJS.Timeout>();
-const botLockMap = new Map<string, Promise<void>>();
 const processedBaileysMessages = new Map<string, number>();
 
 setInterval(() => {
@@ -959,15 +958,13 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                         console.error('Failed to send composing presence', e);
                                     }
 
-                                    if (botDebounceMap.has(debounceKey)) {
-                                        clearTimeout(botDebounceMap.get(debounceKey)!);
-                                    }
+                                    clearBotDebounce(debounceKey);
 
-                                    botDebounceMap.set(debounceKey, setTimeout(async () => {
-                                        botDebounceMap.delete(debounceKey);
+                                    setBotDebounce(debounceKey, setTimeout(async () => {
+                                        clearBotDebounce(debounceKey);
                                         
                                         // Ensure sequential execution of AI generation for the same conversation
-                                        let prevPromise = botLockMap.get(debounceKey) || Promise.resolve();
+                                        let prevPromise = getBotLock(debounceKey);
                                         
                                         const nextPromise = prevPromise.then(async () => {
                                             try {
@@ -1065,7 +1062,7 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                             console.error("Queue execution error:", err);
                                         });
 
-                                        botLockMap.set(debounceKey, nextPromise);
+                                        setBotLock(debounceKey, nextPromise);
                                         
                                     }, 1500));
                                 }
