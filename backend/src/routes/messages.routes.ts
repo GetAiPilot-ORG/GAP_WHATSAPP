@@ -17,6 +17,10 @@ router.post('/n8n/conversations/:conversationId/summary', postSummary); // Webho
 
 router.post('/conversations/:conversationId/send', authMiddleware, sendMessage);
 router.post('/conversations/:conversationId/send-media', authMiddleware, upload.single('file'), sendMediaMessage);
+router.post('/messages/audio', authMiddleware, upload.single('file'), (req, res) => {
+    req.params.conversationId = req.body.conversation_id;
+    return sendMediaMessage(req, res);
+});
 router.post('/conversations/:id/read', authMiddleware, markAsRead);
 
 export default router;

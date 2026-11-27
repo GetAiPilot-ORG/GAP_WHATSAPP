@@ -49,7 +49,7 @@ export interface OutboundDispatchParams {
   forwardFromMessageId?: string | null;
   clientMessageId?: string | null;
 
-  senderType?: 'user' | 'agent' | 'ai_agent' | 'system';
+  senderType?: 'user' | 'agent' | 'human_agent' | 'ai_agent' | 'system';
   automationSource?: 'flow' | 'ai_agent' | 'campaign' | 'manual';
   isBotReply?: boolean;
   metadata?: Record<string, any>;
@@ -139,7 +139,7 @@ export async function sendOutboundMessage(
     replyToWaMessageId,
     forwardFromMessageId,
     clientMessageId,
-    senderType = 'agent',
+    senderType = 'human_agent',
     automationSource,
     isBotReply = false,
     metadata = {},
@@ -368,7 +368,7 @@ export async function sendOutboundMessage(
       content: contentPayload,
       status: 'sent',
       is_bot_reply: isBotReply,
-      sender_type: senderType,
+      sender_type: senderType === 'agent' ? 'human_agent' : senderType,
       automation_source: automationSource,
       metadata: {
         ...metadata,
@@ -396,7 +396,7 @@ export async function sendOutboundMessage(
       from: accountRow?.display_phone_number || accountPhoneOrId,
       phone: to,
       text: preview,
-      sender: senderType === 'user' ? 'agent' : senderType,
+      sender: senderType === 'user' || senderType === 'human_agent' ? 'agent' : senderType,
       conversation_id: conversationId,
       contact_id: contactId,
       message_id: storedMessageId,

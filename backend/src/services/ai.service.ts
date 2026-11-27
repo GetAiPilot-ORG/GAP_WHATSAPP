@@ -645,7 +645,7 @@ export async function getBotAgentReply(params: {
     // First check conversation eligibility (skip groups/channels and paused chats)
     const { data: conv, error: convErr } = await supabase
       .from("w_conversations")
-      .select("bot_enabled, assigned_bot_id, contact_id, contact:w_contacts(contact_type, wa_id)")
+      .select("bot_enabled, assigned_bot_id, handoff_status, contact_id, contact:w_contacts(contact_type, wa_id)")
       .eq("id", conversation_id)
       .single();
 

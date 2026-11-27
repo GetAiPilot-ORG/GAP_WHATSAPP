@@ -291,6 +291,9 @@ export const updateConversationBot = async (req: any, res: Response) => {
     
     if (typeof bot_enabled === "boolean") {
       updates.bot_enabled = bot_enabled;
+      if (bot_enabled) {
+        updates.handoff_status = 'bot_active';
+      }
     }
     if (assigned_bot_id !== undefined) {
       updates.assigned_bot_id = assigned_bot_id || null;

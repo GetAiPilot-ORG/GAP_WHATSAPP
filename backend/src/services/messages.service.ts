@@ -285,10 +285,10 @@ export async function storeMessage(params: {
     status: "sent" | "delivered" | "read" | "failed";
     is_bot_reply?: boolean;
     bot_agent_id?: string | null;
-    sender_type?: "customer" | "human_agent" | "ai_agent" | "system";
+    sender_type?: "customer" | "human_agent" | "ai_agent" | "system" | "agent" | "user" | string;
     sender_user_id?: string | null;
     is_internal_note?: boolean;
-    automation_source?: "flow" | "ai_agent" | "broadcast" | "manual" | "webhook" | "n8n" | "system" | null;
+    automation_source?: "flow" | "ai_agent" | "broadcast" | "manual" | "webhook" | "n8n" | "system" | string | null;
     handoff_triggered?: boolean;
     metadata?: any;
 }) {
@@ -304,14 +304,35 @@ export async function storeMessage(params: {
         || !!params.bot_agent_id
         || !!params.content?.bot_agent_id;
     const botAgentId = params.bot_agent_id || params.content?.bot_agent_id || null;
-    const senderType = params.sender_type
-        || (params.is_internal_note ? 'system' : null)
-        || (params.direction === 'inbound' ? 'customer' : null)
-        || (isBotReply ? 'ai_agent' : 'human_agent');
-    const automationSource = params.automation_source
+
+    // Strictly normalize sender_type to satisfy DB constraint:
+    // CHECK (sender_type IN ('customer', 'human_agent', 'ai_agent', 'system'))
+    let senderType: 'customer' | 'human_agent' | 'ai_agent' | 'system';
+    const rawSender = String(params.sender_type || '').toLowerCase().trim();
+
+    if (rawSender === 'customer' || (params.direction === 'inbound' && !rawSender)) {
+        senderType = 'customer';
+    } else if (rawSender === 'system' || params.is_internal_note) {
+        senderType = 'system';
+    } else if (rawSender === 'ai_agent' || isBotReply) {
+        senderType = 'ai_agent';
+    } else if (rawSender === 'human_agent' || rawSender === 'agent' || rawSender === 'user' || params.direction === 'outbound') {
+        senderType = 'human_agent';
+    } else {
+        senderType = params.direction === 'inbound' ? 'customer' : 'human_agent';
+    }
+
+    // Strictly normalize automation_source to satisfy DB constraint:
+    // CHECK (automation_source IN ('flow', 'ai_agent', 'broadcast', 'manual', 'webhook', 'n8n', 'system'))
+    let automationSource = params.automation_source
         || (params.content?.is_flow ? 'flow' : null)
         || (isBotReply ? 'ai_agent' : null)
         || (params.direction === 'outbound' ? 'manual' : 'webhook');
+
+    const validSources = new Set(['flow', 'ai_agent', 'broadcast', 'manual', 'webhook', 'n8n', 'system']);
+    if (automationSource && !validSources.has(automationSource)) {
+        automationSource = params.direction === 'outbound' ? 'manual' : 'webhook';
+    }
 
     const payload = {
         organization_id: params.organization_id,

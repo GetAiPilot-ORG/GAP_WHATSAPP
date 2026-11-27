@@ -8,6 +8,7 @@ import { performAutoAssignment } from './assignment.service.js';
 import { uploadMediaToStorage } from './broadcast.service.js';
 import { processFlowEngine } from './flows.service.js';
 import { getBotAgentReply } from './ai.service.js';
+import { setBotDebounce, clearBotDebounce, getBotLock, setBotLock } from './botDebounce.service.js';
 import { sendPushNotificationToOrg } from './push.service.js';
 import { sendOutboundMessage } from './outboundDispatch.service.js';
 import { isGroupOrChannelWaId, isNonIndividualThreadContact } from '../utils/format.js';
@@ -62,9 +63,6 @@ export interface InboundIngestionResult {
   flowTriggered?: boolean;
   botReplied?: boolean;
 }
-
-const botDebounceMap = new Map<string, NodeJS.Timeout>();
-const botLockMap = new Map<string, Promise<void>>();
 
 /**
  * Deep Inbound Ingestion Module.
@@ -415,16 +413,14 @@ export async function ingestInboundMessage(
           }).catch(() => {});
         }
 
-        if (botDebounceMap.has(debounceKey)) {
-          clearTimeout(botDebounceMap.get(debounceKey)!);
-        }
+        clearBotDebounce(debounceKey);
 
-        botDebounceMap.set(
+        setBotDebounce(
           debounceKey,
           setTimeout(async () => {
-            botDebounceMap.delete(debounceKey);
+            clearBotDebounce(debounceKey);
 
-            const prevPromise = botLockMap.get(debounceKey) || Promise.resolve();
+            const prevPromise = getBotLock(debounceKey);
             const nextPromise = prevPromise.then(async () => {
               try {
                 const botResult = await getBotAgentReply({
@@ -491,7 +487,7 @@ export async function ingestInboundMessage(
               }
             });
 
-            botLockMap.set(debounceKey, nextPromise);
+            setBotLock(debounceKey, nextPromise);
             await nextPromise;
           }, 1500)
         );
