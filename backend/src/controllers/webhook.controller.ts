@@ -11,6 +11,7 @@ import { sendTextMessage, applyReactionUpdate, downloadMetaMedia, sendInteractiv
 import { processFlowEngine } from '../services/flows.service.js';
 import { upsertContact } from '../services/contacts.service.js';
 import { getBotAgentReply } from '../services/ai.service.js';
+import { setBotDebounce, clearBotDebounce, getBotLock, setBotLock } from '../services/botDebounce.service.js';
 import { normalizeMetaTemplateStatus, upsertLocalTemplateSubmission } from './whatsapp.controller.js';
 import { encryptToken } from '../utils/crypto.js';
 import { isGroupOrChannelWaId, isNonIndividualThreadContact } from '../utils/format.js';
@@ -22,8 +23,6 @@ const APP_SECRET = process.env.META_APP_SECRET;
 const ACCESS_TOKEN = process.env.WA_ACCESS_TOKEN;
 const WEBHOOK_DEBUG = String(process.env.WEBHOOK_DEBUG || "true").toLowerCase() !== "false";
 
-const botDebounceMap = new Map<string, NodeJS.Timeout>();
-const botLockMap = new Map<string, Promise<void>>();
 const processedWebhookMessages = new Map<string, number>();
 
 // Periodic cleanup of deduplication cache (keep IDs for 15 minutes)
@@ -107,17 +106,15 @@ export function queueBotAgentReply(params: {
   }
 
   const debounceKey = conv.id;
-  if (botDebounceMap.has(debounceKey)) {
-    clearTimeout(botDebounceMap.get(debounceKey)!);
-  }
+  clearBotDebounce(debounceKey);
 
-  botDebounceMap.set(
+  setBotDebounce(
     debounceKey,
     setTimeout(async () => {
-      botDebounceMap.delete(debounceKey);
+      clearBotDebounce(debounceKey);
 
       // Ensure sequential processing per conversation
-      const previousPromise = botLockMap.get(conv.id) || Promise.resolve();
+      const previousPromise = getBotLock(conv.id);
       const currentPromise = previousPromise.then(async () => {
         try {
           if (phone_number_id && wa_message_id) {
@@ -492,7 +489,7 @@ export function queueBotAgentReply(params: {
         }
       });
 
-      botLockMap.set(conv.id, currentPromise);
+      setBotLock(conv.id, currentPromise);
     }, 1500)
   );
 }

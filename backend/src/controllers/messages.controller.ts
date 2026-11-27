@@ -8,6 +8,7 @@ import { sessions } from '../services/whatsapp.service.js';
 import { io } from '../socket.js';
 import { triggerHandoffWebhook } from '../services/n8n.service.js';
 import { sendOutboundMessage } from '../services/outboundDispatch.service.js';
+import { clearBotDebounce } from '../services/botDebounce.service.js';
 import dotenv from "dotenv";
 import { uploadMediaToStorage } from '../services/broadcast.service.js';
 import { decryptToken } from '../utils/crypto.js';
@@ -337,12 +338,27 @@ export async function sendMessage(req: any, res: Response) {
             replyToWaMessageId: reply_to_message_id,
             forwardFromMessageId: forward_from_message_id,
             clientMessageId: client_message_id,
-            senderType: 'agent',
+            senderType: 'human_agent',
             automationSource: 'manual',
             metadata: {
                 sender_user_id: (req as any).user?.id || null,
             },
         });
+
+        // Cancel any pending bot debounce timers and mark handoff as human_active
+        clearBotDebounce(conv.id);
+        const convUpdate: Record<string, any> = {
+            handoff_status: 'human_active',
+        };
+        if (dispatchResult.storedMessageId) {
+            convUpdate.last_human_message_id = dispatchResult.storedMessageId;
+        }
+        await supabase
+            .from('w_conversations')
+            .update(convUpdate)
+            .eq('id', conv.id)
+            .eq('organization_id', orgId)
+            .catch((err: any) => console.error('[Messages] Failed to update conversation handoff status:', err));
 
         res.json({
             success: true,
@@ -480,7 +496,7 @@ export async function markAsRead(req: any, res: Response) {
 }
 
 export async function sendMediaMessage(req: any, res: Response) {
-    const { conversationId } = req.params;
+    const conversationId = req.params.conversationId || req.body?.conversation_id;
     const orgId = req.organization_id;
     const caption = String(req.body?.caption || "").trim();
     const session_id = String(req.body?.session_id || "");
@@ -542,12 +558,27 @@ export async function sendMediaMessage(req: any, res: Response) {
                 type: msgType,
             },
             clientMessageId: client_message_id,
-            senderType: 'agent',
+            senderType: 'human_agent',
             automationSource: 'manual',
             metadata: {
                 sender_user_id: (req as any).user?.id || null,
             },
         });
+
+        // Cancel any pending bot debounce timers and mark handoff as human_active
+        clearBotDebounce(conv.id);
+        const convUpdate: Record<string, any> = {
+            handoff_status: 'human_active',
+        };
+        if (dispatchResult.storedMessageId) {
+            convUpdate.last_human_message_id = dispatchResult.storedMessageId;
+        }
+        await supabase
+            .from('w_conversations')
+            .update(convUpdate)
+            .eq('id', conv.id)
+            .eq('organization_id', orgId)
+            .catch((err: any) => console.error('[Messages] Failed to update conversation handoff status:', err));
 
         res.json({
             success: true,
