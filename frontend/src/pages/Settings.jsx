@@ -576,6 +576,10 @@ export default function Settings() {
     }, [activeTab, session?.access_token])
 
     useEffect(() => {
+        if (activeTab === 'whatsapp_accounts') fetchAccounts()
+    }, [activeTab, session?.access_token])
+
+    useEffect(() => {
         if (activeTab === 'knowledge_base') {
             fetchKnowledgeBase()
         }
@@ -626,7 +630,7 @@ export default function Settings() {
                     <TourButton compact />
                 </div>
                 <nav className="flex gap-1.5 overflow-x-auto p-1 bg-gray-100/60 rounded-xl lg:bg-transparent lg:p-0 lg:block lg:space-y-1 lg:overflow-visible scrollbar-none">
-                    {['General', 'Notifications', 'Knowledge Base', 'Integrations', 'Developer API', 'Broadcast Insights'].map((tab) => {
+                    {['General', 'WhatsApp Accounts', 'Notifications', 'Knowledge Base', 'Integrations', 'Developer API', 'Broadcast Insights'].map((tab) => {
                         const id = tab.toLowerCase().replace(' ', '_')
                         return (
                             <button
@@ -638,6 +642,7 @@ export default function Settings() {
                                     }`}
                             >
                                 {id === 'general' && <Globe className="mr-2 h-4 w-4 shrink-0 text-indigo-600/70 lg:mr-3 lg:h-5 lg:w-5 lg:text-gray-400" />}
+                                {id === 'whatsapp_accounts' && <PhoneCall className="mr-2 h-4 w-4 shrink-0 text-indigo-600/70 lg:mr-3 lg:h-5 lg:w-5 lg:text-gray-400" />}
                                 {id === 'notifications' && <Bell className="mr-2 h-4 w-4 shrink-0 text-indigo-600/70 lg:mr-3 lg:h-5 lg:w-5 lg:text-gray-400" />}
                                 {id === 'knowledge_base' && <Database className="mr-2 h-4 w-4 shrink-0 text-indigo-600/70 lg:mr-3 lg:h-5 lg:w-5 lg:text-gray-400" />}
                                 {id === 'integrations' && <ShoppingBag className="mr-2 h-4 w-4 shrink-0 text-indigo-600/70 lg:mr-3 lg:h-5 lg:w-5 lg:text-gray-400" />}
@@ -1144,6 +1149,31 @@ export default function Settings() {
                         </div>
                     );
                 })()}
+                {activeTab === 'whatsapp_accounts' && (
+                    <section className="p-4 sm:p-8">
+                        <div className="mb-6">
+                            <h2 className="text-xl font-bold text-gray-900">WhatsApp accounts</h2>
+                            <p className="mt-1 text-sm text-gray-500">Switch provider or disconnect a connected number.</p>
+                        </div>
+                        {isLoadingAccounts ? (
+                            <p className="py-8 text-sm text-gray-500">Loading WhatsApp accounts...</p>
+                        ) : accounts.length === 0 ? (
+                            <p className="rounded-xl border border-gray-200 bg-gray-50 p-5 text-sm text-gray-600">No WhatsApp accounts connected.</p>
+                        ) : (
+                            <div className="space-y-3">
+                                {accounts.map(account => (
+                                    <div key={account.id} className="flex flex-col gap-3 rounded-xl border border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+                                        <div>
+                                            <p className="font-semibold text-gray-900">{account.name || 'WhatsApp Business'}</p>
+                                            <p className="mt-1 text-sm text-gray-500">{account.display_phone_number || account.phone_number_id}</p>
+                                        </div>
+                                        <Link to={`/whatsapp-offboarding?account=${encodeURIComponent(account.id)}`} className="inline-flex items-center justify-center rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Switch or disconnect</Link>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </section>
+                )}
                 {activeTab === 'notifications' && (
                     <div data-tour="settings-notifications" className="bg-gray-50/60">
                         <div className="border-b border-gray-200 bg-white px-4 py-5 sm:px-8 sm:py-6">
