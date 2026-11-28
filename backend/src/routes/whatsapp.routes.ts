@@ -1,6 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
-import { authMiddleware } from "../middlewares/auth.middleware.js";
+import { authMiddleware, offboardingAuthMiddleware } from "../middlewares/auth.middleware.js";
 import {
   getNumberRequests,
   createNumberRequest,
@@ -20,7 +20,15 @@ import {
   recordOnboardingEvent,
 } from "../controllers/whatsapp.controller.js";
 
+import {
+  confirmWhatsAppMetaRemoval,
+  exportWhatsAppHistory,
+  listWhatsAppOffboarding,
+  requireWhatsAppAdmin,
+} from "../controllers/whatsappOffboarding.controller.js";
+
 const router = Router();
+const offboardingAuth = [offboardingAuthMiddleware, requireWhatsAppAdmin];
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
 // Base path: /api/whatsapp
@@ -33,7 +41,10 @@ router.post("/number-requests", authMiddleware, createNumberRequest);
 router.get("/accounts", authMiddleware, getAccounts);
 router.get("/accounts/:id/messaging-limits", authMiddleware, getAccountMessagingLimits);
 router.post("/accounts/meta", authMiddleware, addMetaAccount);
-router.delete("/accounts/:id", authMiddleware, deleteAccount);
+router.get("/offboarding", ...offboardingAuth, listWhatsAppOffboarding);
+router.get("/offboarding/:id/history", ...offboardingAuth, exportWhatsAppHistory);
+router.post("/offboarding/:id/confirm-meta-removal", ...offboardingAuth, confirmWhatsAppMetaRemoval);
+router.delete("/accounts/:id", ...offboardingAuth, deleteAccount);
 router.get("/accounts/:id/diagnostics", authMiddleware, getAccountDiagnostics);
 router.get(
   "/accounts/:id/business-profile",

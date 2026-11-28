@@ -1,3 +1,4 @@
+import { assertWhatsAppSendingAllowed } from './whatsappOffboarding.service.js';
 import { supabase, MEDIA_BUCKET } from '../config/supabase.js';
 import { getOrganizationPlanLimits } from './billing.service.js';
 import { getActiveWhatsappRate, normalizeWhatsappBillingCategory } from './messages.service.js';
@@ -270,7 +271,11 @@ export async function processCampaign(campaign: any) {
             }
         }
 
-        await supabase.from('w_campaigns').update({ status: 'processing' }).eq('id', campaign.id);
+        const { data: processing, error: processingError } = await supabase.from('w_campaigns')
+            .update({ status: 'processing' }).eq('id', campaign.id)
+            .not('status', 'in', '(cancelled,cancelling)').select('id').maybeSingle();
+        if (processingError) throw processingError;
+        if (!processing) return;
 
         const orgId = campaign.organization_id;
         const wa_account_id = campaign.wa_account_id;
@@ -342,22 +347,58 @@ export async function processCampaign(campaign: any) {
             })
             .eq('id', campaign.id);
 
-        let sent = 0;
-        let failed = 0;
+        // ── Checkpoint & Idempotency: Query already dispatched recipients for THIS campaign ──
+        const { data: existingMessages } = await supabase
+            .from('w_messages')
+            .select('metadata')
+            .eq('organization_id', orgId)
+            .contains('metadata', { campaign_id: campaign.id });
+
+        const alreadySentPhones = new Set<string>();
+        if (existingMessages && existingMessages.length > 0) {
+            for (const msg of existingMessages) {
+                const recip = msg.metadata?.recipient || msg.metadata?.raw_recipient;
+                if (recip) {
+                    const norm = derivePhoneForStorage(recip);
+                    if (norm) alreadySentPhones.add(norm);
+                }
+            }
+        }
+
+        // Restore previous results if recovering an ongoing campaign
+        const previousResults = Array.isArray(freshCampaign?.results) ? [...freshCampaign.results] : [];
+        const results = [...previousResults];
+        let sent = results.filter(r => r.status === 'sent').length;
+        let failed = results.filter(r => r.status === 'failed').length;
         let processed = 0;
         let isCancelled = false;
-        const results = [];
+
+        // Immediately write initial progress heartbeat
+        await supabase.from('w_campaigns').update({
+            last_progress_at: new Date().toISOString(),
+            processing_started_at: freshCampaign?.processing_started_at || new Date().toISOString(),
+        }).eq('id', campaign.id);
 
         for (const contact of contactsToProcess) {
             processed++;
-            if (processed % 10 === 0) {
+            if (processed % 10 === 0 || processed === 1) {
                 const { data: checkCamp } = await supabase.from('w_campaigns').select('status').eq('id', campaign.id).maybeSingle();
-                if (checkCamp && (checkCamp.status === 'cancelled' || checkCamp.status === 'paused')) {
+                if (checkCamp && (['cancelled', 'cancelling', 'paused'].includes(checkCamp.status))) {
                     isCancelled = true;
                     console.log(`[processCampaign] Campaign ${campaign.id} was cancelled/paused. Stopping.`);
                     break;
                 }
             }
+
+            // Write periodic heartbeat every 5 contacts so watchdog knows progress is healthy
+            if (processed % 5 === 0) {
+                await supabase.from('w_campaigns').update({
+                    last_progress_at: new Date().toISOString(),
+                    sent_count: sent,
+                    failed_count: failed,
+                }).eq('id', campaign.id);
+            }
+
             const rawRecipient = contact.phone || contact.wa_id;
             const recipient = normalizeBroadcastRecipient(rawRecipient);
             if (!recipient) {
@@ -368,6 +409,12 @@ export async function processCampaign(campaign: any) {
                     status: 'failed',
                     error: 'Invalid or missing phone number. Use international format, for example 919876543210.'
                 });
+                continue;
+            }
+
+            // ZERO-TOLERANCE IDEMPOTENCY: Skip if recipient already dispatched for this campaign
+            if (alreadySentPhones.has(recipient)) {
+                console.log(`[processCampaign] Skipping already-sent recipient ${recipient} for campaign ${campaign.id}`);
                 continue;
             }
 
@@ -471,6 +518,7 @@ export async function processCampaign(campaign: any) {
                     components_count: components.length,
                 });
 
+                await assertWhatsAppSendingAllowed(phone_number_id);
                 const response = await fetch(`https://graph.facebook.com/v21.0/${phone_number_id}/messages`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -481,6 +529,7 @@ export async function processCampaign(campaign: any) {
 
                 if (response.ok) {
                     sent++;
+                    alreadySentPhones.add(recipient);
                     const wa_message_id = data.messages?.[0]?.id;
                     const realWaId = data.contacts?.[0]?.wa_id || recipient;
                     results.push({
@@ -633,8 +682,10 @@ export async function processCampaign(campaign: any) {
             total_contacts: contactsToProcess.length,
             sent_count: sent,
             failed_count: failed,
-            results: results
-        }).eq('id', campaign.id);
+            results: results,
+            completed_at: isCancelled ? null : new Date().toISOString(),
+            last_progress_at: new Date().toISOString(),
+        }).eq('id', campaign.id).not('status', 'in', '(cancelled,cancelling)');
 
         await supabase.from('w_campaigns').update({
             actual_cost_paise: sent * Number(campaignRate.rate_paise || 0),
@@ -671,7 +722,7 @@ export async function processCampaign(campaign: any) {
 
     } catch (err) {
         console.error('Error processing campaign:', campaign.id, err);
-        await supabase.from('w_campaigns').update({ status: 'failed' }).eq('id', campaign.id);
+        await supabase.from('w_campaigns').update({ status: 'failed' }).eq('id', campaign.id).not('status', 'in', '(cancelled,cancelling)');
         
         try {
             const { sendTransactionalEmail } = await import('./supermailbox.service.js');

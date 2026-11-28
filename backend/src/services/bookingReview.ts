@@ -1,0 +1,70 @@
+import { parseInteractiveReply } from './agentButtons.js';
+
+type Message = { role: string; content: string };
+const bookingIntent = /^(?:please\s+)?(?:book|reserve|register|enroll)\b|\b(?:want to|would like to|need to|can you|could you|please|help me)\s+(?:book|reserve|register|enroll|join)\b|\b(?:book|booking|register)\s+(?:karni|karna|karo|kro|karwa|chahiye)\b|बुक\s*(?:कर|करना)/i;
+const bookingPrompt = /^(?:Booking request review(?:\n|$)|Booking request ke liye aapka naam|Kitne participants ke liye booking request|Kya badalna hai)/;
+const bookingDetails = /^(?:(?:my name is|name|naam|participants?|people|for me|mere liye|make it|change (?:the |my )?(?:name|date|workshop|participants))\b|\d{1,3}(?:\s+(?:people|participants?|persons?|of us))?[.!]?$)/i;
+
+export function bookingAction(text: string): 'review' | 'confirm' | 'change' | 'cancel' | null {
+  const value = text.trim().toLowerCase().replace(/[!?।.]+$/g, '').trim();
+  if (/^(confirm booking request|confirm|haan confirm|haa confirm|yes confirm)$/.test(value)) return 'confirm';
+  if (/^(cancel booking request|cancel request)$/.test(value)) return 'cancel';
+  if (/^(change booking details|change details)$/.test(value) || /(?:info|details).*(?:update|change)|(?:update|change).*(?:info|details)/.test(value)) return 'change';
+  // Asking for confirmation/status is not consent and must never become payment intent.
+  if (/^(?:confirmation|conformation|booking status|booking confirmation|booking review|zala ka.*registration|registration.*zala ka|registration status)$/.test(value) || /^review\b/.test(value)) return 'review';
+  return null;
+}
+
+export function bookingReviewContext(history: Message[], text: string): Message[] | null {
+  const action = bookingAction(text);
+  const value = text.trim();
+  if (!action && bookingIntent.test(value)) return [];
+
+  // Only an uninterrupted sequence of booking prompts belongs to the active request.
+  const detail = bookingDetails.test(value);
+  const possibleName = /^[\p{L}]+(?:[ -][\p{L}]+){0,2}$/u.test(value)
+    && !/\b(?:classes?|schedule|contact|payment|qr|workshops?|fees?|details|information|info|registration|link|please|hello|hi|thanks|timings?|address|location|weekend|saturday|sunday)\b/i.test(value);
+  if (!action && !detail && !possibleName) return null;
+  let start = history.length;
+  while (start >= 2) {
+    const prompt = history[start - 1];
+    const customer = history[start - 2];
+    if (prompt.role !== 'assistant' || customer.role !== 'user') break;
+    if (!bookingPrompt.test(parseInteractiveReply(prompt.content)?.text || prompt.content)) break;
+    start -= 2;
+    if (bookingIntent.test(customer.content.trim())) break;
+  }
+  const active = start < history.length;
+  const pendingName = /^Booking request ke liye aapka naam/.test(history.at(-1)?.content || '');
+  if (action === 'review' || (active && (action || detail || (pendingName && possibleName)))) {
+    return history.slice(start);
+  }
+  return null;
+}
+
+// The model extracts fields only. Code owns the stage, summary and buttons.
+export function renderBookingReview(fields: any, events: any[], history: Message[], timezone: string, now = Date.now()): string {
+  if (fields?.action === 'cancel') return 'Booking request rok di hai. Koi confirmed booking cancel nahi ki gayi hai.';
+  if (fields?.action === 'other') return '';
+  if (fields?.action === 'change') return 'Kya badalna hai—workshop/date, naam ya participants? Nayi details batayein; phir review buttons bhejunga.';
+  if (fields?.kind === 'artist') return JSON.stringify({ text: 'Studio rental ya collaboration request ke liye apni preferred date, time, duration aur requirements batayein. Final approval studio team degi.', buttons: [{ id: 'Studio rental request', text: 'Studio Rental' }, { id: 'Studio collab request', text: 'Collaboration' }] });
+  const event = events.find(e => String(e.id) === fields?.event_id);
+  if (!event || event.status === 'cancelled' || !event.start?.dateTime || !event.end?.dateTime || !Number.isFinite(Date.parse(event.start.dateTime)) || !(Date.parse(event.end.dateTime) > now)) {
+    return '';
+  }
+  const name = typeof fields.name === 'string' ? fields.name.trim().slice(0, 100) : '';
+  const count = Number(fields.participants);
+  if (!name || !Number.isInteger(count) || count < 1 || count > 100) {
+    return !name ? 'Booking request ke liye aapka naam aur kitne participants hain, batayein. Final booking studio approval ke baad hogi.' : 'Kitne participants ke liye booking request chahiye?';
+  }
+  const format = (value: string) => new Intl.DateTimeFormat('en-IN', { timeZone: timezone, dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+  const summary = `Workshop: ${event.title || event.summary}\nDate/time: ${format(event.start.dateTime)} – ${format(event.end.dateTime)} (${timezone})\nName: ${name}\nParticipants: ${count}`;
+  const lastAssistant = history.filter(m => m.role === 'assistant').at(-1)?.content || '';
+  const previous = parseInteractiveReply(lastAssistant);
+  // A yes is valid only after the matching review, never after an unrelated question.
+  const reviewed = (previous?.text || lastAssistant).includes(summary) && (previous?.text || lastAssistant).includes('Booking request review');
+  if (fields.action === 'confirm' && reviewed) {
+    return `Aapne ye details approve ki hain:\n${summary}\n\nFinal booking abhi pending hai. Request studio ko automatically forward ya reserve nahi hui hai. Final confirmation ke liye studio team se contact karein.`;
+  }
+  return JSON.stringify({ text: `Booking request review\n${summary}\n\nKya ye details sahi hain? Final booking studio approval ke baad hogi.`, buttons: [{ id: 'Confirm booking request', text: 'Confirm' }, { id: 'Change booking details', text: 'Change Details' }, { id: 'Cancel booking request', text: 'Cancel Request' }] });
+}

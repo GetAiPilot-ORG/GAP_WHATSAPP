@@ -30,11 +30,13 @@ function normalizePlanId(planId: any): string | null {
         if (value.includes('starter')) return 'starter';
         if (value.includes('growth')) return 'growth';
         if (value.includes('pro') || value.includes('premium')) return 'pro';
-        if (value.includes('enterprise')) return 'enterprise';
+        if (value.includes('enterprise') || value.includes('enterprice')) return 'enterprise';
     }
     
-    if (value.includes('enterprise')) return 'enterprise';
-    if (value.includes('all_in_one') || value.includes('ultimate')) return 'all_in_one';
+    if (value.includes('enterprise') || value.includes('enterprice') || value.includes('scale')) return 'enterprise';
+    if (value.includes('core') || value.includes('growth')) return 'growth';
+    if (value.includes('all_in_one') || value.includes('bundle')) return 'growth';
+    if (value.includes('ultimate')) return 'enterprise';
     return PLAN_RANKS[value] ? value : null;
 }
 

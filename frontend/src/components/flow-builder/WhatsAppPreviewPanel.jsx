@@ -1,5 +1,6 @@
 import { X, ArrowLeft } from 'lucide-react';
 import React from 'react';
+import { normalizeMediaUrl } from '../../utils/mediaUrlHelper';
 
 // Common doodle background for WhatsApp
 const whatsappDoodleUrl = 'https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png';
@@ -16,6 +17,8 @@ export default function WhatsAppPreviewPanel({ node, onClose, phoneNumber, isCon
         let buttons = [];
         let header = '';
         let footer = '';
+        let mediaUrl = '';
+        const mediaType = data?.mediaType || type;
 
         if (type === 'startBotFlow') {
             messageText = 'Start Bot Flow\nKeywords: ' + (config.keywords || '');
@@ -30,6 +33,16 @@ export default function WhatsAppPreviewPanel({ node, onClose, phoneNumber, isCon
             header = config.headerText || config.header || '';
             footer = config.footerText || config.footer || '';
             buttons = config.buttons || [];
+        } else if (type === 'image' || type === 'media' || type === 'video' || type === 'audio' || type === 'file' || data?.mediaType) {
+            mediaUrl = normalizeMediaUrl(config.url || '', mediaType);
+            messageText = config.caption || '';
+            if (config.buttonText || config.buttonUrl) {
+                buttons = [{
+                    text: config.buttonText || 'Visit Website',
+                    url: config.buttonUrl,
+                    type: 'url'
+                }];
+            }
         } else if (type === 'templateMessage' || type === 'template') {
             messageText = config.templateName || config.template?.name ? `Template: ${config.templateName || config.template?.name}` : 'Select a template';
         } else if (config.message || config.text || config.body) {
@@ -44,7 +57,40 @@ export default function WhatsAppPreviewPanel({ node, onClose, phoneNumber, isCon
             <div className="flex flex-col gap-1 w-full max-w-[85%]">
                 <div className="bg-white rounded-lg rounded-tl-none p-2.5 shadow-sm text-[15px] text-[#111b21] leading-relaxed relative">
                     {header && <div className="font-bold mb-1">{header}</div>}
-                    <div className="whitespace-pre-wrap break-words">{messageText}</div>
+                    {mediaUrl && (
+                        <div className="mb-2 rounded overflow-hidden max-h-48 bg-gray-100 flex items-center justify-center">
+                            {mediaType === 'image' ? (
+                                <img
+                                    src={mediaUrl}
+                                    alt="preview"
+                                    referrerPolicy="no-referrer"
+                                    loading="lazy"
+                                    className="w-full h-auto object-cover"
+                                    onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        if (e.target.nextSibling) e.target.nextSibling.style.display = 'block';
+                                    }}
+                                />
+                            ) : mediaType === 'video' ? (
+                                <video
+                                    src={mediaUrl}
+                                    controls
+                                    preload="metadata"
+                                    className="w-full h-auto max-h-48 object-cover"
+                                    onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        if (e.target.nextSibling) e.target.nextSibling.style.display = 'block';
+                                    }}
+                                />
+                            ) : (
+                                <div className="p-4 text-xs text-gray-500">[{mediaType} file]</div>
+                            )}
+                            <div className="hidden p-4 text-xs text-gray-400 italic text-center">
+                                [{mediaType || 'Media'} unavailable]
+                            </div>
+                        </div>
+                    )}
+                    {messageText && <div className="whitespace-pre-wrap break-words">{messageText}</div>}
                     {footer && <div className="text-[13px] text-gray-500 mt-1">{footer}</div>}
                     <div className="text-[11px] text-gray-400 text-right mt-1.5 float-right ml-3">
                         {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -53,8 +99,9 @@ export default function WhatsAppPreviewPanel({ node, onClose, phoneNumber, isCon
                 {buttons.length > 0 && (
                     <div className="flex flex-col gap-1 mt-1">
                         {buttons.map((btn, idx) => (
-                            <div key={idx} className="bg-white rounded-lg shadow-sm text-center py-2.5 px-4 text-[#00a884] text-[15px] cursor-pointer hover:bg-gray-50 transition-colors">
-                                {btn.text || btn.title || btn.label || `Button ${idx + 1}`}
+                            <div key={idx} className="bg-white rounded-lg shadow-sm text-center py-2.5 px-4 text-[#00a884] text-[15px] font-medium cursor-pointer hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5">
+                                {(btn.type === 'url' || btn.url) && <span>🔗</span>}
+                                <span>{btn.text || btn.title || btn.label || `Button ${idx + 1}`}</span>
                             </div>
                         ))}
                     </div>

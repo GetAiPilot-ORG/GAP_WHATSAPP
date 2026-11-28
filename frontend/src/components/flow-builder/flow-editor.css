@@ -1,0 +1,36 @@
+/* Match the editor to the shared workspace surfaces and primary action color. */
+.flow-canvas {
+    background: #f5f7fa;
+}
+
+.flow-canvas .react-flow__handle:hover {
+    box-shadow: 0 0 0 4px rgba(11, 116, 201, 0.14);
+}
+
+.flow-canvas .react-flow__controls {
+    overflow: hidden;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
+}
+
+.flow-canvas .react-flow__controls-button {
+    width: 30px;
+    height: 30px;
+    border-color: #e5e7eb;
+    color: #4b5563;
+}
+
+.flow-canvas .react-flow__minimap {
+    overflow: hidden;
+    border-radius: 8px;
+}
+
+.flow-editor button:focus-visible {
+    outline: 2px solid #0b74c9;
+    outline-offset: 2px;
+}
+
+.flow-editor button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}

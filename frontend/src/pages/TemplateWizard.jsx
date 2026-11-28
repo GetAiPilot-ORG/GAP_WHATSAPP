@@ -1,3 +1,4 @@
+import { TemplateQuickReplyCoverage } from "../components/flow-builder/QuickReplyTriggers";
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -509,6 +510,7 @@ export default function TemplateWizard() {
                         {button.type === 'COPY_CODE' && <input className={`${fieldClass} mt-3`} value={button.codeExample || ''} onChange={event => update({ buttons: form.buttons.map((item, itemIndex) => itemIndex === index ? { ...item, codeExample: event.target.value } : item) })} placeholder="Example offer code" />}
                       </div>
                     ))}
+                    {form.buttons.some(button => button.type === 'QUICK_REPLY' && button.text?.trim()) && <TemplateQuickReplyCoverage buttons={form.buttons} accountId={templateAccountId} />}
                     {form.buttons.length < 10 && <button onClick={addButton} className="flex items-center gap-2 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"><Plus className="h-4 w-4" /> Add button</button>}
                   </div>
                 </section>
@@ -516,7 +518,7 @@ export default function TemplateWizard() {
             </div>
           )}
 
-          {step === 3 && <div className="space-y-4"><section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h1 className="text-xl font-bold">Review and submit</h1><p className="mt-1 text-sm text-slate-500">Meta will review this language version before it can be sent.</p><dl className="mt-6 grid gap-4 sm:grid-cols-2">{[['Template', form.name], ['Category', form.category], ['Type', form.templateType.replace(/_/g, ' ')], ['Language', `${getMetaLanguage(form.language).label} · ${form.language}`]].map(([label, value]) => <div key={label} className="rounded-lg bg-slate-50 p-3"><dt className="text-xs font-semibold uppercase text-slate-500">{label}</dt><dd className="mt-1 text-sm font-semibold text-slate-900">{value}</dd></div>)}</dl>{submitError && <p className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{submitError}</p>}</section><section className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">Submission ke baad status Pending hoga. Approval, rejection, aur Meta category changes Templates list mein sync honge.</section></div>}
+          {step === 3 && <div className="space-y-4">{form.buttons.some(button => button.type === 'QUICK_REPLY' && button.text?.trim()) && <TemplateQuickReplyCoverage buttons={form.buttons} accountId={templateAccountId} />}<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h1 className="text-xl font-bold">Review and submit</h1><p className="mt-1 text-sm text-slate-500">Meta will review this language version before it can be sent.</p><dl className="mt-6 grid gap-4 sm:grid-cols-2">{[['Template', form.name], ['Category', form.category], ['Type', form.templateType.replace(/_/g, ' ')], ['Language', `${getMetaLanguage(form.language).label} · ${form.language}`]].map(([label, value]) => <div key={label} className="rounded-lg bg-slate-50 p-3"><dt className="text-xs font-semibold uppercase text-slate-500">{label}</dt><dd className="mt-1 text-sm font-semibold text-slate-900">{value}</dd></div>)}</dl>{submitError && <p className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{submitError}</p>}</section><section className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">Submission ke baad status Pending hoga. Approval, rejection, aur Meta category changes Templates list mein sync honge.</section></div>}
         </div>
         <aside className="hidden lg:block"><div className="sticky top-32 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><WhatsAppPreview form={form} mediaUrl={mediaUrl} /></div></aside>
       </main>

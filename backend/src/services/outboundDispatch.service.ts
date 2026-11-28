@@ -1,3 +1,4 @@
+import { assertWhatsAppSendingAllowed, WhatsAppOffboardedError } from './whatsappOffboarding.service.js';
 import { supabase } from '../config/supabase.js';
 import { io } from '../socket.js';
 import { sessions } from './whatsapp.service.js';
@@ -48,7 +49,7 @@ export interface OutboundDispatchParams {
   forwardFromMessageId?: string | null;
   clientMessageId?: string | null;
 
-  senderType?: 'user' | 'agent' | 'ai_agent' | 'system';
+  senderType?: 'user' | 'agent' | 'human_agent' | 'ai_agent' | 'system';
   automationSource?: 'flow' | 'ai_agent' | 'campaign' | 'manual';
   isBotReply?: boolean;
   metadata?: Record<string, any>;
@@ -138,7 +139,7 @@ export async function sendOutboundMessage(
     replyToWaMessageId,
     forwardFromMessageId,
     clientMessageId,
-    senderType = 'agent',
+    senderType = 'human_agent',
     automationSource,
     isBotReply = false,
     metadata = {},
@@ -246,6 +247,7 @@ export async function sendOutboundMessage(
 
       usedTransport = 'meta';
     } catch (cloudErr: any) {
+      if (cloudErr instanceof WhatsAppOffboardedError) throw cloudErr;
       console.warn(
         `[OutboundDispatch] Meta Cloud API failed for ${accountPhoneOrId} (${cloudErr.message}). Initiating Baileys fallback.`
       );
@@ -255,6 +257,7 @@ export async function sendOutboundMessage(
 
   // 3. Fallback or direct send via Baileys Socket
   if (!hasEncryptedToken || isFallback) {
+    if (accountPhoneOrId) await assertWhatsAppSendingAllowed(accountPhoneOrId);
     const sock = resolveBaileysSocket({
       sessionId,
       phoneOrId: accountPhoneOrId,
@@ -299,7 +302,7 @@ export async function sendOutboundMessage(
       }
     } else {
       // Plain text or text fallback for interactive
-      const bodyText = interactive ? `${interactive.body}\n${(interactive.buttons || []).map((b) => `• ${b.text || b.title}`).join('\n')}` : text || '';
+      const bodyText = interactive ? `${interactive.body}\n${(interactive.buttons || []).map((b) => `• ${b.text || b.title}${b.url ? `: ${b.url}` : ''}`).join('\n')}` : text || '';
       sendResult = await sock.sendMessage(jid, { text: bodyText });
     }
 
@@ -365,7 +368,7 @@ export async function sendOutboundMessage(
       content: contentPayload,
       status: 'sent',
       is_bot_reply: isBotReply,
-      sender_type: senderType,
+      sender_type: senderType === 'agent' ? 'human_agent' : senderType,
       automation_source: automationSource,
       metadata: {
         ...metadata,
@@ -393,7 +396,7 @@ export async function sendOutboundMessage(
       from: accountRow?.display_phone_number || accountPhoneOrId,
       phone: to,
       text: preview,
-      sender: senderType === 'user' ? 'agent' : senderType,
+      sender: senderType === 'user' || senderType === 'human_agent' ? 'agent' : senderType,
       conversation_id: conversationId,
       contact_id: contactId,
       message_id: storedMessageId,

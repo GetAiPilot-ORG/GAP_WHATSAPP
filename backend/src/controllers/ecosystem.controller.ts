@@ -1,3 +1,5 @@
+import { assertWhatsAppSendingAllowed } from '../services/whatsappOffboarding.service.js';
+import { sendOutboundMessage } from '../services/outboundDispatch.service.js';
 import { Request, Response } from 'express';
 import { supabase } from '../config/supabase.js';
 import { decryptToken } from '../utils/crypto.js';
@@ -212,6 +214,7 @@ export const sendWhatsAppAction = async (req: Request, res: Response) => {
 
         console.log(`[ECOSYSTEM] Sending Meta WhatsApp message to ${cleanPhone} with template ${templateName}:`, JSON.stringify(payload));
 
+        await assertWhatsAppSendingAllowed(waPhoneId);
         const metaRes = await fetch(`https://graph.facebook.com/v17.0/${waPhoneId}/messages`, {
             method: 'POST',
             headers: {
@@ -481,5 +484,69 @@ export const getEcosystemTemplates = async (req: Request, res: Response) => {
     } catch (error: any) {
         console.error('[ECOSYSTEM] Error in getEcosystemTemplates:', error);
         return res.status(500).json({ error: 'Internal Server Error' });
+    }
+};
+
+/**
+ * Direct ecosystem text/reminder dispatch using the organization's connected
+ * GAP WhatsApp account (supports both Meta Cloud API and Baileys QR sessions).
+ */
+export const sendEcosystemMessage = async (req: Request, res: Response) => {
+    try {
+        const secret = req.headers['x-ecosystem-secret'];
+        if (secret !== process.env.ECOSYSTEM_SYNC_SECRET && secret !== 'super_secret_ecosystem_key_2024') {
+            return res.status(401).json({ error: 'Unauthorized ecosystem request' });
+        }
+
+        const { organization_id, to, text, wa_account_id, phone_number_id, metadata } = req.body || {};
+
+        if (!organization_id || !to || !text) {
+            return res.status(400).json({ error: 'organization_id, to, and text are required' });
+        }
+
+        let resolvedWaAccountId = wa_account_id || null;
+        let resolvedPhoneNumberId = phone_number_id || null;
+
+        if (!resolvedWaAccountId && !resolvedPhoneNumberId && supabase) {
+            const { data: acc } = await supabase
+                .from('w_wa_accounts')
+                .select('id, phone_number_id, access_token_encrypted, status')
+                .eq('organization_id', organization_id)
+                .neq('status', 'disconnected')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (!acc) {
+                return res.status(404).json({
+                    error: 'No connected WhatsApp number found for this organization in GAP WhatsApp',
+                });
+            }
+            resolvedWaAccountId = acc.id;
+            resolvedPhoneNumberId = acc.phone_number_id;
+        }
+
+        const result = await sendOutboundMessage({
+            organizationId: organization_id,
+            to,
+            waAccountId: resolvedWaAccountId,
+            phoneNumberId: resolvedPhoneNumberId,
+            type: 'text',
+            text,
+            senderType: 'system',
+            automationSource: 'flow',
+            metadata: metadata || { source: 'fee_pilot_reminder' },
+        });
+
+        return res.status(200).json({
+            success: result.success,
+            waMessageId: result.waMessageId,
+            storedMessageId: result.storedMessageId,
+            transport: result.transport,
+            isFallback: result.isFallback,
+        });
+    } catch (error: any) {
+        console.error('[ECOSYSTEM] Error in sendEcosystemMessage:', error);
+        return res.status(500).json({ error: error?.message || 'Failed to send WhatsApp message' });
     }
 };

@@ -24,21 +24,44 @@ import HomePage from './pages/HomePage'
 import TermsOfService from './pages/TermsOfService'
 import { loadFacebookSDK } from './services/facebookSdkLoader'
 
-const FlowBuilder = lazy(() => import('./pages/FlowBuilder'))
-const Templates = lazy(() => import('./pages/Templates'))
-const TemplateWizard = lazy(() => import('./pages/TemplateWizard'))
-const Broadcast = lazy(() => import('./pages/Broadcast'))
-const LiveChat = lazy(() => import('./pages/LiveChat'))
-const BotAgents = lazy(() => import('./pages/BotAgents'))
-const Settings = lazy(() => import('./pages/Settings'))
-const TeamMembers = lazy(() => import('./pages/TeamMembers'))
-const HelpCenter = lazy(() => import('./pages/HelpCenter'))
-const BillingPage = lazy(() => import('./pages/BillingPage'))
-const WhatsAppConnect = lazy(() => import('./pages/WhatsAppConnect'))
-const WhatsAppNumberPage = lazy(() => import('./pages/WhatsAppNumberPage'))
-const WhatsAppLinkGenerator = lazy(() => import('./pages/WhatsAppLinkGenerator'))
-const ScheduledMeetings = lazy(() => import('./pages/ScheduledMeetings'))
-const PrivacyPolicy = lazy(() => import('./pages/LegalPrivacyNotice'))
+function lazyWithRetry(importer) {
+  return lazy(async () => {
+    try {
+      return await importer()
+    } catch (error) {
+      const isChunkError = error?.message?.includes('Failed to fetch dynamically imported module') ||
+        error?.name === 'ChunkLoadError'
+      if (isChunkError) {
+        const retryKey = `retry_${window.location.pathname}`
+        if (!sessionStorage.getItem(retryKey)) {
+          sessionStorage.setItem(retryKey, 'true')
+          window.location.reload()
+          return new Promise(() => {})
+        }
+      }
+      throw error
+    }
+  })
+}
+
+const FlowBuilder = lazyWithRetry(() => import('./pages/FlowBuilder'))
+const Templates = lazyWithRetry(() => import('./pages/Templates'))
+const TemplateWizard = lazyWithRetry(() => import('./pages/TemplateWizard'))
+const Broadcast = lazyWithRetry(() => import('./pages/Broadcast'))
+const LiveChat = lazyWithRetry(() => import('./pages/LiveChat'))
+const BotAgents = lazyWithRetry(() => import('./pages/BotAgents'))
+const Settings = lazyWithRetry(() => import('./pages/Settings'))
+const TeamMembers = lazyWithRetry(() => import('./pages/TeamMembers'))
+const HelpCenter = lazyWithRetry(() => import('./pages/HelpCenter'))
+const BillingPage = lazyWithRetry(() => import('./pages/BillingPage'))
+const WhatsAppConnect = lazyWithRetry(() => import('./pages/WhatsAppConnect'))
+const WhatsAppOffboarding = lazyWithRetry(() => import('./pages/WhatsAppOffboarding'))
+const WhatsAppNumberPage = lazyWithRetry(() => import('./pages/WhatsAppNumberPage'))
+const WhatsAppLinkGenerator = lazyWithRetry(() => import('./pages/WhatsAppLinkGenerator'))
+const ScheduledMeetings = lazyWithRetry(() => import('./pages/ScheduledMeetings'))
+const PrivacyPolicy = lazyWithRetry(() => import('./pages/LegalPrivacyNotice'))
+const PublicBookingPage = lazyWithRetry(() => import('./pages/PublicBookingPage'))
+const MeetingWaitingRoom = lazyWithRetry(() => import('./pages/MeetingWaitingRoom'))
 
 const PageFallback = () => (
   <div className="flex h-[60vh] w-full items-center justify-center">
@@ -91,6 +114,11 @@ export default function App() {
                       <Route path="/sso" element={<SSOLogin />} />
                       <Route path="/payment-success" element={<PaymentSuccessPage />} />
                       <Route path="/wa/:data" element={<WhatsAppRedirect />} />
+                      <Route path="/book/:slug" element={<Suspense fallback={<PageFallback />}><PublicBookingPage /></Suspense>} />
+                      <Route path="/book" element={<Suspense fallback={<PageFallback />}><PublicBookingPage /></Suspense>} />
+                      <Route path="/join-meeting" element={<Suspense fallback={<PageFallback />}><MeetingWaitingRoom /></Suspense>} />
+                      <Route path="/join/:id" element={<Suspense fallback={<PageFallback />}><MeetingWaitingRoom /></Suspense>} />
+                      <Route path="/whatsapp-offboarding" element={<Suspense fallback={<PageFallback />}><WhatsAppOffboarding /></Suspense>} />
                       <Route element={<Layout />}>
                         <Route path="dashboard" element={<Dashboard />} />
                         <Route path="whatsapp-connect" element={<Suspense fallback={<PageFallback />}><WhatsAppConnect /></Suspense>} />

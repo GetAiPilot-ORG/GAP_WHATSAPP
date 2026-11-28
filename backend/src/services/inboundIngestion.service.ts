@@ -1,3 +1,4 @@
+import { agentButtonsEnabled, parseInteractiveReply } from "./agentButtons.js";
 import { supabase } from '../config/supabase.js';
 import { io } from '../socket.js';
 import { upsertContact } from './contacts.service.js';
@@ -7,6 +8,7 @@ import { performAutoAssignment } from './assignment.service.js';
 import { uploadMediaToStorage } from './broadcast.service.js';
 import { processFlowEngine } from './flows.service.js';
 import { getBotAgentReply } from './ai.service.js';
+import { setBotDebounce, clearBotDebounce, getBotLock, setBotLock } from './botDebounce.service.js';
 import { sendPushNotificationToOrg } from './push.service.js';
 import { sendOutboundMessage } from './outboundDispatch.service.js';
 import { isGroupOrChannelWaId, isNonIndividualThreadContact } from '../utils/format.js';
@@ -61,9 +63,6 @@ export interface InboundIngestionResult {
   flowTriggered?: boolean;
   botReplied?: boolean;
 }
-
-const botDebounceMap = new Map<string, NodeJS.Timeout>();
-const botLockMap = new Map<string, Promise<void>>();
 
 /**
  * Deep Inbound Ingestion Module.
@@ -299,7 +298,7 @@ export async function ingestInboundMessage(
       organizationId,
       contact.id,
       conv.id,
-      inboundText,
+      interactive?.id || inboundText,
       storedMessage?.id || null,
       waAccountId || null
     );
@@ -359,7 +358,11 @@ export async function ingestInboundMessage(
 
       // 8c. Outbound Media Nodes from Flow
       if (Array.isArray(flowResult.media) && flowResult.media.length > 0) {
-        for (const m of flowResult.media) {
+        const hasMediaInteractiveHeader = flowResult.interactive?.header?.type === 'image' || flowResult.interactive?.header?.type === 'video';
+        const mediaToSend = hasMediaInteractiveHeader
+          ? flowResult.media.filter((m: any) => !((m.type === 'image' || m.type === 'video') && m.buttonUrl))
+          : flowResult.media;
+        for (const m of mediaToSend) {
           try {
             await sendOutboundMessage({
               organizationId,
@@ -410,30 +413,29 @@ export async function ingestInboundMessage(
           }).catch(() => {});
         }
 
-        if (botDebounceMap.has(debounceKey)) {
-          clearTimeout(botDebounceMap.get(debounceKey)!);
-        }
+        clearBotDebounce(debounceKey);
 
-        botDebounceMap.set(
+        setBotDebounce(
           debounceKey,
           setTimeout(async () => {
-            botDebounceMap.delete(debounceKey);
+            clearBotDebounce(debounceKey);
 
-            const prevPromise = botLockMap.get(debounceKey) || Promise.resolve();
+            const prevPromise = getBotLock(debounceKey);
             const nextPromise = prevPromise.then(async () => {
               try {
                 const botResult = await getBotAgentReply({
                   organization_id: organizationId,
                   conversation_id: conv.id,
-                  text: inboundText,
+                  text: interactive?.id || inboundText,
                 });
 
                 if (botResult?.reply) {
                   botReplied = true;
                   const isFallback = botResult.reply.startsWith('[FALLBACK]');
                   const cleanReply = botResult.reply.replace('[FALLBACK]', '').trim();
+                  const choices = !isFallback ? parseInteractiveReply(cleanReply) : null;
 
-                  if (isFallback) {
+                  if (isFallback && agentButtonsEnabled(botResult.agent)) {
                     await sendOutboundMessage({
                       organizationId,
                       to: contactWaId,
@@ -467,8 +469,9 @@ export async function ingestInboundMessage(
                       contactId: contact.id,
                       waAccountId,
                       phoneNumberId,
-                      type: 'text',
-                      text: cleanReply,
+                      type: choices ? 'interactive' : 'text',
+                      text: choices?.text || cleanReply,
+                      interactive: choices ? { type: choices.buttons[0]?.type === 'url' || choices.buttons[0]?.type === 'form' ? 'cta_url' : 'buttons', body: choices.text, buttons: choices.buttons, footer: choices.footer } : undefined,
                       senderType: 'ai_agent',
                       automationSource: 'ai_agent',
                       isBotReply: true,
@@ -484,9 +487,9 @@ export async function ingestInboundMessage(
               }
             });
 
-            botLockMap.set(debounceKey, nextPromise);
+            setBotLock(debounceKey, nextPromise);
             await nextPromise;
-          }, 500)
+          }, 1500)
         );
       }
     }

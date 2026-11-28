@@ -10,7 +10,15 @@ import {
  * Verifies Bearer JWT tokens and delegates tenant resolution and subscription
  * gating to the deep Organization Context module.
  */
-export async function authMiddleware(req: any, res: Response, next: NextFunction) {
+export function authMiddleware(req: any, res: Response, next: NextFunction) {
+  return authenticate(req, res, next, true);
+}
+
+export function offboardingAuthMiddleware(req: any, res: Response, next: NextFunction) {
+  return authenticate(req, res, next, false);
+}
+
+async function authenticate(req: any, res: Response, next: NextFunction, requireSubscription: boolean) {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
   if (!token) return res.status(401).json({ error: 'Unauthorized - missing token' });
@@ -44,7 +52,7 @@ export async function authMiddleware(req: any, res: Response, next: NextFunction
     req.organization_id = context.organizationId;
 
     const bypassPaths = ['/api/team/my-profile', '/api/wa/logout'];
-    if (!bypassPaths.includes(req.path)) {
+    if (requireSubscription && !bypassPaths.includes(req.path)) {
       const hasSub = await checkOrganizationSubscription(context.organizationId);
       if (!hasSub) {
         return res.status(403).json({

@@ -252,31 +252,33 @@ export default function EnhancedFlowSidebar({ onDragStart, mobileMode = false, o
     }, [searchQuery]);
 
     return (
-        <div className={`bg-white flex flex-col h-full ${mobileMode ? 'w-full' : 'w-[316px] border-r border-gray-200'}`}>
+        <div className={`bg-white flex flex-col h-full ${mobileMode ? 'w-full' : 'w-[272px] border-r border-gray-200'}`}>
             {/* Header */}
-            <div className="border-b border-gray-100 px-4 py-3 bg-white/80 backdrop-blur-md z-10 relative shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)]">
+            <div className="relative z-10 border-b border-gray-200 bg-white px-4 py-4">
                 <div className="flex items-center justify-between gap-2 mb-3">
                     <h3 className="text-sm font-bold text-gray-900 tracking-tight flex items-center gap-2">
-                        {mobileMode ? 'Add Node' : 'Nodes'}
+                        {mobileMode ? 'Add a block' : 'Flow blocks'}
                     </h3>
                     <span className="rounded-full bg-gray-50 px-2 py-0.5 text-[10px] font-semibold text-gray-500 shrink-0 border border-gray-200 shadow-sm">
                         {allNodes.length} blocks
                     </span>
                 </div>
                 <div className="relative group">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400 group-focus-within:text-[#25D366] transition-colors" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400 group-focus-within:text-[#0b74c9] transition-colors" />
                     <input
                         type="text"
+                        aria-label="Search flow blocks"
                         placeholder="Search blocks..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full h-8 pl-9 pr-3 text-xs rounded-lg bg-gray-50 border border-gray-200 focus:bg-white focus:border-[#25D366] focus:ring-2 focus:ring-[#25D366]/10 outline-none transition-all placeholder:text-gray-400"
+                        className="w-full h-9 pl-9 pr-3 text-xs rounded-lg bg-gray-50 border border-gray-200 focus:bg-white focus:border-[#0b74c9] focus:ring-1 focus:ring-[#0b74c9] outline-none transition-all placeholder:text-gray-400"
                     />
                 </div>
             </div>
 
             {/* Node List */}
             <div className="flex-1 overflow-y-auto px-3 py-3">
+                {filteredCategories.length === 0 && <div className="px-3 py-8 text-center"><p className="text-sm font-medium text-gray-900">No blocks found</p><p className="mt-1 text-xs leading-5 text-gray-500">Try a different name or clear your search.</p><button type="button" onClick={() => setSearchQuery('')} className="mt-3 text-xs font-medium text-blue-700 hover:underline">Clear search</button></div>}
                 {filteredCategories.map((category) => {
                     const isCollapsed = collapsedCategories.has(category.title);
 
@@ -284,10 +286,11 @@ export default function EnhancedFlowSidebar({ onDragStart, mobileMode = false, o
                         <section key={category.title} className="mb-3">
                             <button
                                 type="button"
+                                aria-expanded={!isCollapsed}
                                 onClick={() => toggleCategory(category.title)}
                                 className="mb-1.5 flex w-full items-center justify-between rounded-md px-1 py-1 text-left hover:bg-gray-50"
                             >
-                                <span className="text-[11px] font-semibold uppercase tracking-normal text-gray-500">{category.title}</span>
+                                <span className="text-xs font-medium text-gray-500">{category.title}</span>
                                 <ChevronDown className={`h-3.5 w-3.5 text-gray-400 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
                             </button>
 
@@ -303,16 +306,17 @@ export default function EnhancedFlowSidebar({ onDragStart, mobileMode = false, o
                                                 <button
                                                     key={node.type}
                                                     type="button"
+                                                    disabled={node.comingSoon}
                                                     onClick={() => node.comingSoon ? undefined : onMobileTap?.(node.type, node)}
                                                     className={`flex flex-col items-center gap-1.5 rounded-xl border p-2.5 w-full text-center transition-colors ${
                                                         isActive
-                                                            ? 'border-[#25D366] bg-[#25D366]/[0.06]'
+                                                            ? 'border-[#0b74c9] bg-blue-50'
                                                             : 'border-gray-200 bg-white hover:border-gray-300'
                                                     } ${node.comingSoon ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}`}
                                                 >
                                                     <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
                                                         isActive
-                                                            ? 'border-[#25D366]/40 bg-white text-[#128C7E]'
+                                                            ? 'border-[#0b74c9]/40 bg-white text-[#128C7E]'
                                                             : 'border-gray-200 bg-[#f5f7fa] text-gray-600'
                                                     }`}>
                                                         <Icon className="h-4 w-4 stroke-[1.8]" />
@@ -331,7 +335,11 @@ export default function EnhancedFlowSidebar({ onDragStart, mobileMode = false, o
                                             <div
                                                 key={node.type}
                                                 draggable={!node.comingSoon}
-                                                tabIndex={0}
+                                                role="button"
+                                                aria-label={`Add ${node.label}`}
+                                                aria-disabled={Boolean(node.comingSoon)}
+                                                tabIndex={node.comingSoon ? -1 : 0}
+                                                onKeyDown={event => { if (!node.comingSoon && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onMobileTap?.(node.type); } }}
                                                 onMouseEnter={(e) => {
                                                     setActiveNode(node);
                                                     if (node.comingSoon) {
@@ -362,14 +370,14 @@ export default function EnhancedFlowSidebar({ onDragStart, mobileMode = false, o
                                                 }}
                                                 className={`group relative cursor-grab rounded-md border bg-white p-2.5 transition-colors active:cursor-grabbing ${
                                                     isActive
-                                                        ? 'border-[#25D366] bg-[#25D366]/[0.04]'
+                                                        ? 'border-[#0b74c9] bg-[#0b74c9]/[0.04]'
                                                         : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                                                 } ${node.comingSoon ? 'opacity-65 cursor-not-allowed' : ''}`}
                                             >
                                                 <div className="flex items-start gap-2.5">
                                                     <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded border ${
                                                         isActive
-                                                            ? 'border-[#25D366]/40 bg-white text-[#128C7E]'
+                                                            ? 'border-[#0b74c9]/40 bg-white text-[#128C7E]'
                                                             : 'border-gray-200 bg-[#f5f7fa] text-gray-600'
                                                     }`}>
                                                         <Icon className="h-4 w-4 stroke-[1.8]" />
@@ -438,11 +446,11 @@ function NodeHelp({ node }) {
     return (
         <div className="relative border-t border-gray-100 bg-white p-3 shrink-0">
             {/* Ambient background glow */}
-            <div className="absolute inset-0 bg-gradient-to-t from-[#25D366]/[0.02] to-transparent pointer-events-none" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#0b74c9]/[0.02] to-transparent pointer-events-none" />
             
             <div className="relative rounded-xl border border-gray-100 bg-white shadow-[0_2px_12px_rgba(0,0,0,0.04)] overflow-hidden">
                 {/* Subtle top highlight */}
-                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#25D366]/30 to-transparent" />
+                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#0b74c9]/30 to-transparent" />
                 
                 <div className="p-3">
 
@@ -450,8 +458,8 @@ function NodeHelp({ node }) {
                     <div className="rounded-lg bg-gray-50/80 border border-gray-100 p-2.5">
                         <div className="text-[9px] font-bold uppercase tracking-wider text-gray-500 mb-2 flex items-center gap-1.5">
                             <span className="flex h-1.5 w-1.5 relative">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#25D366] opacity-40"></span>
-                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#25D366]"></span>
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#0b74c9] opacity-40"></span>
+                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#0b74c9]"></span>
                             </span>
                             {node.label}
                         </div>

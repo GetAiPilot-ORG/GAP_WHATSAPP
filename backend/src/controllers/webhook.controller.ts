@@ -1,3 +1,4 @@
+import { agentButtonsEnabled } from "../services/agentButtons.js";
 import { Response } from 'express';
 import crypto from "crypto";
 import * as fs from "fs";
@@ -10,6 +11,7 @@ import { sendTextMessage, applyReactionUpdate, downloadMetaMedia, sendInteractiv
 import { processFlowEngine } from '../services/flows.service.js';
 import { upsertContact } from '../services/contacts.service.js';
 import { getBotAgentReply } from '../services/ai.service.js';
+import { setBotDebounce, clearBotDebounce, getBotLock, setBotLock } from '../services/botDebounce.service.js';
 import { normalizeMetaTemplateStatus, upsertLocalTemplateSubmission } from './whatsapp.controller.js';
 import { encryptToken } from '../utils/crypto.js';
 import { isGroupOrChannelWaId, isNonIndividualThreadContact } from '../utils/format.js';
@@ -21,8 +23,15 @@ const APP_SECRET = process.env.META_APP_SECRET;
 const ACCESS_TOKEN = process.env.WA_ACCESS_TOKEN;
 const WEBHOOK_DEBUG = String(process.env.WEBHOOK_DEBUG || "true").toLowerCase() !== "false";
 
-const botDebounceMap = new Map<string, NodeJS.Timeout>();
-const botLockMap = new Map<string, Promise<void>>();
+const processedWebhookMessages = new Map<string, number>();
+
+// Periodic cleanup of deduplication cache (keep IDs for 15 minutes)
+setInterval(() => {
+  const cutoff = Date.now() - 15 * 60 * 1000;
+  for (const [id, ts] of processedWebhookMessages.entries()) {
+    if (ts < cutoff) processedWebhookMessages.delete(id);
+  }
+}, 5 * 60 * 1000).unref();
 
 function botDebugLog(text: string) {
   try {
@@ -97,17 +106,15 @@ export function queueBotAgentReply(params: {
   }
 
   const debounceKey = conv.id;
-  if (botDebounceMap.has(debounceKey)) {
-    clearTimeout(botDebounceMap.get(debounceKey)!);
-  }
+  clearBotDebounce(debounceKey);
 
-  botDebounceMap.set(
+  setBotDebounce(
     debounceKey,
     setTimeout(async () => {
-      botDebounceMap.delete(debounceKey);
+      clearBotDebounce(debounceKey);
 
       // Ensure sequential processing per conversation
-      const previousPromise = botLockMap.get(conv.id) || Promise.resolve();
+      const previousPromise = getBotLock(conv.id);
       const currentPromise = previousPromise.then(async () => {
         try {
           if (phone_number_id && wa_message_id) {
@@ -116,7 +123,7 @@ export function queueBotAgentReply(params: {
           const botResult = await getBotAgentReply({
             organization_id,
             conversation_id: conv.id,
-            text, // This will be the text of the LAST message sent within the 5 seconds
+            text, // Use the latest message in the debounce window.
           });
 
           webhookLog("bot_agent.process.done", {
@@ -133,20 +140,31 @@ export function queueBotAgentReply(params: {
             const isFallback = botResult.reply.startsWith("[FALLBACK]");
             const cleanReply = botResult.reply.replace("[FALLBACK]", "").trim();
 
-            if (isFallback) {
+            if (isFallback && agentButtonsEnabled(botResult.agent)) {
               console.log(`🤖 Bot "${botResult.agent?.name}" sending fallback interactive buttons`);
               const buttonBody =
                 cleanReply ||
                 'I couldn\'t find an answer to your question. Please reply with "human" or click the button below to connect with a support agent.';
               const fallbackButtons = [{ id: "talk_to_agent", text: "Talk to Agent" }];
 
-              const sendResult = await sendInteractiveButtons(
-                from,
-                buttonBody,
-                fallbackButtons,
-                "Choose an option",
-                phone_number_id
-              );
+              let sendResult: any = null;
+              let isInteractiveSent = false;
+              try {
+                sendResult = await sendInteractiveButtons(
+                  from,
+                  buttonBody,
+                  fallbackButtons,
+                  "Choose an option",
+                  phone_number_id
+                );
+                isInteractiveSent = Boolean(sendResult?.messages?.[0]?.id);
+              } catch (fallbackInteractiveErr: any) {
+                console.warn(
+                  `[Bot Agent] Fallback interactive buttons send failed (${fallbackInteractiveErr?.message || fallbackInteractiveErr}). Falling back to text.`
+                );
+                sendResult = await sendTextMessage(from, buttonBody, phone_number_id);
+              }
+
               botWaMessageId = sendResult?.messages?.[0]?.id || null;
 
               storedBotReply = await storeMessage({
@@ -155,8 +173,8 @@ export function queueBotAgentReply(params: {
                 conversation_id: conv.id,
                 wa_message_id: botWaMessageId,
                 direction: "outbound",
-                type: "interactive",
-                content: {
+                type: isInteractiveSent ? "interactive" : "text",
+                content: isInteractiveSent ? {
                   text: buttonBody,
                   interactive: {
                     type: "button",
@@ -164,6 +182,10 @@ export function queueBotAgentReply(params: {
                     buttons: fallbackButtons,
                   },
                   is_bot_reply: true,
+                  bot_agent_id: botResult.agent?.id,
+                  bot_agent_name: botResult.agent?.name,
+                } : {
+                  text: buttonBody,
                   bot_agent_id: botResult.agent?.id,
                   bot_agent_name: botResult.agent?.name,
                 },
@@ -185,14 +207,16 @@ export function queueBotAgentReply(params: {
                 wa_message_id: botWaMessageId,
                 created_at: storedBotReply?.created_at || new Date().toISOString(),
                 connectedAccount: metadata?.display_phone_number,
-                type: "interactive",
-                content: {
+                type: isInteractiveSent ? "interactive" : "text",
+                content: isInteractiveSent ? {
                   text: buttonBody,
                   interactive: {
                     type: "button",
                     body: buttonBody,
                     buttons: fallbackButtons,
                   },
+                } : {
+                  text: buttonBody,
                 },
                 is_bot_reply: true,
               });
@@ -230,12 +254,21 @@ export function queueBotAgentReply(params: {
               let interactiveType: "button" | "cta_url" = "button";
 
               if (isJsonButtons && parsedInteractive) {
-                const buttons = parsedInteractive.buttons;
-                if (buttons.length < 1) {
+                // Meta WhatsApp strictly requires interactive body text <= 1024 chars
+                if (!parsedInteractive.text || typeof parsedInteractive.text !== "string" || parsedInteractive.text.trim().length > 1024) {
+                  botDebugLog(`Interactive body text missing or exceeds 1024 chars (length: ${parsedInteractive.text?.length}). Invalidating interactive payload to use plain text fallback.`);
                   isValid = false;
-                } else {
+                }
+
+                const buttons = parsedInteractive.buttons;
+                if (!Array.isArray(buttons) || buttons.length < 1) {
+                  isValid = false;
+                } else if (isValid) {
                   const rawButtonsSlice = buttons.slice(0, 3);
-                  for (const btn of rawButtonsSlice) {
+                  const seenButtonTitles = new Set<string>();
+
+                  for (let i = 0; i < rawButtonsSlice.length; i++) {
+                    const btn = rawButtonsSlice[i];
                     if (!btn || typeof btn !== "object" || !btn.text || typeof btn.text !== "string") {
                       isValid = false;
                       break;
@@ -256,11 +289,22 @@ export function queueBotAgentReply(params: {
                       break;
                     }
 
-                    const sanitizedText = btn.text.trim().substring(0, 20);
+                    let sanitizedText = btn.text.trim().substring(0, 20);
                     if (!sanitizedText) {
                       isValid = false;
                       break;
                     }
+
+                    // Deduplicate button titles: Meta rejects interactive messages if any buttons have duplicate titles
+                    const lowerText = sanitizedText.toLowerCase();
+                    if (seenButtonTitles.has(lowerText)) {
+                      const suffix = ` (${i + 1})`;
+                      sanitizedText = (sanitizedText.substring(0, 20 - suffix.length) + suffix).trim();
+                      if (seenButtonTitles.has(sanitizedText.toLowerCase())) {
+                        sanitizedText = `Option ${i + 1}`;
+                      }
+                    }
+                    seenButtonTitles.add(sanitizedText.toLowerCase());
 
                     const rawId = btn.id || btn.text;
                     const sanitizedId = String(rawId).trim().substring(0, 256);
@@ -298,14 +342,27 @@ export function queueBotAgentReply(params: {
                 const footer = parsedInteractive.footer || "";
                 previewText = buttonBody;
 
-                const sendResult = await sendInteractiveButtons(
-                  from,
-                  buttonBody,
-                  validatedButtons,
-                  footer,
-                  phone_number_id
-                );
-                botWaMessageId = sendResult?.messages?.[0]?.id || null;
+                let sendResult: any = null;
+                let isDynamicInteractiveSent = false;
+
+                try {
+                  sendResult = await sendInteractiveButtons(
+                    from,
+                    buttonBody,
+                    validatedButtons,
+                    footer,
+                    phone_number_id
+                  );
+                  botWaMessageId = sendResult?.messages?.[0]?.id || null;
+                  isDynamicInteractiveSent = Boolean(botWaMessageId);
+                } catch (dynamicInteractiveErr: any) {
+                  console.warn(
+                    `[Bot Agent] Dynamic interactive buttons send failed (${dynamicInteractiveErr?.message || dynamicInteractiveErr}). Falling back to plain text.`
+                  );
+                  botDebugLog(`Dynamic interactive send failed: ${dynamicInteractiveErr?.message || dynamicInteractiveErr}. Falling back to plain text.`);
+                  sendResult = await sendTextMessage(from, buttonBody, phone_number_id);
+                  botWaMessageId = sendResult?.messages?.[0]?.id || null;
+                }
 
                 storedBotReply = await storeMessage({
                   organization_id,
@@ -313,8 +370,8 @@ export function queueBotAgentReply(params: {
                   conversation_id: conv.id,
                   wa_message_id: botWaMessageId,
                   direction: "outbound",
-                  type: "interactive",
-                  content: {
+                  type: isDynamicInteractiveSent ? "interactive" : "text",
+                  content: isDynamicInteractiveSent ? {
                     text: buttonBody,
                     interactive: {
                       type: interactiveType,
@@ -323,6 +380,10 @@ export function queueBotAgentReply(params: {
                       buttons: validatedButtons,
                     },
                     is_bot_reply: true,
+                    bot_agent_id: botResult.agent?.id,
+                    bot_agent_name: botResult.agent?.name,
+                  } : {
+                    text: buttonBody,
                     bot_agent_id: botResult.agent?.id,
                     bot_agent_name: botResult.agent?.name,
                   },
@@ -344,8 +405,8 @@ export function queueBotAgentReply(params: {
                   wa_message_id: botWaMessageId,
                   created_at: storedBotReply?.created_at || new Date().toISOString(),
                   connectedAccount: metadata?.display_phone_number,
-                  type: "interactive",
-                  content: {
+                  type: isDynamicInteractiveSent ? "interactive" : "text",
+                  content: isDynamicInteractiveSent ? {
                     text: buttonBody,
                     interactive: {
                       type: interactiveType,
@@ -353,12 +414,14 @@ export function queueBotAgentReply(params: {
                       footer: footer,
                       buttons: validatedButtons,
                     },
+                  } : {
+                    text: buttonBody,
                   },
                   is_bot_reply: true,
                 });
               } else {
                 botDebugLog(`Replying with plain text for bot "${botResult.agent?.name}"`);
-                let plainTextReply = botResult.reply;
+                let plainTextReply = cleanReply;
                 if (isJsonButtons && parsedInteractive && parsedInteractive.text) {
                   plainTextReply = parsedInteractive.text;
                 }
@@ -426,8 +489,8 @@ export function queueBotAgentReply(params: {
         }
       });
 
-      botLockMap.set(conv.id, currentPromise);
-    }, 5000)
+      setBotLock(conv.id, currentPromise);
+    }, 1500)
   );
 }
 
@@ -707,6 +770,18 @@ export async function handleWebhook(req: any, res: Response) {
       continue;
     }
 
+    // Account-level onboarding notifications do not carry message metadata.
+    // They cannot establish a tenant mapping or replace the authenticated OAuth
+    // callback that saves the number and its access token.
+    if (change?.field === "account_update" && !metadata?.phone_number_id) {
+      webhookLog("account.update.received", {
+        requestId,
+        event: value?.event || null,
+        waba_id: value?.waba_info?.waba_id || entry?.id || null,
+      });
+      continue;
+    }
+
     // 1. Identify Organization & Account
     const phone_number_id = metadata?.phone_number_id;
     let organization_id: string | null = null;
@@ -717,18 +792,28 @@ export async function handleWebhook(req: any, res: Response) {
         requestId,
         phone_number_id,
       });
-      const { data: acc, error: accountLookupError } = await supabase
+      let { data: acc, error: accountLookupError } = await supabase
         .from("w_wa_accounts")
-        .select("id, organization_id")
+        .select("id, organization_id, offboarding_started_at")
         .eq("phone_number_id", phone_number_id)
         .maybeSingle();
+
+      if (accountLookupError?.code === '42703') {
+        const legacy = await supabase.from("w_wa_accounts").select("id, organization_id")
+          .eq("phone_number_id", phone_number_id).maybeSingle();
+        acc = legacy.data;
+        accountLookupError = legacy.error;
+      }
 
       if (accountLookupError) {
         webhookError("account.lookup.failed", accountLookupError, {
           requestId,
           phone_number_id,
         });
+        continue;
       }
+
+      if (acc?.offboarding_started_at) continue;
 
       if (acc) {
         organization_id = acc.organization_id;
@@ -791,6 +876,35 @@ export async function handleWebhook(req: any, res: Response) {
         contacts[0]?.profile?.name ||
         null;
       const wa_message_id = msg.id;
+
+      // Inbound Webhook Idempotency: Ignore duplicate deliveries from Meta retries
+      if (wa_message_id) {
+        if (processedWebhookMessages.has(wa_message_id)) {
+          webhookLog("message.duplicate_skipped_memory", {
+            requestId,
+            wa_message_id,
+          });
+          continue;
+        }
+
+        const { data: existingMsg } = await supabase
+          .from("w_messages")
+          .select("id")
+          .eq("wa_message_id", wa_message_id)
+          .maybeSingle();
+
+        if (existingMsg?.id) {
+          processedWebhookMessages.set(wa_message_id, Date.now());
+          webhookLog("message.duplicate_skipped_db", {
+            requestId,
+            wa_message_id,
+            existing_id: existingMsg.id,
+          });
+          continue;
+        }
+
+        processedWebhookMessages.set(wa_message_id, Date.now());
+      }
 
       let type = msg.type;
       let text = "";
@@ -1561,13 +1675,14 @@ export async function handleWebhook(req: any, res: Response) {
             // 2. Send interactive buttons if present
             if (flowResult.interactive?.type === "button" || flowResult.interactive?.type === "cta_url") {
               console.log(`🔘 Flow Engine sending real buttons`);
-              const { body, buttons, footer } = flowResult.interactive;
+              const { body, buttons, footer, header } = flowResult.interactive;
               const sendResult = await sendInteractiveButtons(
                 from,
                 body,
                 buttons || [],
                 footer,
                 phone_number_id,
+                header,
               );
               const botWaMessageId = sendResult?.messages?.[0]?.id || null;
 
@@ -1689,7 +1804,12 @@ export async function handleWebhook(req: any, res: Response) {
               Array.isArray(flowResult.media) &&
               flowResult.media.length > 0
             ) {
-              for (const media of flowResult.media) {
+              const hasMediaInteractiveHeader = flowResult.interactive?.header?.type === "image" || flowResult.interactive?.header?.type === "video";
+              const mediaToSend = hasMediaInteractiveHeader
+                ? flowResult.media.filter((m) => !((m.type === "image" || m.type === "video") && m.buttonUrl))
+                : flowResult.media;
+
+              for (const media of mediaToSend) {
                 try {
                   const sentMedia = await sendFlowMediaMessageMeta({
                     phone_number_id,

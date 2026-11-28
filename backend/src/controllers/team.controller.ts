@@ -441,19 +441,74 @@ export async function getMyProfile(req: any, res: Response) {
         if ((!subscription || (!subscription.plan_id && !subscription.plan_label)) && orgId) {
             const { data: org } = await supabase
                 .from('organizations')
-                .select('plan_id, plan_status, is_active, subscription_tier')
+                .select('plan_id, plan_status, is_active, subscription_tier, plan_end_date')
                 .eq('id', orgId)
                 .maybeSingle();
+            const orgNotExpired = !org?.plan_end_date || new Date(org.plan_end_date).getTime() > Date.now();
             if (
                 org &&
                 org.subscription_tier !== 'free' &&
                 (org.plan_status === 'active' || org.plan_status === 'trial') &&
                 org.plan_id &&
-                org.plan_id !== 'free'
+                org.plan_id !== 'free' &&
+                orgNotExpired
             ) {
                 subscription = {
                     plan_id: org.plan_id,
-                    plan_label: org.plan_id === 'pro' ? 'WA Pro' : org.plan_id === 'growth' ? 'WA Growth' : 'WA Starter',
+                    plan_label: org.plan_id === 'enterprise' ? 'GAP Enterprise' : org.plan_id === 'pro' ? 'WA Pro' : org.plan_id === 'growth' ? 'WA Growth' : 'WA Starter',
+                    status: 'active',
+                    expires_at: org.plan_end_date || null
+                };
+            }
+        }
+
+        // Fallback to active Hub captured payment or admin/tester profile if app_user_subscriptions row is absent
+        if ((!subscription || (!subscription.plan_id && !subscription.plan_label)) && targetUserId) {
+            const [{ data: ownerProf }, { data: ownerPayments }] = await Promise.all([
+                supabase
+                    .from('profiles')
+                    .select('is_admin, role, subscription')
+                    .eq('id', targetUserId)
+                    .maybeSingle(),
+                supabase
+                    .from('app_subscription_payments')
+                    .select('plan_id, plan_label, charged_at, created_at, raw, payment_status')
+                    .eq('user_id', targetUserId)
+                    .order('created_at', { ascending: false })
+                    .limit(5)
+            ]);
+
+            const nowMs = Date.now();
+            const activePayment = (ownerPayments || []).find((p: any) => {
+                if (p?.payment_status === 'failed' || p?.plan_id === 'free_trial') return false;
+                if (Array.isArray(p?.raw?.active_plans)) {
+                    const ap = p.raw.active_plans.find((item: any) => item?.expires_at && new Date(item.expires_at).getTime() > nowMs && item?.plan_id !== 'free_trial');
+                    if (ap) return true;
+                }
+                const ts = p?.charged_at || p?.created_at;
+                return ts ? new Date(ts).getTime() + 32 * 86400000 > nowMs : false;
+            });
+
+            if (activePayment) {
+                const activeItem = Array.isArray(activePayment?.raw?.active_plans)
+                    ? activePayment.raw.active_plans.find((item: any) => item?.expires_at && new Date(item.expires_at).getTime() > nowMs && item?.plan_id !== 'free_trial')
+                    : null;
+                const ts = activePayment.charged_at || activePayment.created_at;
+                subscription = {
+                    plan_id: activeItem?.plan_id || activePayment.plan_id,
+                    plan_label: activeItem?.plan_label || activePayment.plan_label,
+                    status: 'active',
+                    expires_at: activeItem?.expires_at || (ts ? new Date(new Date(ts).getTime() + 32 * 86400000).toISOString() : null)
+                };
+            } else if (
+                ownerProf?.is_admin ||
+                ['admin', 'tester'].includes(String(ownerProf?.role || '').toLowerCase())
+            ) {
+                const profSub = String(ownerProf?.subscription || '').toLowerCase();
+                const isEnt = profSub.includes('enterprise') || profSub.includes('enterprice') || profSub.includes('scale');
+                subscription = {
+                    plan_id: isEnt ? 'gap_enterprise' : 'gap_core',
+                    plan_label: isEnt ? 'GAP Enterprise' : 'GAP Core',
                     status: 'active',
                     expires_at: null
                 };

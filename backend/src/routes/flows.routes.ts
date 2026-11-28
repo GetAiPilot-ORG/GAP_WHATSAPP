@@ -1,3 +1,4 @@
+import { getQuickReplyRegistry } from "../controllers/quickReplies.controller.js";
 import { Router } from 'express';
 import { 
     getFlows,
@@ -20,6 +21,7 @@ const router = Router();
 // Flows
 router.get('/', authMiddleware, getFlows);
 router.post('/', authMiddleware, createFlow);
+router.get('/quick-replies', authMiddleware, getQuickReplyRegistry);
 router.get('/:id', authMiddleware, getFlowById);
 router.put('/:id', authMiddleware, updateFlow);
 router.delete('/:id', authMiddleware, deleteFlow);

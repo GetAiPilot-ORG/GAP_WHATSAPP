@@ -37,7 +37,7 @@ export async function checkOrganizationSubscription(orgId: string): Promise<bool
 
     if (targetUserId) {
       const { data: s } = await supabase
-        .from('subscriptions')
+        .from('app_user_subscriptions')
         .select('plan_id, plan_label, expires_at, status')
         .eq('user_id', targetUserId)
         .maybeSingle();

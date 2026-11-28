@@ -1,7 +1,7 @@
 
 import { Request, Response } from "express";
 import { supabase } from "../config/supabase.js";
-import { listGoogleCalendarEvents, deleteGoogleCalendarEvent } from "../services/googleCalendar.service.js";
+import { listGoogleCalendarEvents, deleteGoogleCalendarEvent, createGoogleCalendarEvent } from "../services/googleCalendar.service.js";
 
 /**
  * GET /api/appointments
@@ -94,6 +94,7 @@ export async function getAppointments(req: Request, res: Response) {
           contact_name: cName,
           contact_phone: cPhone || null,
           html_link: gEvent.htmlLink || null,
+          meet_link: gEvent.hangoutLink || (gEvent.conferenceData?.entryPoints?.find((ep: any) => ep.entryPointType === 'video')?.uri) || null,
         });
       }
     }
@@ -101,12 +102,22 @@ export async function getAppointments(req: Request, res: Response) {
     // 2. Query w_flow_sessions as active sessions source
     const { data: flowSessions } = await supabase
       .from("w_flow_sessions")
-      .select("id, organization_id, contact_id, state_data, created_at, updated_at")
+      .select("id, organization_id, contact_id, flow_id, state_data, created_at, updated_at")
       .eq("organization_id", organizationId);
+
+    const flowIds = [...new Set((flowSessions || []).map((session: any) => session.flow_id || session.state_data?.appointment_flow_id).filter(Boolean))];
+    const flowNames = new Map<string, string>();
+    for (let offset = 0; offset < flowIds.length; offset += 100) {
+      const { data: flows, error: flowError } = await supabase.from("w_flows").select("id, name").eq("organization_id", organizationId).in("id", flowIds.slice(offset, offset + 100));
+      if (flowError) throw flowError;
+      for (const flow of flows || []) flowNames.set(flow.id, flow.name);
+    }
 
     if (flowSessions && flowSessions.length > 0) {
       for (const session of flowSessions) {
         const state = session.state_data || {};
+        const flowId = session.flow_id || state.appointment_flow_id || null;
+        const flowName = flowNames.get(flowId) || state.appointment_flow_name || null;
 
         // Skip explicitly cancelled or cleared appointment sessions
         if (state.appointment_status === "cancelled" || !state.appointment_date) {
@@ -130,11 +141,16 @@ export async function getAppointments(req: Request, res: Response) {
             const existing = appointmentsMap.get(existingKey);
             existing.contact_id = session.contact_id || existing.contact_id;
             existing.flow_session_id = session.id;
+            existing.flow_id = flowId;
+            existing.flow_name = flowName;
             existing.status = state.appointment_status || existing.status || "confirmed";
             // Always keep google_event_id from gcal entry (already set), also add session_id for deletion routing
             existing.session_id = session.id;
             if (state.name) existing.contact_name = state.name;
             if (state.phone) existing.contact_phone = state.phone;
+            if (state.meet_link || state.meeting_link || state.meet_url) {
+              existing.meet_link = state.meet_link || state.meeting_link || state.meet_url;
+            }
           } else {
             const key = `session_${session.id}`;
             appointmentsMap.set(key, {
@@ -142,6 +158,8 @@ export async function getAppointments(req: Request, res: Response) {
               google_event_id: gId || null,
               session_id: session.id,
               source: "w_flow_sessions",
+              flow_id: flowId,
+              flow_name: flowName,
               contact_id: session.contact_id,
               conversation_id: null,
               flow_session_id: session.id,
@@ -153,6 +171,7 @@ export async function getAppointments(req: Request, res: Response) {
               created_at: session.created_at || session.updated_at,
               contact_name: state.name || null,
               contact_phone: state.phone || null,
+              meet_link: state.meet_link || state.meeting_link || state.meet_url || null,
             });
           }
         }
@@ -248,6 +267,11 @@ export async function getAppointments(req: Request, res: Response) {
       const yr = parseInt((app.appointment_date || "").split("-")[0], 10);
       if (yr > 2027) return false;
 
+      // Always keep meetings created via flow sessions, meeting studio, or with a meet link
+      if (app.source === "w_flow_sessions" || app.flow_session_id || app.session_id || app.meet_link) {
+        return true;
+      }
+
       const name = String(app.contact_name || "").trim().toLowerCase();
       const phone = String(app.contact_phone || "").trim().toLowerCase();
 
@@ -261,6 +285,15 @@ export async function getAppointments(req: Request, res: Response) {
 
       return true;
     });
+
+    const services = [...new Map(allAppointments.map((appointment: any) => [appointment.flow_id || "__other__", {
+      id: appointment.flow_id || "__other__",
+      name: appointment.flow_name || (appointment.flow_id ? "Previous flow" : "Other sources"),
+    }])).values()].sort((a: any, b: any) => a.name.localeCompare(b.name));
+    const serviceFilter = String(req.query.flow_id || "").trim();
+    if (serviceFilter && serviceFilter !== "all") {
+      allAppointments = allAppointments.filter((appointment: any) => (appointment.flow_id || "__other__") === serviceFilter);
+    }
 
     // 4. Calculate Live Summary Metrics dynamically from valid active appointments
     const getLocalDateStr = () => {
@@ -323,11 +356,19 @@ export async function getAppointments(req: Request, res: Response) {
         const name = String(a.contact_name || "").toLowerCase();
         const phone = String(a.contact_phone || "").toLowerCase();
         const date = String(a.appointment_date || "").toLowerCase();
-        return name.includes(search) || phone.includes(search) || date.includes(search);
+        const service = String(a.flow_name || "").toLowerCase();
+        return name.includes(search) || phone.includes(search) || date.includes(search) || service.includes(search);
       });
     }
 
-    // 8. Pagination & Return
+    // 8. Sort appointments: Newest / Most recent first so newly created meetings appear at the top
+    allAppointments.sort((a, b) => {
+      const createdA = new Date(a.created_at || a.appointment_datetime || `${a.appointment_date}T00:00:00` || 0).getTime();
+      const createdB = new Date(b.created_at || b.appointment_datetime || `${b.appointment_date}T00:00:00` || 0).getTime();
+      return createdB - createdA;
+    });
+
+    // 9. Pagination & Return
     const total = allAppointments.length;
     const totalPages = Math.ceil(total / limit) || 1;
     const startIndex = (page - 1) * limit;
@@ -336,6 +377,7 @@ export async function getAppointments(req: Request, res: Response) {
     return res.json({
       success: true,
       data: paginatedAppointments,
+      services,
       summary: {
         totalBookings,
         todayCount,
@@ -525,5 +567,294 @@ export async function deleteAppointment(req: Request, res: Response) {
   } catch (error: any) {
     console.error("Error in deleteAppointment controller:", error);
     return res.status(500).json({ error: error.message || "Failed to delete appointment" });
+  }
+}
+
+/**
+ * POST /api/appointments
+ * Create a new appointment / scheduled meeting (saves to session state and syncs to Google Calendar)
+ */
+export async function createAppointment(req: Request, res: Response) {
+  try {
+    const organizationId = String(
+      req.body.organization_id || req.headers["x-organization-id"] || ""
+    ).trim();
+
+    if (!organizationId) {
+      return res.status(400).json({ error: "Missing organization_id" });
+    }
+
+    const {
+      contact_name,
+      contact_phone,
+      contact_email,
+      appointment_date,
+      appointment_time,
+      service_name,
+      meet_link,
+      notes,
+    } = req.body;
+
+    if (!appointment_date || !appointment_time) {
+      return res.status(400).json({ error: "appointment_date and appointment_time are required" });
+    }
+
+    // Format display time & raw time
+    let displayTime = appointment_time;
+    let rawTime = appointment_time;
+    if (appointment_time.includes(":")) {
+      const parts = appointment_time.split(":");
+      const hr = parseInt(parts[0], 10);
+      const min = parts[1] ? parts[1].slice(0, 2) : "00";
+      if (!isNaN(hr)) {
+        const ampm = hr >= 12 ? "PM" : "AM";
+        const displayHr = hr > 12 ? hr - 12 : hr === 0 ? 12 : hr;
+        displayTime = `${String(displayHr).padStart(2, "0")}:${min} ${ampm}`;
+        rawTime = `${String(hr).padStart(2, "0")}:${min}`;
+      }
+    }
+
+    // Check if time slot is already taken before schedule finishes
+    try {
+      const { data: existingSessions } = await supabase
+        .from("w_flow_sessions")
+        .select("id, state_data")
+        .eq("organization_id", organizationId)
+        .eq("state_data->>appointment_date", appointment_date)
+        .limit(100);
+
+      if (existingSessions && existingSessions.length > 0) {
+        const clash = existingSessions.find((s: any) => {
+          const sd = s.state_data || {};
+          if (sd.appointment_status === "cancelled") return false;
+          const sRaw = String(sd.selected_time_raw || "").trim();
+          const sDisp = String(sd.appointment_time || "").trim();
+          return sRaw === rawTime || sDisp === displayTime || sDisp === rawTime;
+        });
+
+        if (clash) {
+          return res.status(409).json({
+            error: `This time slot (${displayTime} on ${appointment_date}) is already taken. Please choose another time.`,
+          });
+        }
+      }
+    } catch (checkErr) {
+      console.warn("Could not check appointment conflict in w_flow_sessions:", checkErr);
+    }
+
+    // Branded Video Meeting link generator
+    let finalMeetLink = meet_link;
+    if (!finalMeetLink) {
+      const cleanTitle = (service_name || "WhatsAppMeeting").replace(/[^a-zA-Z0-9]/g, "").slice(0, 16);
+      const shortId = Math.random().toString(36).slice(2, 8);
+      finalMeetLink = `https://meet.jit.si/GetAiPilot-${cleanTitle}-${shortId}`;
+    }
+
+    // Google Calendar Sync if integrated
+    let googleEventId: string | null = null;
+    try {
+      const startDateTimeISO = `${appointment_date}T${rawTime}:00`;
+      const [h, m] = rawTime.split(":");
+      const startD = new Date(`${appointment_date}T${h.padStart(2, "0")}:${m ? m.padStart(2, "0") : "00"}:00`);
+      const endD = new Date(startD.getTime() + 30 * 60 * 1000);
+      const endDateTimeISO = endD.toISOString();
+
+      const summary = `Appointment: ${contact_name || contact_phone || "Client"} - ${service_name || "Meeting"}`;
+      const description = `WhatsApp Scheduled Meeting\nClient: ${contact_name || "Client"}\nPhone: ${contact_phone || "N/A"}\nEmail: ${contact_email || "N/A"}\nMeeting Link: ${finalMeetLink}\nNotes: ${notes || "None"}`;
+
+      const gcalRes = await createGoogleCalendarEvent(
+        organizationId,
+        summary,
+        startDateTimeISO,
+        endDateTimeISO,
+        description
+      );
+      if (gcalRes && gcalRes.success && gcalRes.eventId) {
+        googleEventId = gcalRes.eventId;
+      }
+    } catch (gcalErr) {
+      console.warn("Could not sync appointment to Google Calendar:", gcalErr);
+    }
+
+    // Upsert Contact in w_contacts if phone is provided
+    let contactId = null;
+    let conversationId = null;
+    if (contact_phone) {
+      const cleanPhone = String(contact_phone).replace(/\D/g, "");
+      if (cleanPhone) {
+        const { data: existingContact } = await supabase
+          .from("w_contacts")
+          .select("id")
+          .eq("organization_id", organizationId)
+          .eq("phone", cleanPhone)
+          .maybeSingle();
+
+        if (existingContact) {
+          contactId = existingContact.id;
+        } else {
+          const { data: newContact } = await supabase
+            .from("w_contacts")
+            .insert({
+              organization_id: organizationId,
+              phone: cleanPhone,
+              name: contact_name || cleanPhone,
+              wa_id: cleanPhone,
+            })
+            .select("id")
+            .single();
+          if (newContact) contactId = newContact.id;
+        }
+
+        if (contactId) {
+          const { data: existingConv } = await supabase
+            .from("w_conversations")
+            .select("id")
+            .eq("organization_id", organizationId)
+            .eq("contact_id", contactId)
+            .maybeSingle();
+          if (existingConv) {
+            conversationId = existingConv.id;
+          }
+        }
+      }
+    }
+
+    // Save appointment record in w_flow_sessions
+    const stateData = {
+      appointment_date,
+      appointment_time: displayTime,
+      selected_time_raw: rawTime,
+      appointment_datetime: `${appointment_date}T${rawTime}:00`,
+      appointment_status: "confirmed",
+      name: contact_name || "Client",
+      phone: contact_phone || null,
+      email: contact_email || null,
+      notes: notes || null,
+      meet_link: finalMeetLink,
+      google_event_id: googleEventId,
+      appointment_flow_name: service_name || "Meeting Link Studio",
+    };
+
+    const sessionPayload: Record<string, any> = {
+      organization_id: organizationId,
+      contact_id: contactId,
+      current_node_id: "appointment_node",
+      status: "completed",
+      state_data: stateData,
+    };
+    if (conversationId) {
+      sessionPayload.conversation_id = conversationId;
+    }
+
+    const { data: sessionData, error: sessionErr } = await supabase
+      .from("w_flow_sessions")
+      .insert(sessionPayload)
+      .select("id, created_at")
+      .single();
+
+    if (sessionErr) {
+      console.error("Error creating appointment session:", sessionErr);
+      return res.status(500).json({ error: sessionErr.message });
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: "Appointment created successfully",
+      data: {
+        id: sessionData.id,
+        google_event_id: googleEventId,
+        appointment_date,
+        appointment_time: rawTime,
+        display_time: displayTime,
+        appointment_datetime: `${appointment_date}T${rawTime}:00`,
+        status: "confirmed",
+        contact_name: contact_name || "Client",
+        contact_phone: contact_phone || null,
+        flow_name: service_name || "Meeting Link Studio",
+        meet_link: finalMeetLink,
+        source: "w_flow_sessions",
+        created_at: sessionData.created_at || new Date().toISOString(),
+      },
+    });
+  } catch (err: any) {
+    console.error("Error creating appointment:", err);
+    return res.status(500).json({ error: err.message || "Failed to create appointment" });
+  }
+}
+
+/**
+ * GET /api/appointments/:id/join
+ * Masked meeting gateway: verifies scheduled time before redirecting or providing the real video link.
+ */
+export async function getAppointmentJoin(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const shouldRedirect = req.query.redirect === "true";
+
+    if (!id) {
+      return res.status(400).json({ error: "Missing appointment id" });
+    }
+
+    // Lookup session in w_flow_sessions
+    const { data: session } = await supabase
+      .from("w_flow_sessions")
+      .select("id, state_data")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (!session || !session.state_data) {
+      return res.status(404).json({ error: "Appointment not found or expired." });
+    }
+
+    const sd = session.state_data;
+    const dateStr = sd.appointment_date;
+    const timeStr = sd.selected_time_raw || sd.appointment_time || "10:00";
+    const rawMeetLink = sd.meet_link;
+
+    if (!rawMeetLink) {
+      return res.status(404).json({ error: "No video meeting room assigned to this appointment." });
+    }
+
+    // Check meeting time window
+    const [y, m, d] = String(dateStr).split("-").map(Number);
+    const [h, min] = String(timeStr).split(":").map(Number);
+    const meetingStart = new Date(y, (m || 1) - 1, d || 1, h || 0, min || 0);
+
+    const now = new Date();
+    const earlyEntryMs = 10 * 60 * 1000; // 10 minutes early entry
+    const earliestJoin = new Date(meetingStart.getTime() - earlyEntryMs);
+    const meetingEnd = new Date(meetingStart.getTime() + 30 * 60 * 1000);
+
+    if (now < earliestJoin) {
+      const remainingSec = Math.ceil((earliestJoin.getTime() - now.getTime()) / 1000);
+      return res.status(403).json({
+        isLocked: true,
+        error: "Meeting room is locked before scheduled time.",
+        unlocksAt: earliestJoin.toISOString(),
+        scheduledStart: meetingStart.toISOString(),
+        secondsRemaining: remainingSec,
+      });
+    }
+
+    if (now > meetingEnd) {
+      return res.status(410).json({
+        isLocked: true,
+        isEnded: true,
+        error: "This meeting session has ended.",
+      });
+    }
+
+    // Unlocked!
+    if (shouldRedirect) {
+      return res.redirect(rawMeetLink);
+    }
+
+    return res.json({
+      isLocked: false,
+      meetLink: rawMeetLink,
+    });
+  } catch (err: any) {
+    console.error("Error in getAppointmentJoin:", err);
+    return res.status(500).json({ error: err.message || "Failed to verify meeting time." });
   }
 }

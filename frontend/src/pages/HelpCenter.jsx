@@ -546,7 +546,7 @@ export default function HelpCenter() {
                 </a>
 
                 <a
-                    href="https://wa.me/919999999999"
+                    href="https://wa.me/getaipilottechsupport"
                     id="help-whatsapp-support"
                     target="_blank"
                     rel="noopener noreferrer"

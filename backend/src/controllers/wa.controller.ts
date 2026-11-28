@@ -45,6 +45,20 @@ export async function connectStart(req: any, res: Response) {
     });
 }
 
+async function fetchSignupMeta(url: string, init: RequestInit = {}) {
+    const started = Date.now();
+    // Log only the Graph path; query strings contain credentials and signup codes.
+    const step = new URL(url).pathname;
+    try {
+        const response = await fetch(url, { ...init, signal: init.signal || AbortSignal.timeout(10000) });
+        console.info(`[ConnectCallback] Meta ${step}: HTTP ${response.status} in ${Date.now() - started}ms`);
+        return response;
+    } catch (error: any) {
+        console.warn(`[ConnectCallback] Meta ${step}: ${error.name || 'Error'} after ${Date.now() - started}ms`);
+        throw error;
+    }
+}
+
 export async function connectCallback(req: any, res: Response) {
     const { code, waba_id, phone_number_id: requestedPhoneNumberId } = req.body;
 
@@ -61,26 +75,48 @@ export async function connectCallback(req: any, res: Response) {
             return res.status(500).json({ error: 'Meta app configuration is missing. Set META_APP_ID and META_APP_SECRET.' });
         }
 
-        const tokenUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/oauth/access_token` +
-            `?client_id=${appId}` +
-            `&client_secret=${appSecret}` +
-            `&code=${code}` +
-            (redirectUri ? `&redirect_uri=${encodeURIComponent(redirectUri)}` : '');
-        const tokenRes = await fetch(tokenUrl);
+        // SDK signup has no application redirect URI. Only include an explicit
+        // URI for callers that actually used it in their OAuth dialog.
+        const tokenParams = new URLSearchParams({
+            client_id: appId,
+            client_secret: appSecret,
+            code: String(code),
+        });
+        if (redirectUri) tokenParams.set('redirect_uri', redirectUri);
+        const tokenUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/oauth/access_token?${tokenParams}`;
+        const tokenRes = await fetchSignupMeta(tokenUrl);
         const tokenData: any = await tokenRes.json();
 
         if (!tokenRes.ok || tokenData.error || !tokenData.access_token) {
+            console.warn('[ConnectCallback] Token exchange rejected', {
+                status: tokenRes.status,
+                error_code: tokenData.error?.code || null,
+                error_subcode: tokenData.error?.error_subcode || null,
+                has_redirect_uri: Boolean(redirectUri),
+            });
             return res.status(400).json({
-                error: getMetaErrorMessage(tokenData, 'Meta could not exchange the signup code. Please retry Connect with Meta.')
+                error: getMetaErrorMessage(tokenData, 'Meta could not exchange the signup code. Please retry Connect with Meta.'),
+                error_code: tokenData.error?.code,
+                error_subcode: tokenData.error?.error_subcode,
+                stage: 'token_exchange'
             });
         }
 
         const shortToken = tokenData.access_token;
+        // Token extension is optional. Overlap it with required setup instead of
+        // holding every subsequent request behind its five-second timeout.
         const longTokenUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${encodeURIComponent(shortToken)}`;
-        const longRes = await fetch(longTokenUrl);
-        const longData: any = await longRes.json();
-
-        const finalToken = longData.access_token || shortToken;
+        const extendedToken = (async () => {
+            try {
+                const longRes = await fetchSignupMeta(longTokenUrl, { signal: AbortSignal.timeout(5000) });
+                const longData: any = await longRes.json();
+                return longRes.ok && longData.access_token ? longData.access_token : shortToken;
+            } catch {
+                console.warn('[ConnectCallback] Token extension unavailable; using the exchanged signup token.');
+                return shortToken;
+            }
+        })();
+        let finalToken = shortToken;
         const insertedAccounts = [];
         const discoveryErrors: string[] = [];
 
@@ -89,7 +125,7 @@ export async function connectCallback(req: any, res: Response) {
             discoveredWabaIds = [{ id: String(waba_id).trim() }];
         } else {
             const wabaDiscoveryUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/me/assigned_whatsapp_business_accounts?access_token=${encodeURIComponent(finalToken)}`;
-            const wabaRes = await fetch(wabaDiscoveryUrl);
+            const wabaRes = await fetchSignupMeta(wabaDiscoveryUrl);
             const wabaData: any = await wabaRes.json();
 
             if (Array.isArray(wabaData?.data) && wabaData.data.length) {
@@ -105,14 +141,22 @@ export async function connectCallback(req: any, res: Response) {
 
         for (const waba of discoveredWabaIds) {
             const currentWabaId = waba.id;
-            try {
-                await subscribeMetaAppToWaba(currentWabaId, finalToken);
-            } catch (error: any) {
-                discoveryErrors.push(`Could not enable inbound webhooks for WABA ${currentWabaId}: ${error.message}`);
+            const numberPath = requestedPhoneNumberId
+                ? encodeURIComponent(String(requestedPhoneNumberId).trim())
+                : `${currentWabaId}/phone_numbers`;
+            const numbersUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/${numberPath}?fields=id,display_phone_number,verified_name,quality_rating,code_verification_status&access_token=${encodeURIComponent(finalToken)}`;
+            // Both operations depend only on the exchanged token, not each other.
+            // allSettled observes both failures, even if one request fails first.
+            const [subscription, numbers] = await Promise.allSettled([
+                subscribeMetaAppToWaba(currentWabaId, finalToken),
+                fetchSignupMeta(numbersUrl)
+            ]);
+            if (subscription.status === 'rejected') {
+                discoveryErrors.push(`Could not enable inbound webhooks for WABA ${currentWabaId}: ${subscription.reason?.message || 'Meta request failed'}`);
                 continue;
             }
-            const numbersUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/${currentWabaId}/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating,code_verification_status&access_token=${encodeURIComponent(finalToken)}`;
-            const numRes = await fetch(numbersUrl);
+            if (numbers.status === 'rejected') throw numbers.reason;
+            const numRes = numbers.value;
             const numData: any = await numRes.json();
 
             if (!numRes.ok || numData.error) {
@@ -120,7 +164,7 @@ export async function connectCallback(req: any, res: Response) {
                 continue;
             }
 
-            let candidateNumbers = Array.isArray(numData.data) ? numData.data : [];
+            let candidateNumbers = requestedPhoneNumberId && numData.id ? [numData] : (Array.isArray(numData.data) ? numData.data : []);
 
             // If a specific phone_number_id was selected during embedded signup, only connect that single number
             if (requestedPhoneNumberId) {
@@ -130,7 +174,7 @@ export async function connectCallback(req: any, res: Response) {
                 if (candidateNumbers.length === 0) {
                     try {
                         const directNumUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/${encodeURIComponent(String(requestedPhoneNumberId).trim())}?fields=id,display_phone_number,verified_name,quality_rating,code_verification_status&access_token=${encodeURIComponent(finalToken)}`;
-                        const directRes = await fetch(directNumUrl);
+                        const directRes = await fetchSignupMeta(directNumUrl);
                         const directData: any = await directRes.json();
                         if (directRes.ok && directData?.id) {
                             candidateNumbers = [directData];
@@ -149,33 +193,30 @@ export async function connectCallback(req: any, res: Response) {
                     const phone_number_id = item.id;
                     const display_phone_number = item.display_phone_number;
 
+                    const limitCheckStarted = Date.now();
                     await enforceWhatsAppCloudNumberLimit(targetOrgId, phone_number_id);
+                    console.info(`[ConnectCallback] Number limit check: ${Date.now() - limitCheckStarted}ms`);
 
-                    // Register the phone number
-                    try {
-                        const registerUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/${phone_number_id}/register`;
-                        const registerRes = await fetch(registerUrl, {
-                            method: 'POST',
-                            headers: {
-                                'Authorization': `Bearer ${finalToken}`,
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({
-                                messaging_product: 'whatsapp',
-                                pin: '123456'
-                            })
-                        });
-                        const registerData: any = await registerRes.json();
-                        if (!registerRes.ok || registerData.error) {
-                            console.warn(`Registration API failed for ${phone_number_id}:`, registerData.error);
-                        } else {
-                            console.log(`Successfully registered phone number ${phone_number_id}`);
-                        }
-                    } catch (regErr) {
-                        console.error(`Registration API exception for ${phone_number_id}:`, regErr);
+                    // Registration is required before reporting a connected account.
+                    const registerUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/${phone_number_id}/register`;
+                    const registerRes = await fetchSignupMeta(registerUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${finalToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ messaging_product: 'whatsapp', pin: '123456' })
+                    });
+                    const registerData: any = await registerRes.json();
+                    if (!registerRes.ok || registerData.error || registerData.success !== true) {
+                        const registrationError: any = new Error(getMetaErrorMessage(registerData, 'Meta could not register this phone number. Please retry Connect with Meta.'));
+                        registrationError.statusCode = 400;
+                        throw registrationError;
                     }
 
+                    finalToken = await extendedToken;
                     const now = new Date().toISOString();
+                    const saveStarted = Date.now();
                     const { data, error } = await supabase.from('w_wa_accounts').upsert({
                         organization_id: targetOrgId,
                         whatsapp_business_account_id: currentWabaId,
@@ -190,53 +231,55 @@ export async function connectCallback(req: any, res: Response) {
                         last_health_check_at: now
                     }, { onConflict: 'phone_number_id' }).select();
 
+                    console.info(`[ConnectCallback] Account save: ${Date.now() - saveStarted}ms`);
                     if (error) {
                         console.error(`DB Save Error for phone ${phone_number_id}:`, error);
                         discoveryErrors.push(`Could not save phone ${display_phone_number || phone_number_id}: ${error.message}`);
                     } else if (data && data[0]) {
-                        const diagnostics = await getMetaAccountDiagnostics(data[0]);
-
-                        const tokenStatus = diagnostics.reconnect_required || diagnostics.issue_codes?.includes('token_expired')
-                            ? 'EXPIRED'
-                            : (diagnostics.issue_codes?.includes('token_missing') ? 'MISSING' : 'VALID');
-
-                        const bizStatus = diagnostics.business_verification?.status
-                            ? String(diagnostics.business_verification.status).toUpperCase()
-                            : 'UNKNOWN';
-
-                        const qualityRating = diagnostics.phone_number_access?.quality_rating
-                            ? String(diagnostics.phone_number_access.quality_rating).toUpperCase()
-                            : 'UNKNOWN';
-
-                        const rawLimit = diagnostics.phone_number_access?.messaging_limit_tier || diagnostics.phone_number_access?.messaging_limit;
-                        const messagingLimit = rawLimit ? normalizeMessagingLimitTier(rawLimit) : null;
-                        const webhookStatus = diagnostics.webhook_subscription && !diagnostics.webhook_subscription.error ? 'SUBSCRIBED' : 'NOT_SUBSCRIBED';
-
-                        const updatedAccount = await AccountHealthService.updateHealth(data[0].id, {
-                            connection_status: tokenStatus === 'EXPIRED' ? 'TOKEN_INVALID' : 'CONNECTED',
-                            token_status: tokenStatus as any,
-                            business_verification_status: bizStatus as any,
-                            business_name: diagnostics.business_verification?.business_name || null,
-                            business_id: diagnostics.business_verification?.business_id || null,
-                            quality_rating: qualityRating as any,
-                            messaging_limit: messagingLimit,
-                            webhook_status: webhookStatus,
-                            diagnostics_json: diagnostics,
-                        }).catch(err => {
-                            console.error('[ConnectCallback] Failed to persist initial health update:', err.message);
-                            return data[0];
-                        }) || data[0];
-
+                        // Connection is persisted; diagnostics must not delay the signup response.
                         insertedAccounts.push({
-                            ...toSafeWhatsappAccount(updatedAccount),
-                            ...buildAccountReadinessSummary(updatedAccount),
-                            send_ready: diagnostics.send_ready,
-                            diagnostics_summary: diagnostics.send_ready ? 'Cloud API send access verified.' : diagnostics.issues.join(', '),
-                            diagnostics
+                            ...toSafeWhatsappAccount(data[0]),
+                            diagnostics_pending: true,
+                            diagnostics_summary: 'Account connected. Health checks are running in the background.'
                         });
+                        void (async () => {
+                            const diagnostics = await getMetaAccountDiagnostics(data[0]);
+
+                            const tokenStatus = diagnostics.reconnect_required || diagnostics.issue_codes?.includes('token_expired')
+                                ? 'EXPIRED'
+                                : (diagnostics.issue_codes?.includes('token_missing') ? 'MISSING' : 'VALID');
+
+                            const bizStatus = diagnostics.business_verification?.status
+                                ? String(diagnostics.business_verification.status).toUpperCase()
+                                : 'UNKNOWN';
+
+                            const qualityRating = diagnostics.phone_number_access?.quality_rating
+                                ? String(diagnostics.phone_number_access.quality_rating).toUpperCase()
+                                : 'UNKNOWN';
+
+                            const rawLimit = diagnostics.phone_number_access?.messaging_limit_tier || diagnostics.phone_number_access?.messaging_limit;
+                            const messagingLimit = rawLimit ? normalizeMessagingLimitTier(rawLimit) : null;
+                            const webhookStatus = diagnostics.webhook_subscription && !diagnostics.webhook_subscription.error ? 'SUBSCRIBED' : 'NOT_SUBSCRIBED';
+
+                            await AccountHealthService.updateHealth(data[0].id, {
+                                connection_status: tokenStatus === 'EXPIRED' ? 'TOKEN_INVALID' : 'CONNECTED',
+                                token_status: tokenStatus as any,
+                                business_verification_status: bizStatus as any,
+                                business_name: diagnostics.business_verification?.business_name || null,
+                                business_id: diagnostics.business_verification?.business_id || null,
+                                quality_rating: qualityRating as any,
+                                messaging_limit: messagingLimit,
+                                webhook_status: webhookStatus,
+                                diagnostics_json: diagnostics,
+                            }).catch(err => {
+                                console.error('[ConnectCallback] Failed to persist initial health update:', err.message);
+                                return data[0];
+                            });
+
+                        })().catch(err => console.warn('[ConnectCallback] Background health check failed:', err.message));
 
                         // Trigger background template sync from Meta for newly connected WABA
-                        fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${currentWabaId}/message_templates?fields=id,name,language,status,category,components,quality_score,rejected_reason&limit=250`, {
+                        fetchSignupMeta(`https://graph.facebook.com/${GRAPH_API_VERSION}/${currentWabaId}/message_templates?fields=id,name,language,status,category,components,quality_score,rejected_reason&limit=250`, {
                             headers: { Authorization: `Bearer ${finalToken}` }
                         })
                         .then(res => res.json())
@@ -264,7 +307,11 @@ export async function connectCallback(req: any, res: Response) {
 
     } catch (e: any) {
         console.error("Connect Error:", e.message);
-        res.status(e.statusCode || 500).json({ error: e.message, limit: e.limit });
+        const timedOut = e.name === 'TimeoutError' || e.name === 'AbortError';
+        res.status(timedOut ? 504 : (e.statusCode || 500)).json({
+            error: timedOut ? 'Meta took too long to respond. Refresh your accounts before retrying Connect with Meta.' : e.message,
+            limit: e.limit
+        });
     }
 }
 

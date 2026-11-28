@@ -41,9 +41,16 @@ import { shouldRunBaileysBotAutomation } from '../utils/format.js';
 import { performAutoAssignment } from './assignment.service.js';
 import { sendPushNotificationToOrg } from './push.service.js';
 import { transcribeAudioBuffer } from './voice.service.js';
+import { setBotDebounce, clearBotDebounce, getBotLock, setBotLock } from './botDebounce.service.js';
 
-const botDebounceMap = new Map<string, NodeJS.Timeout>();
-const botLockMap = new Map<string, Promise<void>>();
+const processedBaileysMessages = new Map<string, number>();
+
+setInterval(() => {
+    const cutoff = Date.now() - 15 * 60 * 1000;
+    for (const [id, ts] of processedBaileysMessages.entries()) {
+        if (ts < cutoff) processedBaileysMessages.delete(id);
+    }
+}, 5 * 60 * 1000).unref();
 
 async function ensureDefaultOrganizationId(): Promise<string | null> {
     return null;
@@ -446,6 +453,23 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                     const isOutbound = msg.key.fromMe;
                     const remoteJid = msg.key.remoteJid || "";
                     if (!remoteJid) continue;
+
+                    if (!isOutbound && msg.key?.id) {
+                        const mid = msg.key.id;
+                        if (processedBaileysMessages.has(mid)) continue;
+                        if (!isHistorySync) {
+                            const { data: existingBaileysMsg } = await supabase
+                                .from('w_messages')
+                                .select('id')
+                                .eq('wa_message_id', mid)
+                                .maybeSingle();
+                            if (existingBaileysMsg?.id) {
+                                processedBaileysMessages.set(mid, Date.now());
+                                continue;
+                            }
+                        }
+                        processedBaileysMessages.set(mid, Date.now());
+                    }
 
                     if (!isHistorySync) {
                         console.log(`   â†³ jid=${remoteJid} fromMe=${isOutbound} id=${msg.key.id || ''}`);
@@ -934,15 +958,13 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                         console.error('Failed to send composing presence', e);
                                     }
 
-                                    if (botDebounceMap.has(debounceKey)) {
-                                        clearTimeout(botDebounceMap.get(debounceKey)!);
-                                    }
+                                    clearBotDebounce(debounceKey);
 
-                                    botDebounceMap.set(debounceKey, setTimeout(async () => {
-                                        botDebounceMap.delete(debounceKey);
+                                    setBotDebounce(debounceKey, setTimeout(async () => {
+                                        clearBotDebounce(debounceKey);
                                         
                                         // Ensure sequential execution of AI generation for the same conversation
-                                        let prevPromise = botLockMap.get(debounceKey) || Promise.resolve();
+                                        let prevPromise = getBotLock(debounceKey);
                                         
                                         const nextPromise = prevPromise.then(async () => {
                                             try {
@@ -967,6 +989,10 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                                             const parsed = JSON.parse(jsonCandidate);
                                                             if (parsed && typeof parsed === "object" && typeof parsed.text === "string") {
                                                                 replyText = parsed.text;
+                                                                // QR transport has no native URL CTA support. Preserve actions in its text fallback.
+                                                                if (Array.isArray(parsed.buttons)) {
+                                                                    replyText += parsed.buttons.map((button: any) => `\n${button.text || 'Open'}${button.url ? `: ${button.url}` : ''}`).join('');
+                                                                }
                                                             }
                                                         }
                                                     } catch (e) {
@@ -1036,9 +1062,9 @@ async function setupBaileys(sessionId: string, socket: any, orgIdFromRequest: st
                                             console.error("Queue execution error:", err);
                                         });
 
-                                        botLockMap.set(debounceKey, nextPromise);
+                                        setBotLock(debounceKey, nextPromise);
                                         
-                                    }, 6000));
+                                    }, 1500));
                                 }
                             } catch (botErr: any) {
                                 console.error('Bot auto-reply error (Baileys):', botErr.message || botErr);

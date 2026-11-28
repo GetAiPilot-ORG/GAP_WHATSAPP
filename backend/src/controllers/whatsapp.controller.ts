@@ -380,29 +380,45 @@ export async function deleteAccount(req: any, res: Response) {
   const { id } = req.params;
   const orgId = req.organization_id;
   try {
-    // 1. Fetch current account record
-    const { data: account } = await supabase
+    let { data: account, error: lookupError } = await supabase
       .from("w_wa_accounts")
-      .select("id, organization_id, whatsapp_business_account_id, access_token_encrypted, phone_number_id")
+      .select("id, organization_id, whatsapp_business_account_id, access_token_encrypted, phone_number_id, offboarding_started_at, meta_removal_confirmed_at")
       .eq("id", id)
       .eq("organization_id", orgId)
       .maybeSingle();
 
-    if (!account) {
-      return res.status(404).json({ error: "WhatsApp account not found" });
+    if (lookupError?.code === '42703') {
+      const legacy = await supabase.from("w_wa_accounts")
+        .select("id, organization_id, whatsapp_business_account_id, access_token_encrypted, phone_number_id")
+        .eq("id", id).eq("organization_id", orgId).maybeSingle();
+      if (legacy.error) throw legacy.error;
+      if (isMetaCloudAccount(legacy.data)) {
+        return res.status(503).json({ error: "WhatsApp offboarding requires the database migration to be applied" });
+      }
+      account = legacy.data;
+      lookupError = null;
     }
 
-    // 2. If Meta Cloud API, attempt to unsubscribe webhooks so Meta stops pinging this server
-    if (account.whatsapp_business_account_id && account.access_token_encrypted) {
-      try {
-        const token = decryptToken(account.access_token_encrypted);
-        await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${encodeURIComponent(account.whatsapp_business_account_id)}/subscribed_apps`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${token}` }
-        });
-      } catch (e: any) {
-        console.warn(`[deleteAccount] Unsubscribe from Meta failed:`, e?.message);
+    if (lookupError) throw lookupError;
+    if (!account) return res.status(404).json({ error: "WhatsApp account not found" });
+
+    if (account.offboarding_started_at || isMetaCloudAccount(account)) {
+      if (!account.offboarding_started_at) {
+        const { error } = await supabase.from("w_wa_accounts")
+          .update({
+            status: "disconnected",
+            connection_status: "DISCONNECTED",
+            token_status: "MISSING",
+            has_access_token: false,
+            access_token_encrypted: null,
+            offboarding_started_at: new Date().toISOString(),
+          })
+          .eq("id", id)
+          .eq("organization_id", orgId)
+          .is("offboarding_started_at", null);
+        if (error) throw error;
       }
+      return res.json({ success: true, meta_action_pending: !account.meta_removal_confirmed_at });
     }
 
     // 3. If active Baileys socket session exists, cleanly end and remove it

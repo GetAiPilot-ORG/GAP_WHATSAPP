@@ -1,3 +1,4 @@
+import { TemplateQuickReplyCoverage } from "../components/flow-builder/QuickReplyTriggers";
 import InfoHelp from '../components/InfoHelp'
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -2559,6 +2560,8 @@ const renderLivePreview = () => {
                                         Confirm the campaign details before sending to <strong>{filteredContacts.length} contacts</strong>.
                                     </p>
                                 </div>
+
+                                {selectedTemplate?.components?.find(component => component.type === 'BUTTONS')?.buttons?.some(button => button.type === 'QUICK_REPLY') && <TemplateQuickReplyCoverage buttons={selectedTemplate.components.find(component => component.type === 'BUTTONS').buttons} accountId={campaign.wa_account_id} />}
 
                                 <div className="grid gap-3 text-left text-sm sm:grid-cols-2">
                                     <button type="button" onClick={() => setCurrentStep(1)} className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-left hover:border-[#b9dcfb] hover:bg-[#f5faff]">
