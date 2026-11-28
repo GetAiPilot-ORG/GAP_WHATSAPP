@@ -413,6 +413,7 @@ export default function LiveChat() {
     const [isAgentStatusModalOpen, setIsAgentStatusModalOpen] = useState(false);
     const [autoAssignSettings, setAutoAssignSettings] = useState({ enabled: false, batch_size: 1, paused_agents: [] });
     const [orgAgents, setOrgAgents] = useState([]);
+    const [crmCampaignIds, setCrmCampaignIds] = useState(() => new Set());
 
     // Draft states for modals
     const [draftAutoAssignSettings, setDraftAutoAssignSettings] = useState({ enabled: false, batch_size: 1 });
@@ -1054,6 +1055,29 @@ export default function LiveChat() {
         setIsAgentStatusModalOpen(false);
     };
 
+    const fetchCrmCampaignIds = async () => {
+        if (!organizationId) return;
+        try {
+            const { data } = await supabase
+                .from('w_campaigns')
+                .select('id, name, audience_tag')
+                .eq('organization_id', organizationId);
+            if (Array.isArray(data)) {
+                const crmIds = new Set(
+                    data
+                        .filter(c =>
+                            (c.audience_tag && /crm/i.test(c.audience_tag)) ||
+                            (c.name && /crm/i.test(c.name))
+                        )
+                        .map(c => c.id)
+                );
+                setCrmCampaignIds(crmIds);
+            }
+        } catch (e) {
+            console.warn('Error fetching CRM campaigns:', e);
+        }
+    };
+
     const fetchChats = async ({ cursor = null } = {}) => {
         if (!session?.access_token) return;
         if (fetchChatsInFlightRef.current) return;
@@ -1398,6 +1422,7 @@ export default function LiveChat() {
             fetchBots(),
             fetchAutoAssignSettings(),
             fetchOrgAgents(),
+            fetchCrmCampaignIds(),
         ]);
     }, [organizationId, isProfileLoading, session?.access_token, selectedAccount]); // Re-fetch when tenant/account context changes
 
@@ -2601,7 +2626,22 @@ export default function LiveChat() {
         let label = msg.agentName || 'You';
         let colorClass = 'text-[#6676ff]'; // Default color for You
 
-        if (source === 'flow' || msg.metadata?.flow_id) {
+        const campId = msg.metadata?.campaign_id;
+        const isCrmSource =
+            source === 'crm' ||
+            source === 'crm_leads' ||
+            msg.metadata?.source === 'crm_leads' ||
+            msg.metadata?.source === 'crm' ||
+            msg.metadata?.source === 'crm_direct' ||
+            msg.metadata?.audience_tag === 'CRM Leads' ||
+            msg.metadata?.audience_tag === 'CRM Direct' ||
+            (typeof msg.metadata?.campaign_name === 'string' && /crm/i.test(msg.metadata.campaign_name)) ||
+            (campId && (crmCampaignIds.has(campId) || /crm/i.test(String(campId))));
+
+        if (isCrmSource) {
+            label = 'CRM Send';
+            colorClass = 'text-[#0284c7] font-semibold';
+        } else if (source === 'flow' || msg.metadata?.flow_id) {
             label = msg.metadata?.flow_name || 'Flow';
             colorClass = 'text-[#0284c7]';
         } else if (source === 'ai_agent' || msg.isBotReply || msg.botAgentId) {
